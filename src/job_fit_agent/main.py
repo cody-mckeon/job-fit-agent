@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
+from job_fit_agent.config import TargetProfile, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.scoring import score_job
 
@@ -14,6 +15,7 @@ COMPANIES = ["stripe", "duolingo", "notion"]
 
 def collect_ranked_jobs(
     collector: GreenhouseCollector,
+    target_profile: TargetProfile,
     companies: list[str] | None = None,
     min_score: int = 45,
 ) -> list[tuple[JobPosting, FitScore]]:
@@ -28,7 +30,7 @@ def collect_ranked_jobs(
             LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
             continue
         for job in jobs:
-            fit = score_job(job)
+            fit = score_job(job, target_profile)
             if fit.total_score >= min_score:
                 ranked_jobs.append((job, fit))
 
@@ -38,6 +40,7 @@ def collect_ranked_jobs(
 
 def main() -> None:
     collector = GreenhouseCollector()
+    target_profile = load_target_profile()
     selected_companies = COMPANIES
     ranked_jobs: list[tuple[JobPosting, FitScore]] = []
     jobs_fetched = 0
@@ -51,34 +54,11 @@ def main() -> None:
 
         jobs_fetched += len(jobs)
         for job in jobs:
-            fit = score_job(job)
+            fit = score_job(job, target_profile)
             if fit.total_score >= 45:
                 ranked_jobs.append((job, fit))
 
     ranked_jobs.sort(key=lambda item: item[1].total_score, reverse=True)
-
-    if not ranked_jobs:
-        print("Top jobs below threshold for debugging")
-        all_jobs_with_scores: list[tuple[JobPosting, FitScore]] = []
-        for company in selected_companies:
-            try:
-                jobs = collector.fetch_jobs(company)
-            except Exception as exc:  # pragma: no cover - defensive guardrail for collectors
-                LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
-                continue
-            for job in jobs:
-                all_jobs_with_scores.append((job, score_job(job)))
-
-        all_jobs_with_scores.sort(key=lambda item: item[1].total_score, reverse=True)
-        for job, fit in all_jobs_with_scores[:10]:
-            print(f"score: {fit.total_score}")
-            print(f"title: {job.title}")
-            print(f"company: {job.company}")
-            print(f"location: {job.location}")
-            print(f"url: {job.url}")
-            print(f"reasons: {fit.reasons}")
-            print(f"red_flags: {fit.red_flags}")
-            print("-" * 40)
 
     for job, fit in ranked_jobs:
         print(f"score: {fit.total_score}")
@@ -87,7 +67,12 @@ def main() -> None:
         print(f"location: {job.location}")
         print(f"url: {job.url}")
         print(f"reasons: {fit.reasons}")
-        print(f"red_flags: {fit.red_flags}")
+        if fit.red_flags:
+            print("location/fit red flags:")
+            for flag in fit.red_flags:
+                print(f"  - {flag}")
+        else:
+            print("location/fit red flags: none")
         print("-" * 40)
 
     print("Summary")

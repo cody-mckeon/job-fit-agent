@@ -1,0 +1,41 @@
+target_titles:
+  - product manager
+  - senior product manager
+  - technical product manager
+  - product operations
+  - product analytics manager
+  - growth product manager
+  - AI product manager
+  - analytics product manager
+
+target_keywords:
+  - AI
+  - analytics
+  - data
+  - web analytics
+  - experimentation
+  - personalization
+  - marketing technology
+  - customer-facing web
+  - conversion
+  - funnel
+  - dashboard
+  - agentic
+  - automation
+  - hospitality
+  - revenue management
+
+preferred_locations:
+  - Remote US
+  - United States
+  - Las Vegas
+  - Nevada
+  - Henderson
+  - Hybrid
+
+excluded_locations:
+  - London
+  - Luxembourg
+  - Singapore
+  - Bengaluru
+  - Toronto
