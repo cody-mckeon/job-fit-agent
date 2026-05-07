@@ -21,6 +21,21 @@ To add or remove companies, edit this list and run the pipeline again.
 
 > Note: Greenhouse board tokens may not match human-readable company names. Use the board token that works in the API URL.
 
+## Location fit logic (Cody profile)
+
+Jobs are considered location-fit only when one of the following is true:
+
+- The posting is clearly **Remote US** (`Remote US`, `Remote United States`, `US Remote`, `United States Remote`, or equivalent wording in location/description text).
+- The role is in **Las Vegas**, **Henderson**, or **Nevada**.
+- The role is clearly **hybrid in Las Vegas/Nevada**.
+
+The scorer applies red flags for:
+
+- Onsite or location-specific US cities outside Las Vegas/Nevada (for example New York or Pittsburgh), unless the posting explicitly says Remote US.
+- International excluded locations (for example London, Singapore, Toronto), which receive a stronger penalty.
+
+Title/keyword relevance alone cannot push a non-location-fit role above the default threshold.
+
 ## How to run
 
 ```bash

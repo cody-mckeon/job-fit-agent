@@ -36,7 +36,7 @@ def test_collect_ranked_jobs_sorts_high_to_low() -> None:
 
 
 def test_collect_ranked_jobs_excludes_below_threshold() -> None:
-    keep = _job("Product Manager AI", location="Remote")
+    keep = _job("Product Manager AI", location="Remote US")
     drop = _job("Software Engineer", location="On-site", description="backend systems")
 
     collector = StubCollector({"openai": [keep, drop]})

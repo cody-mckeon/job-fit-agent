@@ -27,11 +27,35 @@ target_keywords:
 
 preferred_locations:
   - Remote US
-  - United States
+  - Remote United States
+  - US Remote
+  - United States Remote
   - Las Vegas
-  - Nevada
   - Henderson
-  - Hybrid
+  - Nevada
+
+acceptable_remote_terms:
+  - remote
+  - remote us
+  - remote united states
+  - us remote
+  - united states remote
+
+local_terms:
+  - las vegas
+  - henderson
+  - nevada
+  - nv
+
+non_remote_us_locations:
+  - New York
+  - Pittsburgh
+  - San Francisco
+  - Los Angeles
+  - Seattle
+  - Austin
+  - Boston
+  - Chicago
 
 excluded_locations:
   - London
