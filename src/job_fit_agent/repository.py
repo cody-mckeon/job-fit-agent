@@ -155,3 +155,17 @@ def get_top_jobs(limit: int = 20, db_path: Path = DB_PATH) -> list[sqlite3.Row]:
             (limit,),
         ).fetchall()
     return rows
+
+
+def get_top_jobs_by_classification(classification: str, limit: int = 10, db_path: Path = DB_PATH) -> list[sqlite3.Row]:
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM jobs
+            WHERE classification = ?
+            ORDER BY score DESC, last_seen_at DESC
+            LIMIT ?
+            """,
+            (classification, limit),
+        ).fetchall()
+    return rows

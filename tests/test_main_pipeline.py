@@ -109,10 +109,9 @@ def test_main_combined_greenhouse_ashby_pipeline_without_lever(monkeypatch, caps
     main()
     output = capsys.readouterr().out
 
-    assert "greenhouse successful companies: openai" in output
-    assert "ashby successful companies: anthropic" in output
-    assert "lever successful companies:" not in output
-    assert "high_fit count:" in output
+    assert "High-fit jobs to review" in output
+    assert "title: Product Manager AI" in output
+    assert "title: Technical Program Manager" in output
 
 
 def test_main_includes_lever_when_enabled(monkeypatch, capsys) -> None:
@@ -132,9 +131,9 @@ def test_main_includes_lever_when_enabled(monkeypatch, capsys) -> None:
     main()
     output = capsys.readouterr().out
 
-    assert "greenhouse successful companies: openai" in output
-    assert "ashby successful companies: anthropic" in output
-    assert "lever successful companies: ramp" in output
+    assert "High-fit jobs to review" in output
+    assert "title: Product Manager AI" in output
+    assert "No new matching jobs found." not in output
 
 
 def test_group_jobs_by_classification_groups_buckets() -> None:
@@ -247,3 +246,35 @@ def test_collect_scored_jobs_aggregates_successful_companies_only() -> None:
     titles = [job.title for job, _ in ranked + below]
     assert "Product Manager AI" in titles
     assert "Software Engineer" not in titles
+
+
+def test_digest_prints_saved_high_and_near_fit_jobs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "score": 97 if classification == "high_fit" else 74,
+                "title": "Staff PM" if classification == "high_fit" else "TPM",
+                "company": "openai",
+                "source": "greenhouse",
+                "url": f"https://example.com/{classification}",
+                "red_flags": "[]",
+            }
+        ],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "Top saved high-fit jobs" in output
+    assert "Top saved near-fit jobs" in output
+    assert "score: 97" in output
+    assert "score: 74" in output
+    assert "title: Staff PM" in output
+    assert "title: TPM" in output
+    assert "company: openai" in output
+    assert "source: greenhouse" in output
+    assert "url: https://example.com/high_fit" in output
+    assert "url: https://example.com/near_fit" in output
+    assert "red_flags: none" in output
