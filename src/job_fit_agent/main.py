@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.scoring import score_job
 
-COMPANIES = ["openai", "anthropic", "duolingo", "notion", "stripe"]
+LOGGER = logging.getLogger(__name__)
+COMPANIES = ["stripe", "duolingo", "notion"]
 
 
 def collect_ranked_jobs(
@@ -19,7 +22,11 @@ def collect_ranked_jobs(
     ranked_jobs: list[tuple[JobPosting, FitScore]] = []
 
     for company in selected_companies:
-        jobs = collector.fetch_jobs(company)
+        try:
+            jobs = collector.fetch_jobs(company)
+        except Exception as exc:  # pragma: no cover - defensive guardrail for collectors
+            LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
+            continue
         for job in jobs:
             fit = score_job(job)
             if fit.total_score >= min_score:
@@ -31,7 +38,24 @@ def collect_ranked_jobs(
 
 def main() -> None:
     collector = GreenhouseCollector()
-    ranked_jobs = collect_ranked_jobs(collector=collector)
+    selected_companies = COMPANIES
+    ranked_jobs: list[tuple[JobPosting, FitScore]] = []
+    jobs_fetched = 0
+
+    for company in selected_companies:
+        try:
+            jobs = collector.fetch_jobs(company)
+        except Exception as exc:  # pragma: no cover - defensive guardrail for collectors
+            LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
+            continue
+
+        jobs_fetched += len(jobs)
+        for job in jobs:
+            fit = score_job(job)
+            if fit.total_score >= 60:
+                ranked_jobs.append((job, fit))
+
+    ranked_jobs.sort(key=lambda item: item[1].total_score, reverse=True)
 
     for job, fit in ranked_jobs:
         print(f"score: {fit.total_score}")
@@ -42,6 +66,11 @@ def main() -> None:
         print(f"reasons: {fit.reasons}")
         print(f"red_flags: {fit.red_flags}")
         print("-" * 40)
+
+    print("Summary")
+    print(f"companies checked: {len(selected_companies)}")
+    print(f"jobs fetched: {jobs_fetched}")
+    print(f"jobs above threshold: {len(ranked_jobs)}")
 
 
 if __name__ == "__main__":
