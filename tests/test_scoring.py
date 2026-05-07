@@ -367,3 +367,52 @@ def test_chief_of_staff_is_executive_near_fit() -> None:
     fit = score_job(job, TARGET_PROFILE)
     assert fit.role_family == "executive"
     assert fit.classification == "near_fit"
+
+
+def test_cursor_onsite_pm_downgrades_to_near_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        company="Cursor",
+        location="Onsite - San Francisco, CA",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "near_fit"
+
+
+def test_figma_sf_ny_pm_downgrades_to_near_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        company="Figma",
+        location="Onsite - SF or NY",
+        description="Lead AI product strategy and analytics experimentation.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "near_fit"
+
+
+def test_linear_remote_pm_remains_high_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        company="Linear",
+        location="Remote US",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+
+
+def test_replit_hybrid_unspecified_pm_is_not_low_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        company="Replit",
+        location="",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "high_fit"}
