@@ -13,6 +13,9 @@ class TargetProfile(BaseModel):
     target_titles: list[str] = Field(default_factory=list)
     target_keywords: list[str] = Field(default_factory=list)
     preferred_locations: list[str] = Field(default_factory=list)
+    acceptable_remote_terms: list[str] = Field(default_factory=list)
+    local_terms: list[str] = Field(default_factory=list)
+    non_remote_us_locations: list[str] = Field(default_factory=list)
     excluded_locations: list[str] = Field(default_factory=list)
 
 
