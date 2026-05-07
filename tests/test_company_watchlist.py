@@ -39,6 +39,7 @@ def test_company_watchlist_loads_correctly() -> None:
     assert "openai" not in watchlist.greenhouse
     assert "supabase" not in watchlist.greenhouse
     assert "anthropic" not in watchlist.ashby
+    assert watchlist.lever[:2] == ["ramp", "scaleai"]
 
 
 def test_pipeline_accepts_company_list_from_config() -> None:

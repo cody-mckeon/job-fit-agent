@@ -82,19 +82,25 @@ def test_collect_scored_jobs_returns_sorted_below_threshold_for_debugging() -> N
     assert below[0][1].total_score >= below[1][1].total_score
 
 
-def test_main_combined_greenhouse_ashby_pipeline(monkeypatch, capsys) -> None:
+def test_main_combined_greenhouse_ashby_lever_pipeline(monkeypatch, capsys) -> None:
     gh_job = _job("Product Manager AI", location="Remote US")
     ashby_job = JobPosting(source="ashby", company="anthropic", title="Technical Program Manager", location="Remote US", url="https://example.com/a", description="program delivery")
+    lever_job = JobPosting(source="lever", company="ramp", title="Senior Product Manager", location="Remote US", url="https://example.com/l", description="payments roadmap")
 
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [gh_job]}))
     monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({"anthropic": [ashby_job]}))
-    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else ["anthropic"])
+    monkeypatch.setattr("job_fit_agent.main.LeverCollector", lambda: StubCollector({"ramp": [lever_job]}))
+    monkeypatch.setattr(
+        "job_fit_agent.main.resolve_companies",
+        lambda source="greenhouse": ["openai"] if source == "greenhouse" else (["anthropic"] if source == "ashby" else ["ramp"]),
+    )
 
     main()
     output = capsys.readouterr().out
 
     assert "greenhouse successful companies: openai" in output
     assert "ashby successful companies: anthropic" in output
+    assert "lever successful companies: ramp" in output
     assert "high_fit count:" in output
 
 
