@@ -6,6 +6,7 @@
 
 - Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{company}/jobs`
 - Ashby: `https://api.ashbyhq.com/posting-api/job-board/{company}`
+- Lever: integration exists in the codebase, but it is currently disabled due to invalid board tokens and low signal quality.
 
 ## Company watchlist
 
@@ -25,7 +26,13 @@ ashby:
 python -m job_fit_agent.main
 ```
 
-The CLI runs both Greenhouse and Ashby collectors, prints source-specific successful/failed companies, and aggregates jobs into a shared scoring pipeline.
+The CLI runs only enabled collectors, prints source-specific successful/failed companies, and aggregates jobs into a shared scoring pipeline.
+
+Current runtime flag in `AppConfig`:
+
+```python
+enable_lever = False
+```
 
 ## Test
 
