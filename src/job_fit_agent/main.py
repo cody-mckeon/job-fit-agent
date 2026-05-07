@@ -85,6 +85,7 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
     for job, fit in sorted(jobs, key=lambda item: item[1].total_score, reverse=True)[:limit]:
         print(f"score: {fit.total_score}")
         print(f"classification: {fit.classification}")
+        print(f"role_family: {fit.role_family}")
         print(f"source: {job.source}")
         print(f"title: {job.title}")
         print(f"company: {job.company}")

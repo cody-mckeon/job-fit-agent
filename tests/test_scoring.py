@@ -262,4 +262,75 @@ def test_singapore_product_manager_gets_international_location_red_flag() -> Non
 
     fit = score_job(job, TARGET_PROFILE)
     assert any("International location" in flag for flag in fit.red_flags)
+
+
+def test_data_scientist_is_data_science_low_fit() -> None:
+    job = _job(
+        title="Data Scientist",
+        location="Remote US",
+        description="Build predictive models for growth analytics.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.role_family == "data_science"
     assert fit.classification == "low_fit"
+
+
+def test_product_manager_is_product_management_high_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        location="Remote US",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.role_family == "product_management"
+    assert fit.classification == "high_fit"
+
+
+def test_technical_program_manager_is_product_operations_high_or_near_fit() -> None:
+    job = _job(
+        title="Technical Program Manager",
+        location="Remote US",
+        description="Lead cross-functional delivery for product initiatives.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.role_family == "product_operations"
+    assert fit.classification in {"high_fit", "near_fit"}
+
+
+def test_product_marketing_manager_is_marketing_near_fit() -> None:
+    job = _job(
+        title="Product Marketing Manager",
+        location="Remote US",
+        description="Lead messaging and go-to-market strategy.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.role_family == "marketing"
+    assert fit.classification == "near_fit"
+
+
+def test_user_researcher_is_research_near_fit() -> None:
+    job = _job(
+        title="User Researcher",
+        location="Remote US",
+        description="Drive user interviews and research synthesis.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.role_family == "research"
+    assert fit.classification == "near_fit"
+
+
+def test_chief_of_staff_is_executive_near_fit() -> None:
+    job = _job(
+        title="Chief of Staff",
+        location="Remote US",
+        description="Support strategic planning and executive operations.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.role_family == "executive"
+    assert fit.classification == "near_fit"
