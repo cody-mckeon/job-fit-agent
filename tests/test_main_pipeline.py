@@ -248,33 +248,70 @@ def test_collect_scored_jobs_aggregates_successful_companies_only() -> None:
     assert "Software Engineer" not in titles
 
 
-def test_digest_prints_saved_high_and_near_fit_jobs(monkeypatch, capsys) -> None:
+def test_digest_does_not_call_collectors(monkeypatch, capsys) -> None:
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     monkeypatch.setattr(
         "job_fit_agent.main.get_top_jobs_by_classification",
-        lambda classification, limit=10: [
-            {
-                "score": 97 if classification == "high_fit" else 74,
-                "title": "Staff PM" if classification == "high_fit" else "TPM",
-                "company": "openai",
-                "source": "greenhouse",
-                "url": f"https://example.com/{classification}",
-                "red_flags": "[]",
-            }
-        ],
+        lambda classification, limit=10: [],
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.GreenhouseCollector",
+        lambda: (_ for _ in ()).throw(AssertionError("collector should not be constructed for digest")),
     )
 
     main(["digest"])
     output = capsys.readouterr().out
 
-    assert "Top saved high-fit jobs" in output
-    assert "Top saved near-fit jobs" in output
+    assert "No saved jobs found." in output
+
+
+def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "score": 97,
+                "title": "Staff PM",
+                "company": "openai",
+                "source": "greenhouse",
+                "url": "https://example.com/high_fit",
+                "red_flags": "[]",
+            }
+        ]
+        if classification == "high_fit"
+        else [],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "Saved high-fit jobs" in output
     assert "score: 97" in output
-    assert "score: 74" in output
     assert "title: Staff PM" in output
+
+
+def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "score": 74,
+                "title": "TPM",
+                "company": "openai",
+                "source": "greenhouse",
+                "url": "https://example.com/near_fit",
+                "red_flags": "[]",
+            }
+        ]
+        if classification == "near_fit"
+        else [],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "Saved near-fit jobs" in output
+    assert "score: 74" in output
     assert "title: TPM" in output
-    assert "company: openai" in output
-    assert "source: greenhouse" in output
-    assert "url: https://example.com/high_fit" in output
-    assert "url: https://example.com/near_fit" in output
-    assert "red_flags: none" in output

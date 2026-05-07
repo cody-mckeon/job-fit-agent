@@ -172,9 +172,13 @@ def print_digest() -> None:
     high_fit_rows = get_top_jobs_by_classification("high_fit", limit=10)
     near_fit_rows = get_top_jobs_by_classification("near_fit", limit=10)
 
-    _print_digest_rows("Top saved high-fit jobs", high_fit_rows)
+    if not high_fit_rows and not near_fit_rows:
+        print("No saved jobs found.")
+        return
+
+    _print_digest_rows("Saved high-fit jobs", high_fit_rows)
     print()
-    _print_digest_rows("Top saved near-fit jobs", near_fit_rows)
+    _print_digest_rows("Saved near-fit jobs", near_fit_rows)
 
 
 def main(argv: list[str] | None = None) -> None:
