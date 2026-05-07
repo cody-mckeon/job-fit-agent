@@ -20,6 +20,25 @@ class GreenhouseCollector:
     def __init__(self, timeout: int = 10) -> None:
         self.timeout = timeout
 
+    def validate_company_token(self, company_name: str) -> bool:
+        """Return True when the Greenhouse board token is reachable."""
+        url = GREENHOUSE_BOARD_URL.format(company=company_name)
+        try:
+            response = requests.get(url, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            status_code = (
+                exc.response.status_code
+                if getattr(exc, "response", None) is not None
+                else None
+            )
+            if status_code == 404:
+                LOGGER.warning("Greenhouse board token not found for %s (404)", company_name)
+            else:
+                LOGGER.warning("Greenhouse board token validation failed for %s: %s", company_name, exc)
+            return False
+        return True
+
     def fetch_jobs(self, company: str) -> list[JobPosting]:
         """Fetch jobs for a company board and map them to `JobPosting` models."""
         url = GREENHOUSE_BOARD_URL.format(company=company)

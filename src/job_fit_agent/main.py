@@ -49,6 +49,9 @@ def collect_scored_jobs(
     below_threshold_jobs: list[tuple[JobPosting, FitScore]] = []
 
     for company in companies:
+        if not collector.validate_company_token(company):
+            LOGGER.info("Skipping company after failed token validation: %s", company)
+            continue
         try:
             jobs = collector.fetch_jobs(company)
         except Exception as exc:  # pragma: no cover - defensive guardrail for collectors
@@ -83,15 +86,24 @@ def main() -> None:
     print(f"source: {source}")
     print(f"companies: {', '.join(selected_companies)}")
 
+    successful_companies: list[str] = []
+    failed_companies: list[str] = []
+
+    for company in selected_companies:
+        if collector.validate_company_token(company):
+            successful_companies.append(company)
+        else:
+            failed_companies.append(company)
+
     ranked_jobs, below_threshold_jobs = collect_scored_jobs(
         collector=collector,
         target_profile=target_profile,
-        companies=selected_companies,
+        companies=successful_companies,
         min_score=45,
     )
 
     jobs_fetched = 0
-    for company in selected_companies:
+    for company in successful_companies:
         try:
             jobs_fetched += len(collector.fetch_jobs(company))
         except Exception as exc:  # pragma: no cover
@@ -148,6 +160,8 @@ def main() -> None:
                 print("-" * 40)
 
     print("Summary")
+    print(f"successful companies: {", ".join(successful_companies) if successful_companies else "none"}")
+    print(f"failed companies: {", ".join(failed_companies) if failed_companies else "none"}")
     print(f"companies checked: {len(selected_companies)}")
     print(f"jobs fetched: {jobs_fetched}")
     print(f"high_fit count: {len(high_fit_jobs)}")

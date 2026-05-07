@@ -9,8 +9,12 @@ from job_fit_agent.models import JobPosting
 
 
 class StubCollector:
-    def __init__(self, jobs_by_company):
+    def __init__(self, jobs_by_company, invalid_companies=None):
         self.jobs_by_company = jobs_by_company
+        self.invalid_companies = set(invalid_companies or [])
+
+    def validate_company_token(self, company: str) -> bool:
+        return company not in self.invalid_companies
 
     def fetch_jobs(self, company: str):
         return self.jobs_by_company.get(company, [])
@@ -31,7 +35,9 @@ def test_company_watchlist_loads_correctly() -> None:
     watchlist = load_company_watchlist()
 
     assert isinstance(watchlist, CompanyWatchlist)
-    assert watchlist.greenhouse == ["stripe", "duolingo"]
+    assert watchlist.greenhouse[:2] == ["stripe", "duolingo"]
+    assert "openai" in watchlist.greenhouse
+    assert "supabase" in watchlist.greenhouse
 
 
 def test_pipeline_accepts_company_list_from_config() -> None:
@@ -40,7 +46,9 @@ def test_pipeline_accepts_company_list_from_config() -> None:
 
     ranked = collect_ranked_jobs(collector=collector, target_profile=load_target_profile(), companies=companies, min_score=0)
 
-    assert companies == ["stripe", "duolingo"]
+    assert "stripe" in companies
+    assert "duolingo" in companies
+    assert len(companies) >= 2
     assert len(ranked) == 1
 
 
