@@ -1,7 +1,7 @@
-"""CLI entry point for job-fit-agent."""
-
 from __future__ import annotations
 
+import argparse
+import json
 import logging
 from typing import Protocol
 
@@ -10,7 +10,7 @@ from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
-from job_fit_agent.repository import initialize, upsert_job
+from job_fit_agent.repository import get_top_jobs_by_classification, initialize, upsert_job
 from job_fit_agent.scoring import score_job
 
 LOGGER = logging.getLogger(__name__)
@@ -18,7 +18,6 @@ LOGGER = logging.getLogger(__name__)
 
 class JobCollector(Protocol):
     def fetch_jobs(self, company: str) -> list[JobPosting]: ...
-
 
 
 def group_jobs_by_classification(
@@ -101,7 +100,24 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
         print("-")
 
 
-def main() -> None:
+def _print_digest_rows(section_title: str, rows: list[dict]) -> None:
+    print(section_title)
+    if not rows:
+        print("none")
+        return
+
+    for row in rows:
+        red_flags = json.loads(row["red_flags"]) if row["red_flags"] else []
+        print(f"score: {row['score']}")
+        print(f"title: {row['title']}")
+        print(f"company: {row['company']}")
+        print(f"source: {row['source']}")
+        print(f"url: {row['url']}")
+        print(f"red_flags: {', '.join(red_flags) if red_flags else 'none'}")
+        print("-")
+
+
+def run_pipeline() -> None:
     target_profile = load_target_profile()
     app_config = AppConfig()
     initialize()
@@ -118,49 +134,25 @@ def main() -> None:
         if source != "lever" or app_config.enable_lever
     }
 
-    successful_by_source: dict[str, list[str]] = {}
-    failed_by_source: dict[str, list[str]] = {}
     all_ranked: list[tuple[JobPosting, FitScore]] = []
     all_below: list[tuple[JobPosting, FitScore]] = []
 
     for source, collector in enabled_collectors.items():
         companies = resolve_companies(source=source)
-        success: list[str] = []
-        failed: list[str] = []
-
-        for company in companies:
-            jobs = collector.fetch_jobs(company)
-            if jobs:
-                success.append(company)
-            else:
-                failed.append(company)
-
-        successful_by_source[source] = success
-        failed_by_source[source] = failed
-
-        ranked, below = collect_scored_jobs(collector, target_profile, success, min_score=45)
+        ranked, below = collect_scored_jobs(collector, target_profile, companies, min_score=45)
         all_ranked.extend(ranked)
         all_below.extend(below)
 
     all_scored_jobs = all_ranked + all_below
 
-    new_added = 0
-    existing_updated = 0
-    duplicates_skipped = 0
     new_matching: list[tuple[JobPosting, FitScore]] = []
 
     for job, fit in all_scored_jobs:
         result = upsert_job(job, fit)
-        if result.is_new:
-            new_added += 1
-            if fit.classification in {"high_fit", "near_fit"}:
-                new_matching.append((job, fit))
-        elif result.updated:
-            existing_updated += 1
-        elif result.skipped_duplicate:
-            duplicates_skipped += 1
+        if result.is_new and fit.classification in {"high_fit", "near_fit"}:
+            new_matching.append((job, fit))
 
-    high_fit_jobs, near_fit_jobs, low_fit_jobs = group_jobs_by_classification(new_matching)
+    high_fit_jobs, near_fit_jobs, _ = group_jobs_by_classification(new_matching)
 
     if high_fit_jobs:
         print_jobs("High-fit jobs to review", high_fit_jobs, limit=15)
@@ -174,19 +166,26 @@ def main() -> None:
     if not high_fit_jobs and not near_fit_jobs:
         print("No new matching jobs found.")
 
-    print("Summary")
-    for source in enabled_collectors:
-        success = successful_by_source[source]
-        failed = failed_by_source[source]
-        print(f"{source} successful companies: {', '.join(success) if success else 'none'}")
-        print(f"{source} failed companies: {', '.join(failed) if failed else 'none'}")
-    print(f"new jobs added: {new_added}")
-    print(f"existing jobs updated: {existing_updated}")
-    print(f"duplicate jobs skipped: {duplicates_skipped}")
-    print(f"high_fit count: {len(high_fit_jobs)}")
-    print(f"near_fit count: {len(near_fit_jobs)}")
-    print(f"low_fit count: {len(low_fit_jobs)}")
 
+def print_digest() -> None:
+    initialize()
+    high_fit_rows = get_top_jobs_by_classification("high_fit", limit=10)
+    near_fit_rows = get_top_jobs_by_classification("near_fit", limit=10)
+
+    _print_digest_rows("Top saved high-fit jobs", high_fit_rows)
+    print()
+    _print_digest_rows("Top saved near-fit jobs", near_fit_rows)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="job_fit_agent")
+    parser.add_argument("command", nargs="?", choices=["run", "digest"], default="run")
+    args = parser.parse_args(argv if argv is not None else [])
+
+    if args.command == "digest":
+        print_digest()
+    else:
+        run_pipeline()
 
 
 if __name__ == "__main__":
