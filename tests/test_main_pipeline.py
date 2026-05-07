@@ -4,8 +4,12 @@ from job_fit_agent.models import JobPosting
 
 
 class StubCollector:
-    def __init__(self, jobs_by_company):
+    def __init__(self, jobs_by_company, invalid_companies=None):
         self.jobs_by_company = jobs_by_company
+        self.invalid_companies = set(invalid_companies or [])
+
+    def validate_company_token(self, company: str) -> bool:
+        return company not in self.invalid_companies
 
     def fetch_jobs(self, company: str):
         return self.jobs_by_company.get(company, [])
@@ -139,3 +143,20 @@ def test_main_prints_low_fit_debug_only_when_no_high_or_near(monkeypatch, capsys
     assert "No high-fit jobs found." in output
     assert "Near-fit jobs worth reviewing" not in output
     assert "Top low-fit jobs for review" in output
+
+
+def test_collect_scored_jobs_aggregates_successful_companies_only() -> None:
+    keep = _job("Product Manager AI", location="Remote US")
+    dropped = _job("Software Engineer", location="On-site", description="backend")
+    collector = StubCollector({"openai": [keep], "badtoken": [dropped]}, invalid_companies={"badtoken"})
+
+    ranked, below = collect_scored_jobs(
+        collector=collector,
+        target_profile=load_target_profile(),
+        companies=["openai", "badtoken"],
+        min_score=0,
+    )
+
+    titles = [job.title for job, _ in ranked + below]
+    assert "Product Manager AI" in titles
+    assert "Software Engineer" not in titles

@@ -49,3 +49,31 @@ def test_fetch_jobs_handles_failed_request(monkeypatch):
     jobs = collector.fetch_jobs("openai")
 
     assert jobs == []
+
+
+def test_validate_company_token_handles_404(monkeypatch):
+    response = Mock()
+    response.status_code = 404
+    err = requests.RequestException("not found")
+    err.response = response
+
+    def _raise(*args, **kwargs):
+        raise err
+
+    monkeypatch.setattr(requests, "get", _raise)
+
+    collector = GreenhouseCollector()
+    assert collector.validate_company_token("missing-company") is False
+
+
+def test_fetch_jobs_handles_empty_company_response(monkeypatch):
+    mock_response = Mock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {"jobs": []}
+
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
+
+    collector = GreenhouseCollector(timeout=3)
+    jobs = collector.fetch_jobs("openai")
+
+    assert jobs == []

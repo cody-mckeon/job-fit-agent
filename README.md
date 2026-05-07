@@ -19,7 +19,13 @@ greenhouse:
 
 To add or remove companies, edit this list and run the pipeline again.
 
-> Note: Greenhouse board tokens may not match human-readable company names. Use the board token that works in the API URL.
+> Note: Greenhouse board tokens may not match human-readable company names. For example, a company brand and the token segment in `.../boards/{token}/jobs` can differ.
+
+To validate a token, open:
+
+- `https://boards-api.greenhouse.io/v1/boards/{token}/jobs`
+
+A valid token returns HTTP 200 with a `jobs` payload; an invalid token usually returns HTTP 404.
 
 ## Location fit logic (Cody profile)
 
