@@ -1,63 +1,100 @@
-"""Simple keyword-based scoring for job fit."""
+"""Keyword-based scoring for job fit."""
 
 from job_fit_agent.models import FitScore, JobPosting
 
-ROLE_KEYWORDS = {
-    "product manager": 30,
-    "product owner": 28,
-    "product operations": 24,
-    "product ops": 24,
-    "pm": 8,
+STRONG_POSITIVE_KEYWORDS = {
+    "senior product manager": 30,
+    "technical product manager": 30,
+    "product manager": 26,
+    "product operations": 22,
+    "product analytics": 22,
+    "growth product": 20,
+    "ai product": 20,
+    "data product": 20,
+    "web analytics": 18,
+    "marketing technology": 16,
+    "experimentation": 16,
+    "personalization": 16,
+    "agentic ai": 20,
+    "analytics platform": 18,
+    "customer-facing web products": 16,
 }
 
-DOMAIN_KEYWORDS = {
-    "ai": 15,
-    "analytics": 12,
+MEDIUM_POSITIVE_KEYWORDS = {
+    "analytics": 10,
     "data": 8,
-    "web analytics": 12,
-    "machine learning": 12,
+    "ai": 10,
+    "machine learning": 10,
+    "platform": 8,
+    "revenue": 6,
+    "hospitality": 6,
+    "fintech": 6,
+    "marketplace": 6,
+    "lifecycle": 6,
+    "conversion": 6,
+    "funnel": 6,
+    "dashboard": 6,
+    "a/b testing": 8,
 }
 
-LOCATION_KEYWORDS = {
-    "remote": 18,
-    "las vegas": 12,
-    "hybrid": 10,
+LOCATION_POSITIVE_KEYWORDS = {
+    "remote us": 16,
+    "united states": 10,
+    "remote": 12,
+    "hybrid": 8,
+    "las vegas": 8,
+    "nevada": 6,
 }
 
-EXCLUSION_KEYWORDS = {
-    "senior engineer": -35,
-    "software engineer": -25,
-    "sales": -30,
-    "nurse": -40,
-    "driver": -40,
+NEGATIVE_KEYWORDS = {
+    "engineer only": -30,
+    "software engineer": -35,
+    "infrastructure engineer": -35,
+    "nurse": -45,
+    "driver": -45,
+    "sales development": -35,
+    "account executive": -35,
+    "finance operations": -20,
+    "tax": -25,
+    "legal": -25,
+    "government relations": -25,
+    "public policy": -20,
+    "treasury": -35,
+    "customer support only": -30,
+    "onsite outside us": -25,
 }
 
 
-def score_job(job: JobPosting) -> FitScore:
-    """Score a job posting against basic role/domain/location preferences."""
+def explain_score(job: JobPosting) -> FitScore:
+    """Return full scoring details for a job posting."""
     text = f"{job.title} {job.description} {job.location}".lower()
     score = 0
     reasons: list[str] = []
     red_flags: list[str] = []
 
-    for keyword, points in ROLE_KEYWORDS.items():
+    for keyword, points in STRONG_POSITIVE_KEYWORDS.items():
         if keyword in text:
             score += points
-            reasons.append(f"Matched role keyword: {keyword}")
+            reasons.append(f"Strong match: {keyword} (+{points})")
 
-    for keyword, points in DOMAIN_KEYWORDS.items():
+    for keyword, points in MEDIUM_POSITIVE_KEYWORDS.items():
         if keyword in text:
             score += points
-            reasons.append(f"Matched domain keyword: {keyword}")
+            reasons.append(f"Medium match: {keyword} (+{points})")
 
-    for keyword, points in LOCATION_KEYWORDS.items():
+    for keyword, points in LOCATION_POSITIVE_KEYWORDS.items():
         if keyword in text:
             score += points
-            reasons.append(f"Matched location preference: {keyword}")
+            reasons.append(f"Location match: {keyword} (+{points})")
 
-    for keyword, points in EXCLUSION_KEYWORDS.items():
+    for keyword, points in NEGATIVE_KEYWORDS.items():
         if keyword in text:
             score += points
-            red_flags.append(f"Possible mismatch keyword: {keyword}")
+            red_flags.append(f"Mismatch keyword: {keyword} ({points})")
 
     return FitScore(total_score=max(0, score), reasons=reasons, red_flags=red_flags)
+
+
+def score_job(job: JobPosting) -> FitScore:
+    """Score a job posting against role, domain, and location preferences."""
+    return explain_score(job)

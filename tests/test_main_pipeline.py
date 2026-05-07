@@ -40,7 +40,7 @@ def test_collect_ranked_jobs_excludes_below_threshold() -> None:
 
     collector = StubCollector({"openai": [keep, drop]})
 
-    ranked = collect_ranked_jobs(collector=collector, companies=["openai"], min_score=60)
+    ranked = collect_ranked_jobs(collector=collector, companies=["openai"], min_score=45)
 
     assert len(ranked) == 1
     assert ranked[0][0].title == "Product Manager AI"
