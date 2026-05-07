@@ -23,6 +23,7 @@ class CompanyWatchlist(BaseModel):
     """Company board tokens grouped by source."""
 
     greenhouse: list[str] = Field(default_factory=list)
+    ashby: list[str] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):

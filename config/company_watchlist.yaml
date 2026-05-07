@@ -13,3 +13,15 @@ greenhouse:
   - cloudflare
   - vercel
   - supabase
+
+ashby:
+  - anthropic
+  - notion
+  - cursor
+  - perplexity
+  - elevenlabs
+  - replit
+  - linear
+  - langchain
+  - modal
+  - mercor
