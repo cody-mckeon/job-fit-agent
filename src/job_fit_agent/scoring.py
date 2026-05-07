@@ -13,7 +13,8 @@ LOCATION_NOT_FIT_CAP = 44
 REMOTE_US_BONUS = 16
 LOCAL_LOCATION_BONUS = 14
 HYBRID_LOCAL_BONUS = 10
-US_NON_LOCAL_PENALTY = -28
+US_NON_LOCAL_PENALTY = -40
+ONSITE_INTERNATIONAL_PENALTY = -60
 UNKNOWN_LOCATION_PENALTY = -4
 HYBRID_UNSPECIFIED_PENALTY = -8
 PRIORITY_COMPANY_BONUS = 10
@@ -94,7 +95,7 @@ def classify_role_family(title: str) -> str:
     return "unknown"
 
 
-def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tuple[int, list[str], list[str], bool]:
+def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tuple[int, list[str], list[str], bool, bool]:
     """Evaluate location fit for Cody's remote/local constraints."""
     location_text = job.location.lower()
     workplace_type_text = job.workplace_type.lower()
@@ -117,9 +118,11 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     has_remote_us = any(term in combined_location_text for term in remote_terms if "us" in term or "united states" in term)
     has_local = (not has_unknown_location) and any(term in location_text for term in local_terms)
     is_hybrid = "hybrid" in combined_location_text
+    is_onsite = "onsite" in combined_location_text or "on-site" in combined_location_text
 
     score_delta = 0
     location_fit = False
+    onsite_non_local_block = False
 
     if has_unknown_geo:
         score_delta += UNKNOWN_LOCATION_PENALTY
@@ -138,14 +141,19 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
             score_delta += HYBRID_LOCAL_BONUS
             reasons.append(f"Location fit: Hybrid in local market ({HYBRID_LOCAL_BONUS:+d})")
 
-    if any(term in location_text for term in excluded_terms):
-        score_delta += EXCLUDED_LOCATION_PENALTY
+    has_international = any(term in location_text for term in excluded_terms)
+    if has_international:
+        penalty = ONSITE_INTERNATIONAL_PENALTY if is_onsite and not has_local and not has_remote_us else EXCLUDED_LOCATION_PENALTY
+        score_delta += penalty
         red_flags.append("International location outside US/Las Vegas constraints")
 
     has_non_local_us = any(term in location_text for term in non_local_us_terms)
     if has_non_local_us and not has_remote_us:
         score_delta += US_NON_LOCAL_PENALTY
         red_flags.append("Onsite or location-specific US role outside Las Vegas/Nevada")
+
+    if is_onsite and not has_local and not has_remote_us:
+        onsite_non_local_block = True
 
     if has_remote and not has_remote_us and not has_local and has_unknown_location:
         red_flags.append("Remote role with unspecified geography")
@@ -157,7 +165,7 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     if has_unknown_location and has_unknown_workplace_type:
         location_fit = False
 
-    return score_delta, reasons, red_flags, location_fit
+    return score_delta, reasons, red_flags, location_fit, onsite_non_local_block
 
 
 def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
@@ -197,7 +205,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             score += PREFERRED_LOCATION_SCORE
             reasons.append(f"Preferred location phrase: {location} (+{PREFERRED_LOCATION_SCORE})")
 
-    location_score, location_reasons, location_flags, location_fit = _evaluate_location_fit(job, target_profile)
+    location_score, location_reasons, location_flags, location_fit, onsite_non_local_block = _evaluate_location_fit(job, target_profile)
     score += location_score
     reasons.extend(location_reasons)
     red_flags.extend(location_flags)
@@ -225,12 +233,16 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         role_family = "unknown"
     has_forced_low_fit_title = any(term in job.title.lower() for term in FORCED_LOW_FIT_TITLES)
     has_location_blocker = location_score <= EXCLUDED_LOCATION_PENALTY
-    if has_strong_match and not has_location_blocker and role_family in {"product_management", "product_operations"}:
+    is_high_fit_role_match = has_strong_match and role_family in {"product_management", "product_operations"}
+    if is_high_fit_role_match and not has_location_blocker:
         classification = "high_fit"
     elif any(term in text for term in NEAR_FIT_TERMS) or role_family in {"marketing", "customer_success", "research", "executive"}:
         classification = "near_fit"
     else:
         classification = "low_fit"
+
+    if onsite_non_local_block and is_high_fit_role_match:
+        classification = "near_fit"
 
     if role_family in {"engineering", "data_science"}:
         classification = "low_fit"
