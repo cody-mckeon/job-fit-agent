@@ -16,14 +16,21 @@ class TargetProfile(BaseModel):
     excluded_locations: list[str] = Field(default_factory=list)
 
 
+class CompanyWatchlist(BaseModel):
+    """Company board tokens grouped by source."""
+
+    greenhouse: list[str] = Field(default_factory=list)
+
+
 class AppConfig(BaseModel):
     """Runtime configuration for the application."""
 
     target_profile_path: Path = Field(default_factory=lambda: Path("config/target_profile.yaml"))
+    company_watchlist_path: Path = Field(default_factory=lambda: Path("config/company_watchlist.yaml"))
 
 
 def _parse_simple_yaml(yaml_text: str) -> dict[str, list[str]]:
-    """Parse simple key/list YAML used by target profile config."""
+    """Parse simple key/list YAML used by config files."""
     data: dict[str, list[str]] = {}
     current_key: str | None = None
 
@@ -49,3 +56,12 @@ def load_target_profile(path: str | Path | None = None) -> TargetProfile:
 
     loaded = _parse_simple_yaml(profile_path.read_text(encoding="utf-8"))
     return TargetProfile(**loaded)
+
+
+def load_company_watchlist(path: str | Path | None = None) -> CompanyWatchlist:
+    """Load company watchlist from YAML."""
+    config = AppConfig()
+    watchlist_path = Path(path) if path else config.company_watchlist_path
+
+    loaded = _parse_simple_yaml(watchlist_path.read_text(encoding="utf-8"))
+    return CompanyWatchlist(**loaded)
