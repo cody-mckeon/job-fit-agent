@@ -76,6 +76,25 @@ def resolve_companies(source: str = "greenhouse") -> list[str]:
     return companies
 
 
+def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]], limit: int = 15) -> None:
+    if not jobs:
+        return
+
+    if section_title:
+        print(section_title)
+    for job, fit in sorted(jobs, key=lambda item: item[1].total_score, reverse=True)[:limit]:
+        print(f"score: {fit.total_score}")
+        print(f"classification: {fit.classification}")
+        print(f"source: {job.source}")
+        print(f"title: {job.title}")
+        print(f"company: {job.company}")
+        print(f"location: {job.location}")
+        print(f"url: {job.url}")
+        print(f"reasons: {', '.join(fit.reasons) if fit.reasons else 'none'}")
+        print(f"red_flags: {', '.join(fit.red_flags) if fit.red_flags else 'none'}")
+        print("-")
+
+
 def main() -> None:
     target_profile = load_target_profile()
     collectors: dict[str, JobCollector] = {
@@ -112,9 +131,14 @@ def main() -> None:
 
     if len(high_fit_jobs) == 0:
         print("No high-fit jobs found.")
+    else:
+        print_jobs("High-fit jobs to review", high_fit_jobs, limit=15)
 
     if near_fit_jobs:
+        if high_fit_jobs:
+            print()
         print("Near-fit jobs worth reviewing")
+        print_jobs(None, near_fit_jobs)
 
     if len(high_fit_jobs) == 0 and not near_fit_jobs:
         print("Top low-fit jobs for review")
