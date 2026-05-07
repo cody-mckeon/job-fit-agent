@@ -44,6 +44,13 @@ NEAR_FIT_TERMS = {
 }
 
 PMM_HIGH_FIT_KEYWORDS = {"product analytics", "experimentation", "ai", "platform", "customer-facing web"}
+FORCED_LOW_FIT_TITLES = {
+    "software engineer",
+    "product engineer",
+    "member of technical staff",
+    "infrastructure engineer",
+    "engineering manager",
+}
 
 
 def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tuple[int, list[str], list[str], bool]:
@@ -60,13 +67,17 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     non_local_us_terms = [term.lower() for term in target_profile.non_remote_us_locations]
     excluded_terms = [term.lower() for term in target_profile.excluded_locations]
 
+    has_unknown_location = not job.location.strip()
     has_remote = "remote" in combined_text
     has_remote_us = any(term in combined_text for term in remote_terms if "us" in term or "united states" in term)
-    has_local = any(term in combined_text for term in local_terms)
+    has_local = (not has_unknown_location) and any(term in location_text for term in local_terms)
     is_hybrid = "hybrid" in combined_text
 
     score_delta = 0
     location_fit = False
+
+    if has_unknown_location:
+        red_flags.append("Unknown location")
 
     if has_remote_us:
         score_delta += REMOTE_US_BONUS
@@ -149,10 +160,14 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         red_flags.append("Product Marketing Manager role lacks product analytics/experimentation/AI/platform/customer-facing web context")
 
     classification = "low_fit"
+    has_forced_low_fit_title = any(term in job.title.lower() for term in FORCED_LOW_FIT_TITLES)
     if location_fit and has_strong_match:
         classification = "high_fit"
     elif any(term in text for term in NEAR_FIT_TERMS):
         classification = "near_fit"
+
+    if has_forced_low_fit_title:
+        classification = "low_fit"
 
     return FitScore(total_score=max(0, score), classification=classification, reasons=reasons, red_flags=red_flags)
 
