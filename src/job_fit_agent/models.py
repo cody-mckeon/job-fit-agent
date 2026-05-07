@@ -12,6 +12,9 @@ class JobPosting(BaseModel):
     location: str
     url: str
     description: str
+    workplace_type: str = ""
+    department: str = ""
+    team: str = ""
     date_found: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

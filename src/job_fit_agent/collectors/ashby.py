@@ -55,6 +55,9 @@ class AshbyCollector:
             return None
 
         location = self._extract_location(job)
+        workplace_type = self._extract_workplace_type(job)
+        department = self._extract_field_name(job, ("departmentName", "department"))
+        team = self._extract_field_name(job, ("teamName", "team"))
 
         description = str(job.get("descriptionPlain") or job.get("description") or "").strip()
 
@@ -63,13 +66,16 @@ class AshbyCollector:
             company=company,
             title=title,
             location=location,
+            workplace_type=workplace_type,
+            department=department,
+            team=team,
             url=url,
             description=description,
             date_found=datetime.now(timezone.utc),
         )
 
     def _extract_location(self, job: dict[str, Any]) -> str:
-        """Build a best-effort location string from Ashby location metadata."""
+        """Build a best-effort location string from Ashby geographic metadata only."""
         location_parts: list[str] = []
 
         def _add_part(value: Any) -> None:
@@ -84,14 +90,6 @@ class AshbyCollector:
 
         _add_part(job.get("locationName"))
 
-        workplace_type = str(job.get("workplaceType") or "").strip().lower()
-        if workplace_type:
-            if "remote" in workplace_type:
-                if any("us" in part.lower() or "united states" in part.lower() for part in location_parts):
-                    return "Remote US"
-                return "Remote"
-            _add_part(job.get("workplaceType"))
-
         address_obj = job.get("address")
         if isinstance(address_obj, dict):
             for key in ("city", "region", "state", "country", "countryCode"):
@@ -100,11 +98,30 @@ class AshbyCollector:
         elif isinstance(address_obj, str):
             _add_part(address_obj)
 
-        for key in ("departmentName", "teamName", "department", "team"):
+        return " | ".join(location_parts)
+
+    def _extract_workplace_type(self, job: dict[str, Any]) -> str:
+        workplace = str(job.get("workplaceType") or "").strip()
+        if not workplace:
+            return ""
+        normalized = workplace.lower()
+        if "remote" in normalized:
+            return "Remote"
+        if "hybrid" in normalized:
+            return "Hybrid"
+        if "on" in normalized and "site" in normalized:
+            return "Onsite"
+        return workplace
+
+    def _extract_field_name(self, job: dict[str, Any], keys: tuple[str, ...]) -> str:
+        for key in keys:
             value = job.get(key)
             if isinstance(value, dict):
-                _add_part(value.get("name"))
+                name = str(value.get("name") or "").strip()
+                if name:
+                    return name
             else:
-                _add_part(value)
-
-        return " | ".join(location_parts)
+                text = str(value or "").strip()
+                if text:
+                    return text
+        return ""

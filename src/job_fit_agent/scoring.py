@@ -56,8 +56,8 @@ FORCED_LOW_FIT_TITLES = {
 def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tuple[int, list[str], list[str], bool]:
     """Evaluate location fit for Cody's remote/local constraints."""
     location_text = job.location.lower()
-    description_text = job.description.lower()
-    combined_text = f"{location_text} {description_text}"
+    workplace_type_text = job.workplace_type.lower()
+    combined_location_text = f"{location_text} {workplace_type_text}"
 
     reasons: list[str] = []
     red_flags: list[str] = []
@@ -68,10 +68,10 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     excluded_terms = [term.lower() for term in target_profile.excluded_locations]
 
     has_unknown_location = not job.location.strip()
-    has_remote = "remote" in combined_text
-    has_remote_us = any(term in combined_text for term in remote_terms if "us" in term or "united states" in term)
+    has_remote = "remote" in combined_location_text
+    has_remote_us = any(term in combined_location_text for term in remote_terms if "us" in term or "united states" in term)
     has_local = (not has_unknown_location) and any(term in location_text for term in local_terms)
-    is_hybrid = "hybrid" in combined_text
+    is_hybrid = "hybrid" in combined_location_text
 
     score_delta = 0
     location_fit = False
@@ -92,11 +92,11 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
             score_delta += HYBRID_LOCAL_BONUS
             reasons.append(f"Location fit: Hybrid in local market ({HYBRID_LOCAL_BONUS:+d})")
 
-    if any(term in combined_text for term in excluded_terms):
+    if any(term in location_text for term in excluded_terms):
         score_delta += EXCLUDED_LOCATION_PENALTY
         red_flags.append("International location outside US/Las Vegas constraints")
 
-    has_non_local_us = any(term in combined_text for term in non_local_us_terms)
+    has_non_local_us = any(term in location_text for term in non_local_us_terms)
     if has_non_local_us and not has_remote_us:
         score_delta += US_NON_LOCAL_PENALTY
         red_flags.append("Onsite or location-specific US role outside Las Vegas/Nevada")
@@ -109,7 +109,7 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
 
 def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     """Return full scoring details for a job posting."""
-    text = f"{job.title} {job.description} {job.location}".lower()
+    text = f"{job.title} {job.description} {job.location} {job.workplace_type} {job.department} {job.team}".lower()
     score = 0
     reasons: list[str] = []
     red_flags: list[str] = []
