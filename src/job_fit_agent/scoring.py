@@ -14,6 +14,8 @@ REMOTE_US_BONUS = 16
 LOCAL_LOCATION_BONUS = 14
 HYBRID_LOCAL_BONUS = 10
 US_NON_LOCAL_PENALTY = -28
+UNKNOWN_LOCATION_PENALTY = -4
+HYBRID_UNSPECIFIED_PENALTY = -8
 
 NEGATIVE_KEYWORDS = {
     "engineer only": -30,
@@ -68,6 +70,10 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     excluded_terms = [term.lower() for term in target_profile.excluded_locations]
 
     has_unknown_location = not job.location.strip()
+    has_unknown_workplace_type = not job.workplace_type.strip()
+    has_unknown_geo = has_unknown_location and not any(
+        term in combined_location_text for term in remote_terms + local_terms + non_local_us_terms + excluded_terms
+    )
     has_remote = "remote" in combined_location_text
     has_remote_us = any(term in combined_location_text for term in remote_terms if "us" in term or "united states" in term)
     has_local = (not has_unknown_location) and any(term in location_text for term in local_terms)
@@ -76,8 +82,9 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     score_delta = 0
     location_fit = False
 
-    if has_unknown_location:
-        red_flags.append("Unknown location")
+    if has_unknown_geo:
+        score_delta += UNKNOWN_LOCATION_PENALTY
+        red_flags.append("Location not specified")
 
     if has_remote_us:
         score_delta += REMOTE_US_BONUS
@@ -101,8 +108,15 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
         score_delta += US_NON_LOCAL_PENALTY
         red_flags.append("Onsite or location-specific US role outside Las Vegas/Nevada")
 
-    if has_remote and not has_remote_us and not has_local:
-        red_flags.append("Remote language found but not clearly Remote US")
+    if has_remote and not has_remote_us and not has_local and has_unknown_location:
+        red_flags.append("Remote role with unspecified geography")
+
+    if is_hybrid and not has_remote_us and not has_local and has_unknown_location:
+        score_delta += HYBRID_UNSPECIFIED_PENALTY
+        red_flags.append("Hybrid role with unspecified location")
+
+    if has_unknown_location and has_unknown_workplace_type:
+        location_fit = False
 
     return score_delta, reasons, red_flags, location_fit
 
@@ -147,7 +161,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             score += points
             red_flags.append(f"Mismatch keyword: {keyword} ({points})")
 
-    if not location_fit and title_hits > 0:
+    if not location_fit and title_hits > 0 and location_score <= EXCLUDED_LOCATION_PENALTY:
         red_flags.append("Role is title-aligned but location is not a fit")
         score = min(score, LOCATION_NOT_FIT_CAP)
 
@@ -161,7 +175,8 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
 
     classification = "low_fit"
     has_forced_low_fit_title = any(term in job.title.lower() for term in FORCED_LOW_FIT_TITLES)
-    if location_fit and has_strong_match:
+    has_location_blocker = location_score <= EXCLUDED_LOCATION_PENALTY
+    if has_strong_match and not has_location_blocker:
         classification = "high_fit"
     elif any(term in text for term in NEAR_FIT_TERMS):
         classification = "near_fit"

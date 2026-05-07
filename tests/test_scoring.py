@@ -111,7 +111,7 @@ def test_remote_engineering_manager_is_low_fit() -> None:
     assert fit.classification == "low_fit"
 
 
-def test_blank_location_gets_unknown_location_red_flag() -> None:
+def test_blank_location_gets_location_not_specified_red_flag() -> None:
     job = _job(
         title="Product Manager",
         location="",
@@ -119,7 +119,7 @@ def test_blank_location_gets_unknown_location_red_flag() -> None:
     )
 
     fit = score_job(job, TARGET_PROFILE)
-    assert "Unknown location" in fit.red_flags
+    assert "Location not specified" in fit.red_flags
 
 
 def test_blank_location_does_not_receive_local_points() -> None:
@@ -200,7 +200,7 @@ def test_location_scoring_ignores_department_team_text() -> None:
     job.team = "London"
 
     fit = score_job(job, TARGET_PROFILE)
-    assert "Unknown location" in fit.red_flags
+    assert "Location not specified" in fit.red_flags
     assert all("International location" not in flag for flag in fit.red_flags)
 
 
@@ -214,3 +214,52 @@ def test_remote_workplace_type_contributes_to_fit() -> None:
 
     fit = score_job(job, TARGET_PROFILE)
     assert any("Remote US" in reason for reason in fit.reasons)
+
+
+def test_remote_unspecified_geography_stays_eligible() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="",
+        description="Drive AI experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Remote"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+    assert "Remote role with unspecified geography" in fit.red_flags
+
+
+def test_hybrid_unspecified_geography_is_near_fit() -> None:
+    job = _job(
+        title="Product Marketing Manager",
+        location="",
+        description="Lead GTM messaging and partner closely with product.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "near_fit"
+    assert "Hybrid role with unspecified location" in fit.red_flags
+
+
+def test_remote_us_is_high_fit() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="Remote United States",
+        description="Own AI platform experimentation and analytics strategy.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+
+
+def test_singapore_product_manager_gets_international_location_red_flag() -> None:
+    job = _job(
+        title="Senior Product Manager",
+        location="Singapore",
+        description="Drive analytics and experimentation",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert any("International location" in flag for flag in fit.red_flags)
+    assert fit.classification == "low_fit"

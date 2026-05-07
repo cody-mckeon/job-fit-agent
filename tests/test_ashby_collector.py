@@ -100,7 +100,7 @@ def test_missing_location_maps_to_empty_and_scores_unknown(monkeypatch):
     assert jobs[0].location == ""
 
     fit = score_job(jobs[0], load_target_profile())
-    assert "Unknown location" in fit.red_flags
+    assert "Location not specified" in fit.red_flags
 
 
 def test_fetch_jobs_separates_metadata_fields(monkeypatch):
