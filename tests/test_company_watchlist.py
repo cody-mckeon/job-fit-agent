@@ -38,6 +38,7 @@ def test_company_watchlist_loads_correctly() -> None:
     assert watchlist.greenhouse[:2] == ["stripe", "duolingo"]
     assert "openai" in watchlist.greenhouse
     assert "supabase" in watchlist.greenhouse
+    assert "anthropic" in watchlist.ashby
 
 
 def test_pipeline_accepts_company_list_from_config() -> None:

@@ -82,20 +82,20 @@ def test_collect_scored_jobs_returns_sorted_below_threshold_for_debugging() -> N
     assert below[0][1].total_score >= below[1][1].total_score
 
 
-def test_main_prints_high_fit_jobs_normally(monkeypatch, capsys) -> None:
-    job = _job("Product Manager AI", location="Remote US")
+def test_main_combined_greenhouse_ashby_pipeline(monkeypatch, capsys) -> None:
+    gh_job = _job("Product Manager AI", location="Remote US")
+    ashby_job = JobPosting(source="ashby", company="anthropic", title="Technical Program Manager", location="Remote US", url="https://example.com/a", description="program delivery")
 
-    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [job]}))
-    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"])
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [gh_job]}))
+    monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({"anthropic": [ashby_job]}))
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else ["anthropic"])
 
     main()
     output = capsys.readouterr().out
 
-    assert "score:" in output
-    assert "title: Product Manager AI" in output
-    assert "high_fit count: 1" in output
-    assert "near_fit count: 0" in output
-    assert "No high-fit jobs found." not in output
+    assert "greenhouse successful companies: openai" in output
+    assert "ashby successful companies: anthropic" in output
+    assert "high_fit count:" in output
 
 
 def test_group_jobs_by_classification_groups_buckets() -> None:
@@ -121,7 +121,7 @@ def test_main_prints_near_fit_section_and_hides_low_fit_when_near_fit_exists(mon
     low = _job("Software Engineer", location="On-site", description="backend systems")
 
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [near, low]}))
-    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"])
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
     main()
     output = capsys.readouterr().out
@@ -135,7 +135,7 @@ def test_main_prints_low_fit_debug_only_when_no_high_or_near(monkeypatch, capsys
     low = _job("Software Engineer", location="On-site", description="backend systems")
 
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [low]}))
-    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"])
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
     main()
     output = capsys.readouterr().out

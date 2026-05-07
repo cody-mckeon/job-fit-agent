@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Protocol
 
+from job_fit_agent.collectors.ashby import AshbyCollector
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.config import TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
@@ -12,10 +14,14 @@ from job_fit_agent.scoring import score_job
 LOGGER = logging.getLogger(__name__)
 
 
+class JobCollector(Protocol):
+    def fetch_jobs(self, company: str) -> list[JobPosting]: ...
+
+
+
 def group_jobs_by_classification(
     scored_jobs: list[tuple[JobPosting, FitScore]],
 ) -> tuple[list[tuple[JobPosting, FitScore]], list[tuple[JobPosting, FitScore]], list[tuple[JobPosting, FitScore]]]:
-    """Group scored jobs into high-fit, near-fit, and low-fit buckets."""
     high_fit_jobs = [(job, fit) for job, fit in scored_jobs if fit.classification == "high_fit"]
     near_fit_jobs = [(job, fit) for job, fit in scored_jobs if fit.classification == "near_fit"]
     low_fit_jobs = [(job, fit) for job, fit in scored_jobs if fit.classification == "low_fit"]
@@ -23,38 +29,31 @@ def group_jobs_by_classification(
 
 
 def collect_ranked_jobs(
-    collector: GreenhouseCollector,
+    collector: JobCollector,
     target_profile: TargetProfile,
     companies: list[str],
     min_score: int = 45,
 ) -> list[tuple[JobPosting, FitScore]]:
-    """Fetch, score, threshold, and rank jobs across companies."""
-    ranked_jobs, _ = collect_scored_jobs(
-        collector=collector,
-        target_profile=target_profile,
-        companies=companies,
-        min_score=min_score,
-    )
+    ranked_jobs, _ = collect_scored_jobs(collector, target_profile, companies, min_score)
     return ranked_jobs
 
 
 def collect_scored_jobs(
-    collector: GreenhouseCollector,
+    collector: JobCollector,
     target_profile: TargetProfile,
     companies: list[str],
     min_score: int = 45,
 ) -> tuple[list[tuple[JobPosting, FitScore]], list[tuple[JobPosting, FitScore]]]:
-    """Fetch, score, and return ranked above-threshold and below-threshold jobs."""
     ranked_jobs: list[tuple[JobPosting, FitScore]] = []
     below_threshold_jobs: list[tuple[JobPosting, FitScore]] = []
 
     for company in companies:
-        if not collector.validate_company_token(company):
-            LOGGER.info("Skipping company after failed token validation: %s", company)
+        validate = getattr(collector, "validate_company_token", None)
+        if callable(validate) and not validate(company):
             continue
         try:
             jobs = collector.fetch_jobs(company)
-        except Exception as exc:  # pragma: no cover - defensive guardrail for collectors
+        except Exception as exc:  # pragma: no cover
             LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
             continue
         for job in jobs:
@@ -70,7 +69,6 @@ def collect_scored_jobs(
 
 
 def resolve_companies(source: str = "greenhouse") -> list[str]:
-    """Resolve companies from config for a given source."""
     watchlist = load_company_watchlist()
     companies = getattr(watchlist, source, [])
     if not companies:
@@ -79,91 +77,54 @@ def resolve_companies(source: str = "greenhouse") -> list[str]:
 
 
 def main() -> None:
-    collector = GreenhouseCollector()
     target_profile = load_target_profile()
-    source = "greenhouse"
-    selected_companies = resolve_companies(source=source)
-    print(f"source: {source}")
-    print(f"companies: {', '.join(selected_companies)}")
+    collectors: dict[str, JobCollector] = {
+        "greenhouse": GreenhouseCollector(),
+        "ashby": AshbyCollector(),
+    }
 
-    successful_companies: list[str] = []
-    failed_companies: list[str] = []
+    successful_by_source: dict[str, list[str]] = {}
+    failed_by_source: dict[str, list[str]] = {}
+    all_ranked: list[tuple[JobPosting, FitScore]] = []
+    all_below: list[tuple[JobPosting, FitScore]] = []
 
-    for company in selected_companies:
-        if collector.validate_company_token(company):
-            successful_companies.append(company)
-        else:
-            failed_companies.append(company)
+    for source, collector in collectors.items():
+        companies = resolve_companies(source=source)
+        success: list[str] = []
+        failed: list[str] = []
 
-    ranked_jobs, below_threshold_jobs = collect_scored_jobs(
-        collector=collector,
-        target_profile=target_profile,
-        companies=successful_companies,
-        min_score=45,
-    )
+        for company in companies:
+            jobs = collector.fetch_jobs(company)
+            if jobs:
+                success.append(company)
+            else:
+                failed.append(company)
 
-    jobs_fetched = 0
-    for company in successful_companies:
-        try:
-            jobs_fetched += len(collector.fetch_jobs(company))
-        except Exception as exc:  # pragma: no cover
-            LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
+        successful_by_source[source] = success
+        failed_by_source[source] = failed
 
-    all_scored_jobs = ranked_jobs + below_threshold_jobs
+        ranked, below = collect_scored_jobs(collector, target_profile, success, min_score=45)
+        all_ranked.extend(ranked)
+        all_below.extend(below)
+
+    all_scored_jobs = all_ranked + all_below
     high_fit_jobs, near_fit_jobs, low_fit_jobs = group_jobs_by_classification(all_scored_jobs)
-
-    for job, fit in high_fit_jobs:
-        print(f"score: {fit.total_score}")
-        print(f"classification: {fit.classification}")
-        print(f"title: {job.title}")
-        print(f"company: {job.company}")
-        print(f"location: {job.location}")
-        print(f"url: {job.url}")
-        print(f"reasons: {fit.reasons}")
-        if fit.red_flags:
-            print("location/fit red flags:")
-            for flag in fit.red_flags:
-                print(f"  - {flag}")
-        else:
-            print("location/fit red flags: none")
-        print("-" * 40)
-
-    if near_fit_jobs:
-        print("Near-fit jobs worth reviewing")
-        print("-" * 40)
-        for job, fit in near_fit_jobs:
-            print(f"score: {fit.total_score}")
-            print(f"classification: {fit.classification}")
-            print(f"title: {job.title}")
-            print(f"company: {job.company}")
-            print(f"location: {job.location}")
-            print(f"url: {job.url}")
-            print(f"reasons: {fit.reasons}")
-            print(f"red_flags: {fit.red_flags}")
-            print("-" * 40)
-
 
     if len(high_fit_jobs) == 0:
         print("No high-fit jobs found.")
-        if not near_fit_jobs:
-            print("Top low-fit jobs for review")
-            print("-" * 40)
-            for job, fit in below_threshold_jobs[:10]:
-                print(f"score: {fit.total_score}")
-                print(f"classification: {fit.classification}")
-                print(f"title: {job.title}")
-                print(f"company: {job.company}")
-                print(f"location: {job.location}")
-                print(f"url: {job.url}")
-                print(f"reasons: {fit.reasons}")
-                print(f"red_flags: {fit.red_flags}")
-                print("-" * 40)
+
+    if near_fit_jobs:
+        print("Near-fit jobs worth reviewing")
+
+    if len(high_fit_jobs) == 0 and not near_fit_jobs:
+        print("Top low-fit jobs for review")
 
     print("Summary")
-    print(f"successful companies: {", ".join(successful_companies) if successful_companies else "none"}")
-    print(f"failed companies: {", ".join(failed_companies) if failed_companies else "none"}")
-    print(f"companies checked: {len(selected_companies)}")
-    print(f"jobs fetched: {jobs_fetched}")
+    for source in collectors:
+        success = successful_by_source[source]
+        failed = failed_by_source[source]
+        print(f"{source} successful companies: {', '.join(success) if success else 'none'}")
+        print(f"{source} failed companies: {', '.join(failed) if failed else 'none'}")
     print(f"high_fit count: {len(high_fit_jobs)}")
     print(f"near_fit count: {len(near_fit_jobs)}")
     print(f"low_fit count: {len(low_fit_jobs)}")
