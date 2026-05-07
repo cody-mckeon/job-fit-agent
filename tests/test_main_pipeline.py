@@ -1,3 +1,4 @@
+from job_fit_agent.config import load_target_profile
 from job_fit_agent.main import collect_ranked_jobs
 from job_fit_agent.models import JobPosting
 
@@ -28,7 +29,7 @@ def test_collect_ranked_jobs_sorts_high_to_low() -> None:
 
     collector = StubCollector({"openai": [mid, low, high]})
 
-    ranked = collect_ranked_jobs(collector=collector, companies=["openai"], min_score=0)
+    ranked = collect_ranked_jobs(collector=collector, target_profile=load_target_profile(), companies=["openai"], min_score=0)
 
     scores = [fit.total_score for _, fit in ranked]
     assert scores == sorted(scores, reverse=True)
@@ -40,7 +41,7 @@ def test_collect_ranked_jobs_excludes_below_threshold() -> None:
 
     collector = StubCollector({"openai": [keep, drop]})
 
-    ranked = collect_ranked_jobs(collector=collector, companies=["openai"], min_score=45)
+    ranked = collect_ranked_jobs(collector=collector, target_profile=load_target_profile(), companies=["openai"], min_score=45)
 
     assert len(ranked) == 1
     assert ranked[0][0].title == "Product Manager AI"
@@ -50,7 +51,7 @@ def test_collect_ranked_jobs_includes_reasons_in_fit_score() -> None:
     job = _job("Product Manager AI", location="Remote", description="AI and data roadmap")
     collector = StubCollector({"openai": [job]})
 
-    ranked = collect_ranked_jobs(collector=collector, companies=["openai"], min_score=0)
+    ranked = collect_ranked_jobs(collector=collector, target_profile=load_target_profile(), companies=["openai"], min_score=0)
 
     assert ranked
     _, fit = ranked[0]
