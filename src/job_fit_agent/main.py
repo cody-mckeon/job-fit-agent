@@ -19,7 +19,24 @@ def collect_ranked_jobs(
     min_score: int = 45,
 ) -> list[tuple[JobPosting, FitScore]]:
     """Fetch, score, threshold, and rank jobs across companies."""
+    ranked_jobs, _ = collect_scored_jobs(
+        collector=collector,
+        target_profile=target_profile,
+        companies=companies,
+        min_score=min_score,
+    )
+    return ranked_jobs
+
+
+def collect_scored_jobs(
+    collector: GreenhouseCollector,
+    target_profile: TargetProfile,
+    companies: list[str],
+    min_score: int = 45,
+) -> tuple[list[tuple[JobPosting, FitScore]], list[tuple[JobPosting, FitScore]]]:
+    """Fetch, score, and return ranked above-threshold and below-threshold jobs."""
     ranked_jobs: list[tuple[JobPosting, FitScore]] = []
+    below_threshold_jobs: list[tuple[JobPosting, FitScore]] = []
 
     for company in companies:
         try:
@@ -31,9 +48,12 @@ def collect_ranked_jobs(
             fit = score_job(job, target_profile)
             if fit.total_score >= min_score:
                 ranked_jobs.append((job, fit))
+            else:
+                below_threshold_jobs.append((job, fit))
 
     ranked_jobs.sort(key=lambda item: item[1].total_score, reverse=True)
-    return ranked_jobs
+    below_threshold_jobs.sort(key=lambda item: item[1].total_score, reverse=True)
+    return ranked_jobs, below_threshold_jobs
 
 
 def resolve_companies(source: str = "greenhouse") -> list[str]:
@@ -53,7 +73,7 @@ def main() -> None:
     print(f"source: {source}")
     print(f"companies: {', '.join(selected_companies)}")
 
-    ranked_jobs = collect_ranked_jobs(
+    ranked_jobs, below_threshold_jobs = collect_scored_jobs(
         collector=collector,
         target_profile=target_profile,
         companies=selected_companies,
@@ -81,6 +101,21 @@ def main() -> None:
         else:
             print("location/fit red flags: none")
         print("-" * 40)
+
+
+    if len(ranked_jobs) == 0:
+        print("No high-fit jobs found.")
+        print("Top below-threshold jobs for review")
+        print("-" * 40)
+        for job, fit in below_threshold_jobs[:10]:
+            print(f"score: {fit.total_score}")
+            print(f"title: {job.title}")
+            print(f"company: {job.company}")
+            print(f"location: {job.location}")
+            print(f"url: {job.url}")
+            print(f"reasons: {fit.reasons}")
+            print(f"red_flags: {fit.red_flags}")
+            print("-" * 40)
 
     print("Summary")
     print(f"companies checked: {len(selected_companies)}")
