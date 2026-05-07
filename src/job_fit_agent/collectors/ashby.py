@@ -54,12 +54,7 @@ class AshbyCollector:
         if not title or not url:
             return None
 
-        location = ""
-        location_obj = job.get("location")
-        if isinstance(location_obj, dict):
-            location = str(location_obj.get("locationName") or "").strip()
-        if not location:
-            location = str(job.get("locationName") or "").strip()
+        location = self._extract_location(job)
 
         description = str(job.get("descriptionPlain") or job.get("description") or "").strip()
 
@@ -72,3 +67,44 @@ class AshbyCollector:
             description=description,
             date_found=datetime.now(timezone.utc),
         )
+
+    def _extract_location(self, job: dict[str, Any]) -> str:
+        """Build a best-effort location string from Ashby location metadata."""
+        location_parts: list[str] = []
+
+        def _add_part(value: Any) -> None:
+            text = str(value or "").strip()
+            if text and text not in location_parts:
+                location_parts.append(text)
+
+        location_obj = job.get("location")
+        if isinstance(location_obj, dict):
+            _add_part(location_obj.get("locationName"))
+            _add_part(location_obj.get("name"))
+
+        _add_part(job.get("locationName"))
+
+        workplace_type = str(job.get("workplaceType") or "").strip().lower()
+        if workplace_type:
+            if "remote" in workplace_type:
+                if any("us" in part.lower() or "united states" in part.lower() for part in location_parts):
+                    return "Remote US"
+                return "Remote"
+            _add_part(job.get("workplaceType"))
+
+        address_obj = job.get("address")
+        if isinstance(address_obj, dict):
+            for key in ("city", "region", "state", "country", "countryCode"):
+                _add_part(address_obj.get(key))
+            _add_part(address_obj.get("formattedAddress"))
+        elif isinstance(address_obj, str):
+            _add_part(address_obj)
+
+        for key in ("departmentName", "teamName", "department", "team"):
+            value = job.get(key)
+            if isinstance(value, dict):
+                _add_part(value.get("name"))
+            else:
+                _add_part(value)
+
+        return " | ".join(location_parts)
