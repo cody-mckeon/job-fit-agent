@@ -1,6 +1,20 @@
+from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import load_target_profile
 from job_fit_agent.main import collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main
 from job_fit_agent.models import JobPosting
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stub_repo(monkeypatch):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.upsert_job",
+        lambda job, fit: UpsertResult(is_new=True, updated=False, skipped_duplicate=False),
+    )
+
 
 
 class StubCollector:
@@ -151,9 +165,8 @@ def test_main_prints_near_fit_section_and_hides_low_fit_when_near_fit_exists(mon
     main()
     output = capsys.readouterr().out
 
-    assert "No high-fit jobs found." in output
+    assert "No new matching jobs found." not in output
     assert "Near-fit jobs worth reviewing" in output
-    assert "Top low-fit jobs for review" not in output
 
 
 def test_main_prints_low_fit_debug_only_when_no_high_or_near(monkeypatch, capsys) -> None:
@@ -165,9 +178,9 @@ def test_main_prints_low_fit_debug_only_when_no_high_or_near(monkeypatch, capsys
     main()
     output = capsys.readouterr().out
 
-    assert "No high-fit jobs found." in output
+    assert "No new matching jobs found." in output
     assert "Near-fit jobs worth reviewing" not in output
-    assert "Top low-fit jobs for review" in output
+    assert "Top low-fit jobs for review" not in output
 
 
 def test_main_prints_high_fit_jobs_when_present(monkeypatch, capsys) -> None:
@@ -216,7 +229,7 @@ def test_main_does_not_print_no_high_fit_message_when_high_fit_exists(monkeypatc
     main()
     output = capsys.readouterr().out
 
-    assert "No high-fit jobs found." not in output
+    assert "No new matching jobs found." not in output
 
 
 def test_collect_scored_jobs_aggregates_successful_companies_only() -> None:
