@@ -53,6 +53,44 @@ FORCED_LOW_FIT_TITLES = {
     "infrastructure engineer",
     "engineering manager",
 }
+ROLE_FAMILIES = {
+    "product_management",
+    "product_operations",
+    "marketing",
+    "engineering",
+    "data_science",
+    "research",
+    "customer_success",
+    "executive",
+    "unknown",
+}
+
+
+def classify_role_family(title: str) -> str:
+    """Classify a role family based primarily on the title."""
+    normalized = title.lower()
+
+    if "chief of staff" in normalized:
+        return "executive"
+    if "data scientist" in normalized or "machine learning scientist" in normalized:
+        return "data_science"
+    if "researcher" in normalized or "research scientist" in normalized or "ux research" in normalized:
+        return "research"
+    if "product marketing" in normalized or "growth marketing" in normalized or "demand generation" in normalized:
+        return "marketing"
+    if "customer success" in normalized or "technical account manager" in normalized:
+        return "customer_success"
+    if "technical program manager" in normalized or "engineering program manager" in normalized:
+        return "product_operations"
+    if "engineer" in normalized or "developer" in normalized:
+        return "engineering"
+    if "product manager" in normalized or "technical product manager" in normalized:
+        return "product_management"
+    if "program manager" in normalized or "project manager" in normalized or "product operations" in normalized:
+        return "product_operations"
+    if any(term in normalized for term in ("chief", "vp ", "vice president", "head of", "director")):
+        return "executive"
+    return "unknown"
 
 
 def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tuple[int, list[str], list[str], bool]:
@@ -124,6 +162,7 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
 def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     """Return full scoring details for a job posting."""
     text = f"{job.title} {job.description} {job.location} {job.workplace_type} {job.department} {job.team}".lower()
+    title_text = job.title.lower()
     score = 0
     reasons: list[str] = []
     red_flags: list[str] = []
@@ -133,7 +172,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
 
     for title in target_profile.target_titles:
         normalized = title.lower()
-        if normalized in text:
+        if normalized in title_text:
             title_hits += 1
             score += BASE_TITLE_SCORE
             reasons.append(f"Title match: {title} (+{BASE_TITLE_SCORE})")
@@ -174,17 +213,31 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         red_flags.append("Product Marketing Manager role lacks product analytics/experimentation/AI/platform/customer-facing web context")
 
     classification = "low_fit"
+    role_family = classify_role_family(job.title)
+    if role_family not in ROLE_FAMILIES:
+        role_family = "unknown"
     has_forced_low_fit_title = any(term in job.title.lower() for term in FORCED_LOW_FIT_TITLES)
     has_location_blocker = location_score <= EXCLUDED_LOCATION_PENALTY
-    if has_strong_match and not has_location_blocker:
+    if has_strong_match and not has_location_blocker and role_family in {"product_management", "product_operations"}:
         classification = "high_fit"
-    elif any(term in text for term in NEAR_FIT_TERMS):
+    elif any(term in text for term in NEAR_FIT_TERMS) or role_family in {"marketing", "customer_success", "research", "executive"}:
         classification = "near_fit"
+    else:
+        classification = "low_fit"
+
+    if role_family in {"engineering", "data_science"}:
+        classification = "low_fit"
 
     if has_forced_low_fit_title:
         classification = "low_fit"
 
-    return FitScore(total_score=max(0, score), classification=classification, reasons=reasons, red_flags=red_flags)
+    return FitScore(
+        total_score=max(0, score),
+        classification=classification,
+        role_family=role_family,
+        reasons=reasons,
+        red_flags=red_flags,
+    )
 
 
 def score_job(job: JobPosting, target_profile: TargetProfile) -> FitScore:
