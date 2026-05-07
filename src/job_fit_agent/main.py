@@ -12,6 +12,16 @@ from job_fit_agent.scoring import score_job
 LOGGER = logging.getLogger(__name__)
 
 
+def group_jobs_by_classification(
+    scored_jobs: list[tuple[JobPosting, FitScore]],
+) -> tuple[list[tuple[JobPosting, FitScore]], list[tuple[JobPosting, FitScore]], list[tuple[JobPosting, FitScore]]]:
+    """Group scored jobs into high-fit, near-fit, and low-fit buckets."""
+    high_fit_jobs = [(job, fit) for job, fit in scored_jobs if fit.classification == "high_fit"]
+    near_fit_jobs = [(job, fit) for job, fit in scored_jobs if fit.classification == "near_fit"]
+    low_fit_jobs = [(job, fit) for job, fit in scored_jobs if fit.classification == "low_fit"]
+    return high_fit_jobs, near_fit_jobs, low_fit_jobs
+
+
 def collect_ranked_jobs(
     collector: GreenhouseCollector,
     target_profile: TargetProfile,
@@ -87,8 +97,8 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover
             LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
 
-    high_fit_jobs = [(job, fit) for job, fit in ranked_jobs if fit.classification == "high_fit"]
-    near_fit_jobs = [(job, fit) for job, fit in ranked_jobs if fit.classification == "near_fit"]
+    all_scored_jobs = ranked_jobs + below_threshold_jobs
+    high_fit_jobs, near_fit_jobs, low_fit_jobs = group_jobs_by_classification(all_scored_jobs)
 
     for job, fit in high_fit_jobs:
         print(f"score: {fit.total_score}")
@@ -106,26 +116,10 @@ def main() -> None:
             print("location/fit red flags: none")
         print("-" * 40)
 
-
-    if len(high_fit_jobs) == 0:
-        print("No high-fit jobs found.")
-        if near_fit_jobs:
-            print("Near-fit jobs")
-            print("-" * 40)
-            for job, fit in near_fit_jobs:
-                print(f"score: {fit.total_score}")
-                print(f"classification: {fit.classification}")
-                print(f"title: {job.title}")
-                print(f"company: {job.company}")
-                print(f"location: {job.location}")
-                print(f"url: {job.url}")
-                print(f"reasons: {fit.reasons}")
-                print(f"red_flags: {fit.red_flags}")
-                print("-" * 40)
-
-        print("Top below-threshold jobs for review")
+    if near_fit_jobs:
+        print("Near-fit jobs worth reviewing")
         print("-" * 40)
-        for job, fit in below_threshold_jobs[:10]:
+        for job, fit in near_fit_jobs:
             print(f"score: {fit.total_score}")
             print(f"classification: {fit.classification}")
             print(f"title: {job.title}")
@@ -136,10 +130,29 @@ def main() -> None:
             print(f"red_flags: {fit.red_flags}")
             print("-" * 40)
 
+
+    if len(high_fit_jobs) == 0:
+        print("No high-fit jobs found.")
+        if not near_fit_jobs:
+            print("Top low-fit jobs for review")
+            print("-" * 40)
+            for job, fit in below_threshold_jobs[:10]:
+                print(f"score: {fit.total_score}")
+                print(f"classification: {fit.classification}")
+                print(f"title: {job.title}")
+                print(f"company: {job.company}")
+                print(f"location: {job.location}")
+                print(f"url: {job.url}")
+                print(f"reasons: {fit.reasons}")
+                print(f"red_flags: {fit.red_flags}")
+                print("-" * 40)
+
     print("Summary")
     print(f"companies checked: {len(selected_companies)}")
     print(f"jobs fetched: {jobs_fetched}")
-    print(f"jobs above threshold: {len(ranked_jobs)}")
+    print(f"high_fit count: {len(high_fit_jobs)}")
+    print(f"near_fit count: {len(near_fit_jobs)}")
+    print(f"low_fit count: {len(low_fit_jobs)}")
 
 
 if __name__ == "__main__":
