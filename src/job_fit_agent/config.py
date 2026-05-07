@@ -33,6 +33,7 @@ class AppConfig(BaseModel):
 
     target_profile_path: Path = Field(default_factory=lambda: Path("config/target_profile.yaml"))
     company_watchlist_path: Path = Field(default_factory=lambda: Path("config/company_watchlist.yaml"))
+    enable_lever: bool = False
 
 
 def _parse_simple_yaml(yaml_text: str) -> dict[str, list[str]]:

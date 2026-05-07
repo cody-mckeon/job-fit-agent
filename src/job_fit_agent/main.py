@@ -8,7 +8,7 @@ from typing import Protocol
 from job_fit_agent.collectors.ashby import AshbyCollector
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
-from job_fit_agent.config import TargetProfile, load_company_watchlist, load_target_profile
+from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.scoring import score_job
 
@@ -102,10 +102,18 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
 
 def main() -> None:
     target_profile = load_target_profile()
+    app_config = AppConfig()
+
     collectors: dict[str, JobCollector] = {
         "greenhouse": GreenhouseCollector(),
         "ashby": AshbyCollector(),
         "lever": LeverCollector(),
+    }
+
+    enabled_collectors = {
+        source: collector
+        for source, collector in collectors.items()
+        if source != "lever" or app_config.enable_lever
     }
 
     successful_by_source: dict[str, list[str]] = {}
@@ -113,7 +121,7 @@ def main() -> None:
     all_ranked: list[tuple[JobPosting, FitScore]] = []
     all_below: list[tuple[JobPosting, FitScore]] = []
 
-    for source, collector in collectors.items():
+    for source, collector in enabled_collectors.items():
         companies = resolve_companies(source=source)
         success: list[str] = []
         failed: list[str] = []
@@ -150,7 +158,7 @@ def main() -> None:
         print("Top low-fit jobs for review")
 
     print("Summary")
-    for source in collectors:
+    for source in enabled_collectors:
         success = successful_by_source[source]
         failed = failed_by_source[source]
         print(f"{source} successful companies: {', '.join(success) if success else 'none'}")
