@@ -111,6 +111,61 @@ def test_remote_engineering_manager_is_low_fit() -> None:
     assert fit.classification == "low_fit"
 
 
+def test_blank_location_gets_unknown_location_red_flag() -> None:
+    job = _job(
+        title="Product Manager",
+        location="",
+        description="Own analytics roadmap for product platform.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert "Unknown location" in fit.red_flags
+
+
+def test_blank_location_does_not_receive_local_points() -> None:
+    job = _job(
+        title="Product Manager",
+        location="",
+        description="Work with Las Vegas stakeholders and data teams.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert all("Las Vegas/Henderson/Nevada" not in reason for reason in fit.reasons)
+
+
+def test_remote_software_engineer_is_low_fit() -> None:
+    job = _job(
+        title="Software Engineer",
+        location="Remote US",
+        description="Build AI data platform for product teams.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
+def test_remote_product_engineer_is_low_fit() -> None:
+    job = _job(
+        title="Product Engineer",
+        location="Remote US",
+        description="Build AI product experiences and experimentation systems.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
+def test_remote_member_of_technical_staff_is_low_fit() -> None:
+    job = _job(
+        title="Member of Technical Staff",
+        location="Remote US",
+        description="Develop AI systems and product analytics capabilities.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
 def test_remote_technical_account_manager_is_near_fit() -> None:
     job = _job(
         title="Technical Account Manager",

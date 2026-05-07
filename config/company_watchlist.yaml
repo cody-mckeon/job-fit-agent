@@ -1,21 +1,12 @@
 greenhouse:
   - stripe
   - duolingo
-  - dbt-labs
   - amplitude
-  - clickup
-  - plaid
-  - github
-  - openai
-  - perplexity
   - figma
-  - posthog
   - cloudflare
   - vercel
-  - supabase
 
 ashby:
-  - anthropic
   - notion
   - cursor
   - perplexity
