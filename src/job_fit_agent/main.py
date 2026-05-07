@@ -7,6 +7,7 @@ from typing import Protocol
 
 from job_fit_agent.collectors.ashby import AshbyCollector
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
+from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.scoring import score_job
@@ -104,6 +105,7 @@ def main() -> None:
     collectors: dict[str, JobCollector] = {
         "greenhouse": GreenhouseCollector(),
         "ashby": AshbyCollector(),
+        "lever": LeverCollector(),
     }
 
     successful_by_source: dict[str, list[str]] = {}

@@ -24,6 +24,7 @@ class CompanyWatchlist(BaseModel):
 
     greenhouse: list[str] = Field(default_factory=list)
     ashby: list[str] = Field(default_factory=list)
+    lever: list[str] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):
