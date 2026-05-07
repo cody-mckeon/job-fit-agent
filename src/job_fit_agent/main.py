@@ -10,6 +10,7 @@ from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
+from job_fit_agent.repository import initialize, upsert_job
 from job_fit_agent.scoring import score_job
 
 LOGGER = logging.getLogger(__name__)
@@ -103,6 +104,7 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
 def main() -> None:
     target_profile = load_target_profile()
     app_config = AppConfig()
+    initialize()
 
     collectors: dict[str, JobCollector] = {
         "greenhouse": GreenhouseCollector(),
@@ -141,11 +143,26 @@ def main() -> None:
         all_below.extend(below)
 
     all_scored_jobs = all_ranked + all_below
-    high_fit_jobs, near_fit_jobs, low_fit_jobs = group_jobs_by_classification(all_scored_jobs)
 
-    if len(high_fit_jobs) == 0:
-        print("No high-fit jobs found.")
-    else:
+    new_added = 0
+    existing_updated = 0
+    duplicates_skipped = 0
+    new_matching: list[tuple[JobPosting, FitScore]] = []
+
+    for job, fit in all_scored_jobs:
+        result = upsert_job(job, fit)
+        if result.is_new:
+            new_added += 1
+            if fit.classification in {"high_fit", "near_fit"}:
+                new_matching.append((job, fit))
+        elif result.updated:
+            existing_updated += 1
+        elif result.skipped_duplicate:
+            duplicates_skipped += 1
+
+    high_fit_jobs, near_fit_jobs, low_fit_jobs = group_jobs_by_classification(new_matching)
+
+    if high_fit_jobs:
         print_jobs("High-fit jobs to review", high_fit_jobs, limit=15)
 
     if near_fit_jobs:
@@ -154,8 +171,8 @@ def main() -> None:
         print("Near-fit jobs worth reviewing")
         print_jobs(None, near_fit_jobs)
 
-    if len(high_fit_jobs) == 0 and not near_fit_jobs:
-        print("Top low-fit jobs for review")
+    if not high_fit_jobs and not near_fit_jobs:
+        print("No new matching jobs found.")
 
     print("Summary")
     for source in enabled_collectors:
@@ -163,9 +180,13 @@ def main() -> None:
         failed = failed_by_source[source]
         print(f"{source} successful companies: {', '.join(success) if success else 'none'}")
         print(f"{source} failed companies: {', '.join(failed) if failed else 'none'}")
+    print(f"new jobs added: {new_added}")
+    print(f"existing jobs updated: {existing_updated}")
+    print(f"duplicate jobs skipped: {duplicates_skipped}")
     print(f"high_fit count: {len(high_fit_jobs)}")
     print(f"near_fit count: {len(near_fit_jobs)}")
     print(f"low_fit count: {len(low_fit_jobs)}")
+
 
 
 if __name__ == "__main__":
