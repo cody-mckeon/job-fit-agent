@@ -87,8 +87,12 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover
             LOGGER.warning("Failed to fetch jobs for %s: %s", company, exc)
 
-    for job, fit in ranked_jobs:
+    high_fit_jobs = [(job, fit) for job, fit in ranked_jobs if fit.classification == "high_fit"]
+    near_fit_jobs = [(job, fit) for job, fit in ranked_jobs if fit.classification == "near_fit"]
+
+    for job, fit in high_fit_jobs:
         print(f"score: {fit.total_score}")
+        print(f"classification: {fit.classification}")
         print(f"title: {job.title}")
         print(f"company: {job.company}")
         print(f"location: {job.location}")
@@ -103,12 +107,27 @@ def main() -> None:
         print("-" * 40)
 
 
-    if len(ranked_jobs) == 0:
+    if len(high_fit_jobs) == 0:
         print("No high-fit jobs found.")
+        if near_fit_jobs:
+            print("Near-fit jobs")
+            print("-" * 40)
+            for job, fit in near_fit_jobs:
+                print(f"score: {fit.total_score}")
+                print(f"classification: {fit.classification}")
+                print(f"title: {job.title}")
+                print(f"company: {job.company}")
+                print(f"location: {job.location}")
+                print(f"url: {job.url}")
+                print(f"reasons: {fit.reasons}")
+                print(f"red_flags: {fit.red_flags}")
+                print("-" * 40)
+
         print("Top below-threshold jobs for review")
         print("-" * 40)
         for job, fit in below_threshold_jobs[:10]:
             print(f"score: {fit.total_score}")
+            print(f"classification: {fit.classification}")
             print(f"title: {job.title}")
             print(f"company: {job.company}")
             print(f"location: {job.location}")

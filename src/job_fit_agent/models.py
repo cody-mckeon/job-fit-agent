@@ -17,5 +17,6 @@ class JobPosting(BaseModel):
 
 class FitScore(BaseModel):
     total_score: int
+    classification: str
     reasons: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)

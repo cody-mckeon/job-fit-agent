@@ -52,6 +52,7 @@ def test_remote_us_product_manager_scores_above_threshold() -> None:
     fit = score_job(job, TARGET_PROFILE)
 
     assert fit.total_score >= 45
+    assert fit.classification == "high_fit"
 
 
 def test_las_vegas_product_manager_scores_above_threshold() -> None:
@@ -75,3 +76,60 @@ def test_london_product_manager_gets_international_location_red_flag() -> None:
 
     fit = score_job(job, TARGET_PROFILE)
     assert any("International location" in flag for flag in fit.red_flags)
+
+
+def test_remote_product_marketing_manager_is_near_fit() -> None:
+    job = _job(
+        title="Product Marketing Manager",
+        location="Remote US",
+        description="Lead GTM and messaging strategy.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "near_fit"
+
+
+def test_remote_technical_product_manager_is_high_fit() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="Remote US",
+        description="Drive AI experimentation and analytics roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+
+
+def test_remote_engineering_manager_is_low_fit() -> None:
+    job = _job(
+        title="Engineering Manager",
+        location="Remote US",
+        description="Manage software delivery and people operations.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
+def test_remote_technical_account_manager_is_near_fit() -> None:
+    job = _job(
+        title="Technical Account Manager",
+        location="Remote US",
+        description="Partner with enterprise customers for onboarding.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "near_fit"
+
+
+def test_onsite_product_manager_outside_nevada_not_high_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        location="Onsite - New York",
+        description="Own product strategy and roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"low_fit", "near_fit"}
+    assert fit.classification != "high_fit"
+    assert any("outside Las Vegas/Nevada" in flag for flag in fit.red_flags)
