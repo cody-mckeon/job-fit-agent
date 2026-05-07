@@ -161,6 +161,9 @@ def test_main_prints_high_fit_jobs_when_present(monkeypatch, capsys) -> None:
     assert "title: Product Manager AI" in output
     assert "company: openai" in output
     assert "location: Remote US" in output
+    assert "workplace_type:" in output
+    assert "department:" in output
+    assert "team:" in output
     assert "url:" in output
     assert "reasons:" in output
     assert "red_flags:" in output

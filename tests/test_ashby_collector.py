@@ -28,6 +28,9 @@ def test_fetch_jobs_parses_ashby_response(monkeypatch):
     assert job.source == "ashby"
     assert job.company == "anthropic"
     assert job.title == "Software Engineer"
+    assert job.workplace_type == ""
+    assert job.department == ""
+    assert job.team == ""
 
 
 def test_fetch_jobs_handles_failed_request(monkeypatch):
@@ -75,7 +78,8 @@ def test_fetch_jobs_maps_remote_from_workplace_type(monkeypatch):
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
 
     jobs = AshbyCollector().fetch_jobs("anthropic")
-    assert jobs[0].location == "Remote US"
+    assert jobs[0].location == "United States"
+    assert jobs[0].workplace_type == "Remote"
 
 
 def test_missing_location_maps_to_empty_and_scores_unknown(monkeypatch):
@@ -97,3 +101,29 @@ def test_missing_location_maps_to_empty_and_scores_unknown(monkeypatch):
 
     fit = score_job(jobs[0], load_target_profile())
     assert "Unknown location" in fit.red_flags
+
+
+def test_fetch_jobs_separates_metadata_fields(monkeypatch):
+    mock_response = Mock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "jobs": [
+            {
+                "title": "PMM",
+                "jobUrl": "https://jobs.example/5",
+                "locationName": "Remote US",
+                "workplaceType": "hybrid",
+                "departmentName": "GTM",
+                "team": {"name": "Marketing"},
+                "descriptionPlain": "desc",
+            }
+        ]
+    }
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
+
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    job = jobs[0]
+    assert job.location == "Remote US"
+    assert job.workplace_type == "Hybrid"
+    assert job.department == "GTM"
+    assert job.team == "Marketing"

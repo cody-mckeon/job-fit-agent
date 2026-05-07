@@ -188,3 +188,29 @@ def test_onsite_product_manager_outside_nevada_not_high_fit() -> None:
     assert fit.classification in {"low_fit", "near_fit"}
     assert fit.classification != "high_fit"
     assert any("outside Las Vegas/Nevada" in flag for flag in fit.red_flags)
+
+
+def test_location_scoring_ignores_department_team_text() -> None:
+    job = _job(
+        title="Product Manager",
+        location="",
+        description="Own analytics roadmap.",
+    )
+    job.department = "New York"
+    job.team = "London"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert "Unknown location" in fit.red_flags
+    assert all("International location" not in flag for flag in fit.red_flags)
+
+
+def test_remote_workplace_type_contributes_to_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        location="United States",
+        description="Drive AI experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Remote"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert any("Remote US" in reason for reason in fit.reasons)
