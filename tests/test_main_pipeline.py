@@ -145,6 +145,52 @@ def test_main_prints_low_fit_debug_only_when_no_high_or_near(monkeypatch, capsys
     assert "Top low-fit jobs for review" in output
 
 
+def test_main_prints_high_fit_jobs_when_present(monkeypatch, capsys) -> None:
+    high = _job("Product Manager AI", location="Remote US")
+
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high]}))
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
+
+    main()
+    output = capsys.readouterr().out
+
+    assert "High-fit jobs to review" in output
+    assert "score:" in output
+    assert "classification: high_fit" in output
+    assert "source: greenhouse" in output
+    assert "title: Product Manager AI" in output
+    assert "company: openai" in output
+    assert "location: Remote US" in output
+    assert "url:" in output
+    assert "reasons:" in output
+    assert "red_flags:" in output
+
+
+def test_main_prints_near_fit_after_high_fit(monkeypatch, capsys) -> None:
+    high = _job("Product Manager AI", location="Remote US")
+    near = _job("Technical Program Manager", location="Remote US", description="program delivery")
+
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high, near]}))
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
+
+    main()
+    output = capsys.readouterr().out
+
+    assert output.index("High-fit jobs to review") < output.index("Near-fit jobs worth reviewing")
+
+
+def test_main_does_not_print_no_high_fit_message_when_high_fit_exists(monkeypatch, capsys) -> None:
+    high = _job("Product Manager AI", location="Remote US")
+
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high]}))
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
+
+    main()
+    output = capsys.readouterr().out
+
+    assert "No high-fit jobs found." not in output
+
+
 def test_collect_scored_jobs_aggregates_successful_companies_only() -> None:
     keep = _job("Product Manager AI", location="Remote US")
     dropped = _job("Software Engineer", location="On-site", description="backend")
