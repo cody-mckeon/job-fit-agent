@@ -30,12 +30,26 @@ class GreenhouseCollector:
             response.raise_for_status()
             payload = response.json()
         except requests.Timeout:
-            LOGGER.warning("Greenhouse request timed out", extra={"company": company})
+            LOGGER.warning(
+                "Greenhouse request failed for %s at %s: timeout",
+                company,
+                url,
+            )
             return []
         except requests.RequestException as exc:
+            status_code = (
+                exc.response.status_code
+                if getattr(exc, "response", None) is not None
+                else None
+            )
+            error_message = str(exc) or exc.__class__.__name__
+            status_prefix = f"{status_code} " if status_code is not None else ""
             LOGGER.warning(
-                "Greenhouse request failed",
-                extra={"company": company, "error": str(exc)},
+                "Greenhouse request failed for %s at %s: %s%s",
+                company,
+                url,
+                status_prefix,
+                error_message,
             )
             return []
         except ValueError as exc:
