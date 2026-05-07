@@ -16,6 +16,7 @@ HYBRID_LOCAL_BONUS = 10
 US_NON_LOCAL_PENALTY = -28
 UNKNOWN_LOCATION_PENALTY = -4
 HYBRID_UNSPECIFIED_PENALTY = -8
+PRIORITY_COMPANY_BONUS = 10
 
 NEGATIVE_KEYWORDS = {
     "engineer only": -30,
@@ -183,6 +184,12 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             keyword_hits += 1
             score += BASE_KEYWORD_SCORE
             reasons.append(f"Keyword match: {keyword} (+{BASE_KEYWORD_SCORE})")
+
+    company_name = job.company.strip().lower()
+    priority_companies = {company.strip().lower() for company in target_profile.priority_companies}
+    if company_name in priority_companies:
+        score += PRIORITY_COMPANY_BONUS
+        reasons.append(f"Priority company match (+{PRIORITY_COMPANY_BONUS})")
 
     for location in target_profile.preferred_locations:
         normalized = location.lower()
