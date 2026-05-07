@@ -33,6 +33,18 @@ NEGATIVE_KEYWORDS = {
     "onsite outside us": -25,
 }
 
+NEAR_FIT_TERMS = {
+    "product marketing manager",
+    "technical program manager",
+    "engineering program manager",
+    "growth marketing",
+    "demand generation",
+    "technical account manager",
+    "customer success analytics",
+}
+
+PMM_HIGH_FIT_KEYWORDS = {"product analytics", "experimentation", "ai", "platform", "customer-facing web"}
+
 
 def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tuple[int, list[str], list[str], bool]:
     """Evaluate location fit for Cody's remote/local constraints."""
@@ -92,6 +104,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     red_flags: list[str] = []
 
     title_hits = 0
+    keyword_hits = 0
 
     for title in target_profile.target_titles:
         normalized = title.lower()
@@ -103,6 +116,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     for keyword in target_profile.target_keywords:
         normalized = keyword.lower()
         if normalized in text:
+            keyword_hits += 1
             score += BASE_KEYWORD_SCORE
             reasons.append(f"Keyword match: {keyword} (+{BASE_KEYWORD_SCORE})")
 
@@ -126,7 +140,21 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         red_flags.append("Role is title-aligned but location is not a fit")
         score = min(score, LOCATION_NOT_FIT_CAP)
 
-    return FitScore(total_score=max(0, score), reasons=reasons, red_flags=red_flags)
+    has_strong_match = title_hits > 0 and keyword_hits > 0
+    lower_description = job.description.lower()
+    is_product_marketing_manager = "product marketing manager" in text
+    pmm_has_required_context = any(term in lower_description for term in PMM_HIGH_FIT_KEYWORDS)
+    if is_product_marketing_manager and not pmm_has_required_context:
+        has_strong_match = False
+        red_flags.append("Product Marketing Manager role lacks product analytics/experimentation/AI/platform/customer-facing web context")
+
+    classification = "low_fit"
+    if location_fit and has_strong_match:
+        classification = "high_fit"
+    elif any(term in text for term in NEAR_FIT_TERMS):
+        classification = "near_fit"
+
+    return FitScore(total_score=max(0, score), classification=classification, reasons=reasons, red_flags=red_flags)
 
 
 def score_job(job: JobPosting, target_profile: TargetProfile) -> FitScore:
