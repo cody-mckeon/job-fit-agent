@@ -1,20 +1,16 @@
 """CLI entry point for job-fit-agent."""
 
-from job_fit_agent.models import JobPosting
-from job_fit_agent.scoring import score_job
+from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 
 
 def main() -> None:
-    sample = JobPosting(
-        source="demo",
-        company="Example Co",
-        title="Product Manager - AI Analytics",
-        location="Remote",
-        url="https://example.com/jobs/1",
-        description="Lead AI-powered product analytics initiatives.",
-    )
-    fit = score_job(sample)
-    print(f"{sample.title} @ {sample.company} -> score={fit.total_score}")
+    collector = GreenhouseCollector()
+    companies = ["openai", "anthropic", "duolingo", "notion", "stripe"]
+
+    for company in companies:
+        jobs = collector.fetch_jobs(company)
+        for job in jobs:
+            print(f"{job.title} | {job.company} | {job.location} | {job.url}")
 
 
 if __name__ == "__main__":
