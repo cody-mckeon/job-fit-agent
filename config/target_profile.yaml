@@ -63,3 +63,14 @@ excluded_locations:
   - Singapore
   - Bengaluru
   - Toronto
+
+priority_companies:
+  - cursor
+  - linear
+  - replit
+  - perplexity
+  - langchain
+  - figma
+  - vercel
+  - cloudflare
+  - notion

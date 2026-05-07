@@ -17,6 +17,7 @@ class TargetProfile(BaseModel):
     local_terms: list[str] = Field(default_factory=list)
     non_remote_us_locations: list[str] = Field(default_factory=list)
     excluded_locations: list[str] = Field(default_factory=list)
+    priority_companies: list[str] = Field(default_factory=list)
 
 
 class CompanyWatchlist(BaseModel):

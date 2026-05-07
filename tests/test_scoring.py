@@ -5,10 +5,10 @@ from job_fit_agent.scoring import score_job
 TARGET_PROFILE = load_target_profile()
 
 
-def _job(title: str, location: str = "Remote", description: str = "") -> JobPosting:
+def _job(title: str, location: str = "Remote", description: str = "", company: str = "Test Co") -> JobPosting:
     return JobPosting(
         source="test",
-        company="Test Co",
+        company=company,
         title=title,
         location=location,
         url="https://example.com/job",
@@ -262,6 +262,39 @@ def test_singapore_product_manager_gets_international_location_red_flag() -> Non
 
     fit = score_job(job, TARGET_PROFILE)
     assert any("International location" in flag for flag in fit.red_flags)
+
+
+def test_priority_company_receives_boost() -> None:
+    base_job = _job(
+        title="Product Manager",
+        company="Acme",
+        location="Remote US",
+        description="Lead AI analytics experimentation strategy.",
+    )
+    priority_job = _job(
+        title="Product Manager",
+        company="Cursor",
+        location="Remote US",
+        description="Lead AI analytics experimentation strategy.",
+    )
+
+    base_fit = score_job(base_job, TARGET_PROFILE)
+    priority_fit = score_job(priority_job, TARGET_PROFILE)
+
+    assert priority_fit.total_score == base_fit.total_score + 10
+    assert "Priority company match (+10)" in priority_fit.reasons
+
+
+def test_non_priority_company_does_not_receive_boost() -> None:
+    job = _job(
+        title="Product Manager",
+        company="Acme",
+        location="Remote US",
+        description="Lead AI analytics experimentation strategy.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert "Priority company match (+10)" not in fit.reasons
 
 
 def test_data_scientist_is_data_science_low_fit() -> None:
