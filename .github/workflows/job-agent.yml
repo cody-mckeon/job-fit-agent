@@ -2,6 +2,11 @@ name: Job Fit Agent
 
 on:
   workflow_dispatch:
+    inputs:
+      reset_database:
+        description: "Delete SQLite DB before run?"
+        required: false
+        default: "false"
   schedule:
     - cron: "0 14 * * *"
 
@@ -28,6 +33,10 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+      - name: Optionally reset database
+        if: ${{ github.event.inputs.reset_database == 'true' }}
+        run: rm -f data/jobs.sqlite
 
       - name: Run job agent
         env:
