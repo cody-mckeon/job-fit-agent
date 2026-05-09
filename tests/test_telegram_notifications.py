@@ -68,6 +68,10 @@ def test_only_new_high_fit_jobs_trigger_notifications(monkeypatch) -> None:
     low = _job("Software Engineer", "https://example.com/low", description="backend systems")
 
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(enabled=True, bot_token="token", chat_id="id")),
+    )
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high, near, low]}))
     monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({}))
     monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
