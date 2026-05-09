@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+import yaml
 from pydantic import BaseModel, Field
 
 
@@ -28,12 +30,24 @@ class CompanyWatchlist(BaseModel):
     lever: list[str] = Field(default_factory=list)
 
 
+
+
+class TelegramConfig(BaseModel):
+    enabled: bool = False
+    bot_token: str = ""
+    chat_id: str = ""
+
+
+class NotificationConfig(BaseModel):
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+
 class AppConfig(BaseModel):
     """Runtime configuration for the application."""
 
     target_profile_path: Path = Field(default_factory=lambda: Path("config/target_profile.yaml"))
     company_watchlist_path: Path = Field(default_factory=lambda: Path("config/company_watchlist.yaml"))
     enable_lever: bool = False
+    notifications_path: Path = Field(default_factory=lambda: Path("config/notifications.yaml"))
 
 
 def _parse_simple_yaml(yaml_text: str) -> dict[str, list[str]]:
@@ -72,3 +86,20 @@ def load_company_watchlist(path: str | Path | None = None) -> CompanyWatchlist:
 
     loaded = _parse_simple_yaml(watchlist_path.read_text(encoding="utf-8"))
     return CompanyWatchlist(**loaded)
+
+
+def load_notification_config(path: str | Path | None = None) -> NotificationConfig:
+    """Load notification settings from YAML with environment fallbacks."""
+    config = AppConfig()
+    notifications_path = Path(path) if path else config.notifications_path
+
+    loaded = yaml.safe_load(notifications_path.read_text(encoding="utf-8")) or {}
+    telegram_loaded = loaded.get("telegram", {}) if isinstance(loaded, dict) else {}
+    notification_config = NotificationConfig(telegram=TelegramConfig(**telegram_loaded))
+
+    if not notification_config.telegram.bot_token:
+        notification_config.telegram.bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    if not notification_config.telegram.chat_id:
+        notification_config.telegram.chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+
+    return notification_config
