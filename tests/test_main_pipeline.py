@@ -106,7 +106,7 @@ def test_main_combined_greenhouse_ashby_pipeline_without_lever(monkeypatch, caps
         lambda source="greenhouse": ["openai"] if source == "greenhouse" else ["anthropic"],
     )
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert "High-fit jobs to review" in output
@@ -128,7 +128,7 @@ def test_main_includes_lever_when_enabled(monkeypatch, capsys) -> None:
         lambda source="greenhouse": ["openai"] if source == "greenhouse" else (["anthropic"] if source == "ashby" else ["ramp"]),
     )
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert "High-fit jobs to review" in output
@@ -161,7 +161,7 @@ def test_main_prints_near_fit_section_and_hides_low_fit_when_near_fit_exists(mon
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [near, low]}))
     monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert "No new matching jobs found." not in output
@@ -174,7 +174,7 @@ def test_main_prints_low_fit_debug_only_when_no_high_or_near(monkeypatch, capsys
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [low]}))
     monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert "No new matching jobs found." in output
@@ -188,7 +188,7 @@ def test_main_prints_high_fit_jobs_when_present(monkeypatch, capsys) -> None:
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high]}))
     monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert "High-fit jobs to review" in output
@@ -213,7 +213,7 @@ def test_main_prints_near_fit_after_high_fit(monkeypatch, capsys) -> None:
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high, near]}))
     monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert output.index("High-fit jobs to review") < output.index("Near-fit jobs worth reviewing")
@@ -225,7 +225,7 @@ def test_main_does_not_print_no_high_fit_message_when_high_fit_exists(monkeypatc
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high]}))
     monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
 
-    main()
+    main(["run"])
     output = capsys.readouterr().out
 
     assert "No new matching jobs found." not in output
@@ -364,3 +364,40 @@ def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
 
     assert "Saved Existing High" in output
     assert "No saved high-fit jobs." not in output
+
+
+def test_digest_command_does_not_call_run_pipeline(monkeypatch) -> None:
+    called = {"run": False}
+    monkeypatch.setattr("job_fit_agent.main.print_digest", lambda: None)
+
+    def _fail_run() -> None:
+        called["run"] = True
+
+    monkeypatch.setattr("job_fit_agent.main.run_pipeline", _fail_run)
+
+    main(["digest"])
+
+    assert called["run"] is False
+
+
+def test_digest_command_does_not_print_no_new_matching_jobs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", lambda classification, limit=10: [])
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "No new matching jobs found." not in output
+
+
+def test_run_command_calls_run_pipeline(monkeypatch) -> None:
+    called = {"run": False}
+
+    def _run() -> None:
+        called["run"] = True
+
+    monkeypatch.setattr("job_fit_agent.main.run_pipeline", _run)
+
+    main(["run"])
+
+    assert called["run"] is True
