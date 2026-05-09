@@ -275,6 +275,8 @@ def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
         lambda classification, limit=10: [
             {
                 "score": 97,
+                "id": 1,
+                "status": "new",
                 "title": "Staff PM",
                 "company": "openai",
                 "source": "greenhouse",
@@ -290,7 +292,9 @@ def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
 
     assert "Saved high-fit jobs" in output
+    assert "id: 1" in output
     assert "score: 97" in output
+    assert "status: new" in output
     assert "title: Staff PM" in output
 
 
@@ -301,6 +305,8 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
         lambda classification, limit=10: [
             {
                 "score": 74,
+                "id": 2,
+                "status": "reviewing",
                 "title": "TPM",
                 "company": "openai",
                 "source": "greenhouse",
@@ -316,8 +322,25 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
 
     assert "Saved near-fit jobs" in output
+    assert "id: 2" in output
     assert "score: 74" in output
+    assert "status: reviewing" in output
     assert "title: TPM" in output
+
+
+def test_mark_command_updates_status(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: {"status": "applied"})
+    main(["mark", "5", "applied"])
+    output = capsys.readouterr().out
+    assert "Updated job 5 status to applied." in output
+
+
+def test_notes_command_updates_notes(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.update_notes", lambda job_id, notes: None)
+    main(["notes", "5", "follow up next week"])
+    output = capsys.readouterr().out
+    assert "Updated job 5 notes." in output
 
 
 def test_digest_prints_both_sections_with_empty_messages(monkeypatch, capsys) -> None:
@@ -341,9 +364,11 @@ def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
 
     def _top_jobs(classification, limit=10):
         if classification == "high_fit":
-            return [{
-                "score": 88,
-                "title": "Saved Existing High",
+                return [{
+                "id": 3,
+                    "score": 88,
+                    "status": "new",
+                    "title": "Saved Existing High",
                 "company": "openai",
                 "source": "greenhouse",
                 "url": "https://example.com/saved_high",

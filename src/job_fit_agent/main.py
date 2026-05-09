@@ -10,7 +10,15 @@ from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
-from job_fit_agent.repository import get_top_jobs_by_classification, initialize, upsert_job
+from job_fit_agent.repository import (
+    VALID_STATUSES,
+    get_job_by_id,
+    get_top_jobs_by_classification,
+    initialize,
+    update_notes,
+    update_status,
+    upsert_job,
+)
 from job_fit_agent.scoring import score_job
 
 LOGGER = logging.getLogger(__name__)
@@ -108,7 +116,9 @@ def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str)
 
     for row in rows:
         red_flags = json.loads(row["red_flags"]) if row["red_flags"] else []
+        print(f"id: {row['id']}")
         print(f"score: {row['score']}")
+        print(f"status: {row['status']}")
         print(f"title: {row['title']}")
         print(f"company: {row['company']}")
         print(f"source: {row['source']}")
@@ -189,8 +199,36 @@ def main(argv: list[str] | None = None) -> None:
         run_pipeline()
         return
 
+    if command == "mark":
+        if len(args) != 3:
+            print("Usage: python -m job_fit_agent.main mark <job_id> <status>")
+            print(f"Valid statuses: {', '.join(sorted(VALID_STATUSES))}")
+            return
+        try:
+            job_id = int(args[1])
+            update_status(job_id, args[2])
+            job = get_job_by_id(job_id)
+            print(f"Updated job {job_id} status to {job['status']}.")
+        except ValueError as exc:
+            print(str(exc))
+        return
+
+    if command == "notes":
+        if len(args) != 3:
+            print('Usage: python -m job_fit_agent.main notes <job_id> "<note text>"')
+            return
+        try:
+            job_id = int(args[1])
+            update_notes(job_id, args[2])
+            print(f"Updated job {job_id} notes.")
+        except ValueError as exc:
+            print(str(exc))
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
+    print("python -m job_fit_agent.main mark <job_id> <status>")
+    print('python -m job_fit_agent.main notes <job_id> "<note text>"')
 
 
 if __name__ == "__main__":

@@ -1,5 +1,17 @@
 from job_fit_agent.models import FitScore, JobPosting
-from job_fit_agent.repository import get_new_jobs, get_top_jobs, initialize, job_exists, upsert_job
+import pytest
+
+from job_fit_agent.repository import (
+    get_job_by_id,
+    get_new_jobs,
+    get_top_jobs,
+    get_top_jobs_by_classification,
+    initialize,
+    job_exists,
+    update_notes,
+    update_status,
+    upsert_job,
+)
 
 
 def _job(url: str, title: str = "Product Manager") -> JobPosting:
@@ -67,8 +79,6 @@ def test_get_top_jobs_by_classification_returns_only_requested_classification(tm
     upsert_job(_job("https://example.com/h2", title="High 2"), _fit(90, "high_fit"), db)
     upsert_job(_job("https://example.com/n1", title="Near 1"), _fit(85, "near_fit"), db)
 
-    from job_fit_agent.repository import get_top_jobs_by_classification
-
     high_rows = get_top_jobs_by_classification("high_fit", limit=10, db_path=db)
     near_rows = get_top_jobs_by_classification("near_fit", limit=10, db_path=db)
 
@@ -79,3 +89,40 @@ def test_get_top_jobs_by_classification_returns_only_requested_classification(tm
     assert len(near_rows) == 1
     assert all(row["classification"] == "near_fit" for row in near_rows)
     assert near_rows[0]["url"] == "https://example.com/n1"
+
+
+def test_update_status_and_notes_and_get_by_id(tmp_path) -> None:
+    db = tmp_path / "jobs.sqlite"
+    initialize(db)
+    upsert_job(_job("https://example.com/1"), _fit(90), db)
+    row = get_top_jobs(limit=1, db_path=db)[0]
+
+    update_status(row["id"], "reviewing", db)
+    update_notes(row["id"], "Strong referral", db)
+    updated = get_job_by_id(row["id"], db)
+
+    assert updated is not None
+    assert updated["status"] == "reviewing"
+    assert updated["notes"] == "Strong referral"
+
+
+def test_update_status_rejects_invalid_status(tmp_path) -> None:
+    db = tmp_path / "jobs.sqlite"
+    initialize(db)
+    upsert_job(_job("https://example.com/1"), _fit(90), db)
+    row = get_top_jobs(limit=1, db_path=db)[0]
+
+    with pytest.raises(ValueError):
+        update_status(row["id"], "invalid", db)
+
+
+def test_digest_queries_exclude_archived_by_classification(tmp_path) -> None:
+    db = tmp_path / "jobs.sqlite"
+    initialize(db)
+    upsert_job(_job("https://example.com/1"), _fit(95, "high_fit"), db)
+    upsert_job(_job("https://example.com/2"), _fit(90, "high_fit"), db)
+    rows = get_top_jobs(limit=2, db_path=db)
+    update_status(rows[1]["id"], "archived", db)
+
+    visible = get_top_jobs_by_classification("high_fit", db_path=db)
+    assert len(visible) == 1
