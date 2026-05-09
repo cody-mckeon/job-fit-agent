@@ -10,6 +10,7 @@ from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
+from job_fit_agent.notifications.telegram import send_message
 from job_fit_agent.repository import (
     VALID_STATUSES,
     get_job_by_id,
@@ -108,6 +109,19 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
         print("-")
 
 
+def format_high_fit_notification(job: JobPosting, fit: FitScore) -> str:
+    return "\n".join(
+        [
+            "[HIGH FIT JOB]",
+            job.company,
+            job.title,
+            f"Score: {fit.total_score}",
+            f"Source: {job.source}",
+            job.url,
+        ]
+    )
+
+
 def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str) -> None:
     print(section_title)
     if not rows:
@@ -156,13 +170,19 @@ def run_pipeline() -> None:
     all_scored_jobs = all_ranked + all_below
 
     new_matching: list[tuple[JobPosting, FitScore]] = []
+    new_high_fit: list[tuple[JobPosting, FitScore]] = []
 
     for job, fit in all_scored_jobs:
         result = upsert_job(job, fit)
         if result.is_new and fit.classification in {"high_fit", "near_fit"}:
             new_matching.append((job, fit))
+        if result.is_new and fit.classification == "high_fit":
+            new_high_fit.append((job, fit))
 
     high_fit_jobs, near_fit_jobs, _ = group_jobs_by_classification(new_matching)
+
+    for job, fit in new_high_fit:
+        send_message(format_high_fit_notification(job, fit))
 
     if high_fit_jobs:
         print_jobs("High-fit jobs to review", high_fit_jobs, limit=15)

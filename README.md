@@ -39,3 +39,30 @@ enable_lever = False
 ```bash
 python -m pytest
 ```
+
+## Telegram notifications for high-fit jobs
+
+Configure Telegram notifications in `config/notifications.yaml`:
+
+```yaml
+telegram:
+  enabled: false
+  bot_token: ""
+  chat_id: ""
+```
+
+When enabled, the pipeline sends one Telegram message per **new high-fit job** only.
+It does not notify for near-fit, duplicate, or updated jobs.
+
+You can also provide credentials via environment variables (used as fallback when YAML values are empty):
+
+```bash
+export TELEGRAM_BOT_TOKEN="<your-bot-token>"
+export TELEGRAM_CHAT_ID="<your-chat-id>"
+```
+
+Setup steps:
+1. Create a bot with `@BotFather` and copy the bot token.
+2. Start a chat with your bot (or add it to a group).
+3. Obtain the chat ID (for groups, use the negative group ID format).
+4. Set `enabled: true` in `config/notifications.yaml` and run the pipeline.
