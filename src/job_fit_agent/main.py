@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import argparse
 import json
 import logging
+import sys
 from typing import Protocol
 
 from job_fit_agent.collectors.ashby import AshbyCollector
@@ -178,14 +178,19 @@ def print_digest() -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="job_fit_agent")
-    parser.add_argument("command", nargs="?", choices=["run", "digest"], default="run")
-    args = parser.parse_args(argv if argv is not None else [])
+    args = argv if argv is not None else sys.argv[1:]
+    command = args[0] if args else "run"
 
-    if args.command == "digest":
+    if command == "digest":
         print_digest()
-    else:
+        return
+
+    if command == "run":
         run_pipeline()
+        return
+
+    print("python -m job_fit_agent.main run")
+    print("python -m job_fit_agent.main digest")
 
 
 if __name__ == "__main__":
