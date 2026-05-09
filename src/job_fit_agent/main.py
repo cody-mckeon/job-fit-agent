@@ -8,7 +8,7 @@ from typing import Protocol
 from job_fit_agent.collectors.ashby import AshbyCollector
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
-from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_target_profile
+from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_notification_config, load_target_profile
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.notifications.telegram import send_message
 from job_fit_agent.repository import (
@@ -144,7 +144,14 @@ def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str)
 def run_pipeline() -> None:
     target_profile = load_target_profile()
     app_config = AppConfig()
+    notification_config = load_notification_config().telegram
     initialize()
+
+    has_bot_token = bool(notification_config.bot_token)
+    has_chat_id = bool(notification_config.chat_id)
+    print(f"notifications enabled: {notification_config.enabled}")
+    print(f"telegram bot token present: {has_bot_token}")
+    print(f"telegram chat id present: {has_chat_id}")
 
     collectors: dict[str, JobCollector] = {
         "greenhouse": GreenhouseCollector(),
@@ -181,8 +188,29 @@ def run_pipeline() -> None:
 
     high_fit_jobs, near_fit_jobs, _ = group_jobs_by_classification(new_matching)
 
-    for job, fit in new_high_fit:
-        send_message(format_high_fit_notification(job, fit))
+    if new_high_fit:
+        print(f"notification candidates count: {len(new_high_fit)}")
+
+    should_send_notifications = True
+    skip_reason = ""
+    if not notification_config.enabled:
+        should_send_notifications = False
+        skip_reason = "disabled"
+    elif not has_bot_token:
+        should_send_notifications = False
+        skip_reason = "missing token"
+    elif not has_chat_id:
+        should_send_notifications = False
+        skip_reason = "missing chat id"
+    elif not new_high_fit:
+        should_send_notifications = False
+        skip_reason = "no new high_fit jobs"
+
+    if should_send_notifications:
+        for job, fit in new_high_fit:
+            send_message(format_high_fit_notification(job, fit))
+    else:
+        print(f"Telegram send skipped: {skip_reason}")
 
     if high_fit_jobs:
         print_jobs("High-fit jobs to review", high_fit_jobs, limit=15)
