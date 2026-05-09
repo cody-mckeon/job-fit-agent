@@ -100,10 +100,10 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
         print("-")
 
 
-def _print_digest_rows(section_title: str, rows: list[dict]) -> None:
+def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str) -> None:
     print(section_title)
     if not rows:
-        print("none")
+        print(empty_message)
         return
 
     for row in rows:
@@ -172,13 +172,9 @@ def print_digest() -> None:
     high_fit_rows = get_top_jobs_by_classification("high_fit", limit=10)
     near_fit_rows = get_top_jobs_by_classification("near_fit", limit=10)
 
-    if not high_fit_rows and not near_fit_rows:
-        print("No saved jobs found.")
-        return
-
-    _print_digest_rows("Saved high-fit jobs", high_fit_rows)
+    _print_digest_rows("Saved high-fit jobs", high_fit_rows, "No saved high-fit jobs.")
     print()
-    _print_digest_rows("Saved near-fit jobs", near_fit_rows)
+    _print_digest_rows("Saved near-fit jobs", near_fit_rows, "No saved near-fit jobs.")
 
 
 def main(argv: list[str] | None = None) -> None:

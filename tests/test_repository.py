@@ -70,6 +70,12 @@ def test_get_top_jobs_by_classification_returns_only_requested_classification(tm
     from job_fit_agent.repository import get_top_jobs_by_classification
 
     high_rows = get_top_jobs_by_classification("high_fit", limit=10, db_path=db)
+    near_rows = get_top_jobs_by_classification("near_fit", limit=10, db_path=db)
+
     assert len(high_rows) == 2
     assert all(row["classification"] == "high_fit" for row in high_rows)
     assert [row["url"] for row in high_rows] == ["https://example.com/h1", "https://example.com/h2"]
+
+    assert len(near_rows) == 1
+    assert all(row["classification"] == "near_fit" for row in near_rows)
+    assert near_rows[0]["url"] == "https://example.com/n1"

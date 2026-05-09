@@ -262,7 +262,10 @@ def test_digest_does_not_call_collectors(monkeypatch, capsys) -> None:
     main(["digest"])
     output = capsys.readouterr().out
 
-    assert "No saved jobs found." in output
+    assert "Saved high-fit jobs" in output
+    assert "No saved high-fit jobs." in output
+    assert "Saved near-fit jobs" in output
+    assert "No saved near-fit jobs." in output
 
 
 def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
@@ -315,3 +318,49 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
     assert "Saved near-fit jobs" in output
     assert "score: 74" in output
     assert "title: TPM" in output
+
+
+def test_digest_prints_both_sections_with_empty_messages(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "Saved high-fit jobs" in output
+    assert "No saved high-fit jobs." in output
+    assert "Saved near-fit jobs" in output
+    assert "No saved near-fit jobs." in output
+
+
+def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+
+    def _top_jobs(classification, limit=10):
+        if classification == "high_fit":
+            return [{
+                "score": 88,
+                "title": "Saved Existing High",
+                "company": "openai",
+                "source": "greenhouse",
+                "url": "https://example.com/saved_high",
+                "red_flags": "[]",
+                "first_seen_at": "2026-05-01T00:00:00+00:00",
+                "last_seen_at": "2026-05-05T00:00:00+00:00",
+            }]
+        return []
+
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", _top_jobs)
+    monkeypatch.setattr(
+        "job_fit_agent.main.GreenhouseCollector",
+        lambda: (_ for _ in ()).throw(AssertionError("collector should not be constructed for digest")),
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "Saved Existing High" in output
+    assert "No saved high-fit jobs." not in output
