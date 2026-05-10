@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import requests
+from bs4 import BeautifulSoup
 
 from job_fit_agent.models import JobPosting
 
@@ -56,6 +57,15 @@ class AshbyCollector:
 
         location = self._extract_location(job)
         workplace_type = self._extract_workplace_type(job)
+
+        if self._is_blank_or_vague_location(location):
+            html_location = self._fetch_location_from_job_page(url)
+            if html_location:
+                location = html_location
+                if not workplace_type:
+                    inferred_workplace_type = self._infer_workplace_type_from_location(html_location)
+                    if inferred_workplace_type:
+                        workplace_type = inferred_workplace_type
         department = self._extract_field_name(job, ("departmentName", "department"))
         team = self._extract_field_name(job, ("teamName", "team"))
 
@@ -99,6 +109,53 @@ class AshbyCollector:
             _add_part(address_obj)
 
         return " | ".join(location_parts)
+
+
+    def _is_blank_or_vague_location(self, location: str) -> bool:
+        normalized = location.strip().lower()
+        if not normalized:
+            return True
+
+        vague_terms = {
+            "united states",
+            "us",
+            "usa",
+            "global",
+            "worldwide",
+            "multiple locations",
+            "various locations",
+            "location flexible",
+        }
+        return normalized in vague_terms
+
+    def _fetch_location_from_job_page(self, job_url: str) -> str:
+        try:
+            response = requests.get(job_url, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            LOGGER.debug("Unable to fetch Ashby job page %s: %s", job_url, exc)
+            return ""
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        location_header = soup.find("h2", string=lambda value: isinstance(value, str) and value.strip().lower() == "location")
+        if location_header is None:
+            return ""
+
+        location_paragraph = location_header.find_next_sibling("p")
+        if location_paragraph is None:
+            return ""
+
+        return " ".join(location_paragraph.get_text(" ", strip=True).split())
+
+    def _infer_workplace_type_from_location(self, location: str) -> str:
+        normalized = location.lower()
+        if "remote" in normalized:
+            return "Remote"
+        if "hybrid" in normalized:
+            return "Hybrid"
+        if "onsite" in normalized or "on-site" in normalized or "in office" in normalized:
+            return "Onsite"
+        return ""
 
     def _extract_workplace_type(self, job: dict[str, Any]) -> str:
         workplace = str(job.get("workplaceType") or "").strip()
