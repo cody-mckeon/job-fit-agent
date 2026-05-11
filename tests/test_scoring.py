@@ -551,3 +551,15 @@ def test_las_vegas_hybrid_role_can_be_high_fit() -> None:
 
     fit = score_job(job, TARGET_PROFILE)
     assert fit.classification == "high_fit"
+
+def test_foster_city_hybrid_product_manager_is_not_high_fit() -> None:
+    job = _job(
+        title="Product Manager",
+        location="Foster City, CA (Hybrid) In office M,W,F",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+    assert "Hybrid in-office requirement outside Las Vegas/Nevada" in fit.red_flags

@@ -160,3 +160,71 @@ def test_fetch_jobs_location_fallback_from_job_page(monkeypatch):
     jobs = AshbyCollector().fetch_jobs("anthropic")
     assert jobs[0].location == "Foster City, CA (Hybrid) In office M,W,F"
     assert jobs[0].workplace_type == "Hybrid"
+
+def test_fetch_jobs_sidebar_parses_location_type(monkeypatch):
+    api_response = _mock_response({
+        "jobs": [
+            {
+                "title": "Senior Product Manager",
+                "jobUrl": "https://jobs.example/sidebar-meta",
+                "locationName": "United States",
+                "descriptionPlain": "Own AI roadmap.",
+            }
+        ]
+    })
+
+    html_response = _mock_response(
+        {},
+        text="""
+    <aside>
+      <div><h3>Location</h3><p>Foster City, CA (Hybrid) In office M,W,F</p></div>
+      <div><h3>Location Type</h3><p>Hybrid</p></div>
+      <div><h3>Department</h3><p>Product</p></div>
+    </aside>
+    """,
+    )
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    assert jobs[0].location == "Foster City, CA (Hybrid) In office M,W,F"
+    assert jobs[0].workplace_type == "Hybrid"
+    assert jobs[0].department == "Product"
+
+
+def test_fetch_jobs_sidebar_location_prevents_location_not_specified(monkeypatch):
+    api_response = _mock_response({
+        "jobs": [
+            {
+                "title": "Product Manager",
+                "jobUrl": "https://jobs.example/sidebar-location",
+                "descriptionPlain": "Own analytics roadmap.",
+            }
+        ]
+    })
+
+    html_response = _mock_response(
+        {},
+        text="""
+    <section>
+      <div><span>Location</span><span>Foster City, CA (Hybrid) In office M,W,F</span></div>
+      <div><span>Location Type</span><span>Hybrid</span></div>
+    </section>
+    """,
+    )
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    fit = score_job(jobs[0], load_target_profile())
+    assert "Location not specified" not in fit.red_flags

@@ -58,16 +58,31 @@ class AshbyCollector:
         location = self._extract_location(job)
         workplace_type = self._extract_workplace_type(job)
 
+        sidebar_metadata = self._fetch_sidebar_metadata_from_job_page(url)
+
+        used_sidebar_location = False
         if self._is_blank_or_vague_location(location):
-            html_location = self._fetch_location_from_job_page(url)
-            if html_location:
-                location = html_location
-                if not workplace_type:
-                    inferred_workplace_type = self._infer_workplace_type_from_location(html_location)
-                    if inferred_workplace_type:
-                        workplace_type = inferred_workplace_type
+            sidebar_location = sidebar_metadata.get("Location", "")
+            if sidebar_location:
+                location = sidebar_location
+                used_sidebar_location = True
+
+        if not workplace_type:
+            sidebar_workplace_type = sidebar_metadata.get("Location Type", "")
+            if sidebar_workplace_type:
+                workplace_type = self._normalize_workplace_type(sidebar_workplace_type)
+            elif used_sidebar_location and location:
+                inferred_workplace_type = self._infer_workplace_type_from_location(location)
+                if inferred_workplace_type:
+                    workplace_type = inferred_workplace_type
+
         department = self._extract_field_name(job, ("departmentName", "department"))
+        if not department:
+            department = sidebar_metadata.get("Department", "")
+
         team = self._extract_field_name(job, ("teamName", "team"))
+        if not team:
+            team = sidebar_metadata.get("Employment Type", "")
 
         description = str(job.get("descriptionPlain") or job.get("description") or "").strip()
 
@@ -128,24 +143,59 @@ class AshbyCollector:
         }
         return normalized in vague_terms
 
-    def _fetch_location_from_job_page(self, job_url: str) -> str:
+    def _normalize_text(self, value: str) -> str:
+        return " ".join(value.split()).strip()
+
+    def _extract_sidebar_value(self, label_node: Any) -> str:
+        container = getattr(label_node, "parent", None)
+        if container is not None:
+            for candidate in container.find_all(["p", "span", "div", "li"], recursive=False):
+                candidate_text = self._normalize_text(candidate.get_text(" ", strip=True))
+                if candidate is label_node or not candidate_text:
+                    continue
+                if candidate_text.lower() != self._normalize_text(label_node.get_text(" ", strip=True)).lower():
+                    return candidate_text
+
+        for sibling in label_node.next_siblings:
+            if isinstance(sibling, str):
+                sibling_text = self._normalize_text(sibling)
+            else:
+                sibling_text = self._normalize_text(sibling.get_text(" ", strip=True))
+            if sibling_text:
+                return sibling_text
+
+        next_element = label_node.find_next(lambda tag: tag is not label_node and self._normalize_text(tag.get_text(" ", strip=True)))
+        if next_element is not None:
+            next_text = self._normalize_text(next_element.get_text(" ", strip=True))
+            label_text = self._normalize_text(label_node.get_text(" ", strip=True))
+            if next_text.lower() != label_text.lower():
+                return next_text
+        return ""
+
+    def _fetch_sidebar_metadata_from_job_page(self, job_url: str) -> dict[str, str]:
         try:
             response = requests.get(job_url, timeout=self.timeout)
             response.raise_for_status()
         except requests.RequestException as exc:
             LOGGER.debug("Unable to fetch Ashby job page %s: %s", job_url, exc)
-            return ""
+            return {}
 
         soup = BeautifulSoup(response.text, "html.parser")
-        location_header = soup.find("h2", string=lambda value: isinstance(value, str) and value.strip().lower() == "location")
-        if location_header is None:
-            return ""
+        metadata: dict[str, str] = {}
+        supported_labels = ("Location", "Location Type", "Department", "Employment Type", "Compensation")
 
-        location_paragraph = location_header.find_next_sibling("p")
-        if location_paragraph is None:
-            return ""
+        for label in supported_labels:
+            label_node = soup.find(string=lambda value: isinstance(value, str) and self._normalize_text(value).lower() == label.lower())
+            if label_node is None:
+                continue
+            parent = label_node.parent if hasattr(label_node, "parent") else None
+            if parent is None:
+                continue
+            value_text = self._extract_sidebar_value(parent)
+            if value_text:
+                metadata[label] = value_text
 
-        return " ".join(location_paragraph.get_text(" ", strip=True).split())
+        return metadata
 
     def _infer_workplace_type_from_location(self, location: str) -> str:
         normalized = location.lower()
@@ -159,6 +209,9 @@ class AshbyCollector:
 
     def _extract_workplace_type(self, job: dict[str, Any]) -> str:
         workplace = str(job.get("workplaceType") or "").strip()
+        return self._normalize_workplace_type(workplace)
+
+    def _normalize_workplace_type(self, workplace: str) -> str:
         if not workplace:
             return ""
         normalized = workplace.lower()
