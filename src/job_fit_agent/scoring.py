@@ -58,6 +58,16 @@ FORCED_LOW_FIT_TITLES = {
     "infrastructure engineer",
     "engineering manager",
 }
+
+NON_LOCAL_HYBRID_CITY_TERMS = {
+    "foster city, ca",
+    "san francisco, ca",
+    "new york, ny",
+    "sf",
+    "ny",
+}
+
+LOCAL_LOCATION_TERMS = ("las vegas", "henderson", "nevada", " nv", "remote us", "us remote", "remote united states")
 ROLE_FAMILIES = {
     "product_management",
     "product_operations",
@@ -151,7 +161,12 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
         red_flags.append("International location outside US/Las Vegas constraints")
 
     has_non_local_us = any(term in location_text for term in non_local_us_terms)
-    if has_non_local_us and not has_remote_us:
+    has_explicit_non_local_hybrid = (
+        is_hybrid
+        and any(term in combined_location_text for term in NON_LOCAL_HYBRID_CITY_TERMS)
+        and not any(term in combined_location_text for term in LOCAL_LOCATION_TERMS)
+    )
+    if (has_non_local_us and not has_remote_us) or has_explicit_non_local_hybrid:
         score_delta += US_NON_LOCAL_PENALTY
         if is_hybrid:
             red_flags.append("Hybrid in-office requirement outside Las Vegas/Nevada")
