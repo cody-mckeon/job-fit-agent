@@ -126,3 +126,34 @@ def test_digest_queries_exclude_archived_by_classification(tmp_path) -> None:
 
     visible = get_top_jobs_by_classification("high_fit", db_path=db)
     assert len(visible) == 1
+
+
+def test_upsert_updates_scoring_fields_and_preserves_status_notes_first_seen(tmp_path) -> None:
+    db = tmp_path / "jobs.sqlite"
+    initialize(db)
+
+    upsert_job(_job("https://example.com/preserve", title="PM"), _fit(70, "near_fit"), db)
+    row = get_top_jobs(limit=1, db_path=db)[0]
+    job_id = row["id"]
+    first_seen_at = row["first_seen_at"]
+
+    update_status(job_id, "reviewing", db)
+    update_notes(job_id, "keep this note", db)
+
+    new_fit = FitScore(
+        total_score=95,
+        classification="high_fit",
+        role_family="product",
+        reasons=["updated reason"],
+        red_flags=["old red flag removed"],
+    )
+    upsert_job(_job("https://example.com/preserve", title="Senior PM"), new_fit, db)
+
+    updated = get_job_by_id(job_id, db)
+    assert updated is not None
+    assert updated["status"] == "reviewing"
+    assert updated["notes"] == "keep this note"
+    assert updated["first_seen_at"] == first_seen_at
+    assert updated["classification"] == "high_fit"
+    assert updated["score"] == 95
+    assert updated["red_flags"] == '["old red flag removed"]'
