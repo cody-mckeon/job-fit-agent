@@ -127,3 +127,38 @@ def test_fetch_jobs_separates_metadata_fields(monkeypatch):
     assert job.workplace_type == "Hybrid"
     assert job.department == "GTM"
     assert job.team == "Marketing"
+
+
+def test_fetch_jobs_location_fallback_from_job_page(monkeypatch):
+    api_response = Mock()
+    api_response.raise_for_status.return_value = None
+    api_response.json.return_value = {
+        "jobs": [
+            {
+                "title": "Senior Product Manager",
+                "jobUrl": "https://jobs.example/foster-city",
+                "locationName": "United States",
+                "descriptionPlain": "Own AI roadmap.",
+            }
+        ]
+    }
+
+    html_response = Mock()
+    html_response.raise_for_status.return_value = None
+    html_response.text = """
+    <div>
+      <h2>Location</h2>
+      <p>Foster City, CA (Hybrid) In office M,W,F</p>
+    </div>
+    """
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    assert jobs[0].location == "Foster City, CA (Hybrid) In office M,W,F"
+    assert jobs[0].workplace_type == "Hybrid"

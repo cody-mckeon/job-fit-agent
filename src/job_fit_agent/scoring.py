@@ -150,7 +150,10 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
     has_non_local_us = any(term in location_text for term in non_local_us_terms)
     if has_non_local_us and not has_remote_us:
         score_delta += US_NON_LOCAL_PENALTY
-        red_flags.append("Onsite or location-specific US role outside Las Vegas/Nevada")
+        if is_hybrid:
+            red_flags.append("Hybrid in-office requirement outside Las Vegas/Nevada")
+        else:
+            red_flags.append("Onsite or location-specific US role outside Las Vegas/Nevada")
 
     if is_onsite and not has_local and not has_remote_us:
         onsite_non_local_block = True

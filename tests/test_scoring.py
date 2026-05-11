@@ -416,3 +416,29 @@ def test_replit_hybrid_unspecified_pm_is_not_low_fit() -> None:
 
     fit = score_job(job, TARGET_PROFILE)
     assert fit.classification in {"near_fit", "high_fit"}
+
+
+def test_foster_city_hybrid_role_downgrades_from_high_fit() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="Foster City, CA (Hybrid) In office M,W,F",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+    assert "Hybrid in-office requirement outside Las Vegas/Nevada" in fit.red_flags
+
+
+def test_sf_ny_hybrid_role_downgrades_from_high_fit() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="San Francisco, CA or New York, NY (Hybrid)",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+    assert "Hybrid in-office requirement outside Las Vegas/Nevada" in fit.red_flags
