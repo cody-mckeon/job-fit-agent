@@ -18,6 +18,9 @@ ONSITE_INTERNATIONAL_PENALTY = -60
 UNKNOWN_LOCATION_PENALTY = -4
 HYBRID_UNSPECIFIED_PENALTY = -8
 PRIORITY_COMPANY_BONUS = 10
+INDUSTRY_BIAS_BONUS = 5
+INDUSTRY_BIAS_BONUS_CAP = 20
+LOCAL_PRIORITY_COMPANY_BONUS = 12
 
 NEGATIVE_KEYWORDS = {
     "engineer only": -30,
@@ -201,6 +204,23 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if company_name in priority_companies:
         score += PRIORITY_COMPANY_BONUS
         reasons.append(f"Priority company match (+{PRIORITY_COMPANY_BONUS})")
+
+    local_priority_companies = {company.strip().lower() for company in target_profile.local_priority_companies}
+    if company_name in local_priority_companies:
+        score += LOCAL_PRIORITY_COMPANY_BONUS
+        reasons.append(f"Local priority company match (+{LOCAL_PRIORITY_COMPANY_BONUS})")
+
+    industry_text = f"{job.title} {job.description} {job.department} {job.team} {job.company}".lower()
+    industry_boost = 0
+    for term in target_profile.industry_bias:
+        normalized = term.lower()
+        if normalized in industry_text and industry_boost < INDUSTRY_BIAS_BONUS_CAP:
+            applied = min(INDUSTRY_BIAS_BONUS, INDUSTRY_BIAS_BONUS_CAP - industry_boost)
+            if applied <= 0:
+                break
+            industry_boost += applied
+            score += applied
+            reasons.append(f"Industry bias match: {term} (+{INDUSTRY_BIAS_BONUS})")
 
     for location in target_profile.preferred_locations:
         normalized = location.lower()

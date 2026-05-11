@@ -418,6 +418,91 @@ def test_replit_hybrid_unspecified_pm_is_not_low_fit() -> None:
     assert fit.classification in {"near_fit", "high_fit"}
 
 
+def test_hospitality_product_manager_receives_industry_bias_boost() -> None:
+    job = _job(
+        title="Product Manager",
+        location="Remote US",
+        description="Own hospitality digital experience and experimentation roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert "Industry bias match: hospitality (+5)" in fit.reasons
+
+
+def test_gaming_product_manager_receives_industry_bias_boost() -> None:
+    job = _job(
+        title="Product Manager, Gaming Platform",
+        location="Remote US",
+        description="Drive gaming loyalty and personalization strategy.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert "Industry bias match: gaming (+5)" in fit.reasons
+
+
+def test_martech_product_analytics_role_receives_industry_bias_boost() -> None:
+    job = _job(
+        title="Product Analytics Manager",
+        location="Remote US",
+        description="Lead martech analytics and experimentation instrumentation.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert "Industry bias match: martech (+5)" in fit.reasons
+
+
+def test_casino_sales_role_does_not_become_high_fit() -> None:
+    job = _job(
+        title="Casino Sales Manager",
+        location="Las Vegas, NV",
+        description="Own casino enterprise sales strategy.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+
+
+def test_hospitality_software_engineer_remains_low_fit() -> None:
+    job = _job(
+        title="Hospitality Software Engineer",
+        location="Remote US",
+        description="Build hotel booking platform APIs.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
+def test_onsite_non_local_gaming_pm_does_not_become_high_fit() -> None:
+    job = _job(
+        title="Gaming Product Manager",
+        location="Onsite - New York, NY",
+        description="Own casino payments and loyalty product roadmap.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+
+
+def test_local_priority_company_receives_boost() -> None:
+    base_job = _job(
+        title="Product Manager",
+        company="Acme",
+        location="Remote US",
+        description="Lead AI analytics experimentation strategy.",
+    )
+    local_priority_job = _job(
+        title="Product Manager",
+        company="MGM Resorts",
+        location="Remote US",
+        description="Lead AI analytics experimentation strategy.",
+    )
+
+    base_fit = score_job(base_job, TARGET_PROFILE)
+    local_priority_fit = score_job(local_priority_job, TARGET_PROFILE)
+
+    assert local_priority_fit.total_score >= base_fit.total_score + 12
+    assert "Local priority company match (+12)" in local_priority_fit.reasons
 def test_foster_city_hybrid_role_downgrades_from_high_fit() -> None:
     job = _job(
         title="Technical Product Manager",

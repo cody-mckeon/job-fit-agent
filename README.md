@@ -34,6 +34,15 @@ Current runtime flag in `AppConfig`:
 enable_lever = False
 ```
 
+## Scoring profile boosts
+
+`config/target_profile.yaml` supports additional ranking boosts:
+
+- `industry_bias`: optional list of industry/domain terms matched against job title, description, department, team, and company.
+- `local_priority_companies`: optional list of higher-priority local/target companies.
+
+These are **ranking boosts, not hard filters**. They improve ordering among already-relevant roles and do not replace role-family and location guardrails.
+
 ## Test
 
 ```bash

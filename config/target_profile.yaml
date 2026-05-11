@@ -74,3 +74,41 @@ priority_companies:
   - vercel
   - cloudflare
   - notion
+
+industry_bias:
+  - gaming
+  - casino
+  - hospitality
+  - hotel
+  - resort
+  - travel
+  - consumer web
+  - ecommerce
+  - marketplace
+  - martech
+  - marketing technology
+  - analytics
+  - experimentation
+  - personalization
+  - revenue management
+  - loyalty
+  - payments
+  - fintech
+  - AI tooling
+  - workflow automation
+  - customer experience
+  - digital experience
+
+local_priority_companies:
+  - slickdeals
+  - mgm resorts
+  - caesars
+  - sphere
+  - aristocrat
+  - light & wonder
+  - konami gaming
+  - everi
+  - draftkings
+  - fanduel
+  - playstudios
+  - skillz
