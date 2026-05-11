@@ -7,10 +7,17 @@ from job_fit_agent.config import load_target_profile
 from job_fit_agent.scoring import score_job
 
 
+def _mock_response(payload: dict, text: str = "") -> Mock:
+    response = Mock()
+    response.status_code = 200
+    response.text = text
+    response.raise_for_status.return_value = None
+    response.json.return_value = payload
+    return response
+
+
 def test_fetch_jobs_parses_ashby_response(monkeypatch):
-    mock_response = Mock()
-    mock_response.raise_for_status.return_value = None
-    mock_response.json.return_value = {
+    mock_response = _mock_response({
         "jobs": [
             {
                 "title": "Software Engineer",
@@ -19,7 +26,7 @@ def test_fetch_jobs_parses_ashby_response(monkeypatch):
                 "descriptionPlain": "Build AI products",
             }
         ]
-    }
+    })
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
 
     jobs = AshbyCollector().fetch_jobs("anthropic")
@@ -43,9 +50,7 @@ def test_fetch_jobs_handles_failed_request(monkeypatch):
 
 
 def test_fetch_jobs_parses_location_name_field(monkeypatch):
-    mock_response = Mock()
-    mock_response.raise_for_status.return_value = None
-    mock_response.json.return_value = {
+    mock_response = _mock_response({
         "jobs": [
             {
                 "title": "PM",
@@ -54,7 +59,7 @@ def test_fetch_jobs_parses_location_name_field(monkeypatch):
                 "descriptionPlain": "desc",
             }
         ]
-    }
+    })
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
 
     jobs = AshbyCollector().fetch_jobs("anthropic")
@@ -62,9 +67,7 @@ def test_fetch_jobs_parses_location_name_field(monkeypatch):
 
 
 def test_fetch_jobs_maps_remote_from_workplace_type(monkeypatch):
-    mock_response = Mock()
-    mock_response.raise_for_status.return_value = None
-    mock_response.json.return_value = {
+    mock_response = _mock_response({
         "jobs": [
             {
                 "title": "PM",
@@ -74,7 +77,7 @@ def test_fetch_jobs_maps_remote_from_workplace_type(monkeypatch):
                 "descriptionPlain": "desc",
             }
         ]
-    }
+    })
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
 
     jobs = AshbyCollector().fetch_jobs("anthropic")
@@ -83,9 +86,7 @@ def test_fetch_jobs_maps_remote_from_workplace_type(monkeypatch):
 
 
 def test_missing_location_maps_to_empty_and_scores_unknown(monkeypatch):
-    mock_response = Mock()
-    mock_response.raise_for_status.return_value = None
-    mock_response.json.return_value = {
+    mock_response = _mock_response({
         "jobs": [
             {
                 "title": "Product Manager",
@@ -93,7 +94,7 @@ def test_missing_location_maps_to_empty_and_scores_unknown(monkeypatch):
                 "descriptionPlain": "Own analytics roadmap for product platform.",
             }
         ]
-    }
+    })
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
 
     jobs = AshbyCollector().fetch_jobs("anthropic")
@@ -104,9 +105,7 @@ def test_missing_location_maps_to_empty_and_scores_unknown(monkeypatch):
 
 
 def test_fetch_jobs_separates_metadata_fields(monkeypatch):
-    mock_response = Mock()
-    mock_response.raise_for_status.return_value = None
-    mock_response.json.return_value = {
+    mock_response = _mock_response({
         "jobs": [
             {
                 "title": "PMM",
@@ -118,7 +117,7 @@ def test_fetch_jobs_separates_metadata_fields(monkeypatch):
                 "descriptionPlain": "desc",
             }
         ]
-    }
+    })
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
 
     jobs = AshbyCollector().fetch_jobs("anthropic")
@@ -130,9 +129,7 @@ def test_fetch_jobs_separates_metadata_fields(monkeypatch):
 
 
 def test_fetch_jobs_location_fallback_from_job_page(monkeypatch):
-    api_response = Mock()
-    api_response.raise_for_status.return_value = None
-    api_response.json.return_value = {
+    api_response = _mock_response({
         "jobs": [
             {
                 "title": "Senior Product Manager",
@@ -141,16 +138,17 @@ def test_fetch_jobs_location_fallback_from_job_page(monkeypatch):
                 "descriptionPlain": "Own AI roadmap.",
             }
         ]
-    }
+    })
 
-    html_response = Mock()
-    html_response.raise_for_status.return_value = None
-    html_response.text = """
+    html_response = _mock_response(
+        {},
+        text="""
     <div>
       <h2>Location</h2>
       <p>Foster City, CA (Hybrid) In office M,W,F</p>
     </div>
-    """
+    """,
+    )
 
     def _mock_get(url, timeout):
         if "posting-api/job-board" in url:
