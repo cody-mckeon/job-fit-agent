@@ -503,3 +503,27 @@ def test_local_priority_company_receives_boost() -> None:
 
     assert local_priority_fit.total_score >= base_fit.total_score + 12
     assert "Local priority company match (+12)" in local_priority_fit.reasons
+def test_foster_city_hybrid_role_downgrades_from_high_fit() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="Foster City, CA (Hybrid) In office M,W,F",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+    assert "Hybrid in-office requirement outside Las Vegas/Nevada" in fit.red_flags
+
+
+def test_sf_ny_hybrid_role_downgrades_from_high_fit() -> None:
+    job = _job(
+        title="Technical Product Manager",
+        location="San Francisco, CA or New York, NY (Hybrid)",
+        description="Own AI platform experimentation and analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+    assert "Hybrid in-office requirement outside Las Vegas/Nevada" in fit.red_flags
