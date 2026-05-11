@@ -426,3 +426,30 @@ def test_run_command_calls_run_pipeline(monkeypatch) -> None:
     main(["run"])
 
     assert called["run"] is True
+
+
+def test_rescore_updates_existing_jobs_without_notifications(monkeypatch, capsys) -> None:
+    high = _job("Product Manager AI", location="Remote US")
+
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high]}))
+    monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({}))
+    monkeypatch.setattr("job_fit_agent.main.LeverCollector", lambda: StubCollector({}))
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
+
+    called = {"sent": False}
+
+    def _fail_send(_message: str) -> None:
+        called["sent"] = True
+
+    monkeypatch.setattr("job_fit_agent.main.send_message", _fail_send)
+    monkeypatch.setattr(
+        "job_fit_agent.main.upsert_job",
+        lambda job, fit: UpsertResult(is_new=False, updated=True, skipped_duplicate=False),
+    )
+
+    main(["rescore"])
+    output = capsys.readouterr().out
+
+    assert "Rescore complete" in output
+    assert "updated jobs count: 1" in output
+    assert called["sent"] is False

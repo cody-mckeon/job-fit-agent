@@ -141,6 +141,36 @@ def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str)
         print("-")
 
 
+
+
+def _build_enabled_collectors(app_config: AppConfig) -> dict[str, JobCollector]:
+    collectors: dict[str, JobCollector] = {
+        "greenhouse": GreenhouseCollector(),
+        "ashby": AshbyCollector(),
+        "lever": LeverCollector(),
+    }
+    return {
+        source: collector
+        for source, collector in collectors.items()
+        if source != "lever" or app_config.enable_lever
+    }
+
+
+def _collect_all_scored_jobs(
+    enabled_collectors: dict[str, JobCollector],
+    target_profile: TargetProfile,
+) -> list[tuple[JobPosting, FitScore]]:
+    all_ranked: list[tuple[JobPosting, FitScore]] = []
+    all_below: list[tuple[JobPosting, FitScore]] = []
+
+    for source, collector in enabled_collectors.items():
+        companies = resolve_companies(source=source)
+        ranked, below = collect_scored_jobs(collector, target_profile, companies, min_score=45)
+        all_ranked.extend(ranked)
+        all_below.extend(below)
+
+    return all_ranked + all_below
+
 def run_pipeline() -> None:
     target_profile = load_target_profile()
     app_config = AppConfig()
@@ -153,28 +183,8 @@ def run_pipeline() -> None:
     print(f"telegram bot token present: {has_bot_token}")
     print(f"telegram chat id present: {has_chat_id}")
 
-    collectors: dict[str, JobCollector] = {
-        "greenhouse": GreenhouseCollector(),
-        "ashby": AshbyCollector(),
-        "lever": LeverCollector(),
-    }
-
-    enabled_collectors = {
-        source: collector
-        for source, collector in collectors.items()
-        if source != "lever" or app_config.enable_lever
-    }
-
-    all_ranked: list[tuple[JobPosting, FitScore]] = []
-    all_below: list[tuple[JobPosting, FitScore]] = []
-
-    for source, collector in enabled_collectors.items():
-        companies = resolve_companies(source=source)
-        ranked, below = collect_scored_jobs(collector, target_profile, companies, min_score=45)
-        all_ranked.extend(ranked)
-        all_below.extend(below)
-
-    all_scored_jobs = all_ranked + all_below
+    enabled_collectors = _build_enabled_collectors(app_config)
+    all_scored_jobs = _collect_all_scored_jobs(enabled_collectors, target_profile)
 
     new_matching: list[tuple[JobPosting, FitScore]] = []
     new_high_fit: list[tuple[JobPosting, FitScore]] = []
@@ -225,6 +235,25 @@ def run_pipeline() -> None:
         print("No new matching jobs found.")
 
 
+
+
+def run_rescore() -> None:
+    target_profile = load_target_profile()
+    app_config = AppConfig()
+    initialize()
+
+    enabled_collectors = _build_enabled_collectors(app_config)
+    all_scored_jobs = _collect_all_scored_jobs(enabled_collectors, target_profile)
+
+    updated_count = 0
+    for job, fit in all_scored_jobs:
+        result = upsert_job(job, fit)
+        if not result.is_new:
+            updated_count += 1
+
+    print("Rescore complete")
+    print(f"updated jobs count: {updated_count}")
+
 def print_digest() -> None:
     initialize()
     high_fit_rows = get_top_jobs_by_classification("high_fit", limit=10)
@@ -245,6 +274,10 @@ def main(argv: list[str] | None = None) -> None:
 
     if command == "run":
         run_pipeline()
+        return
+
+    if command == "rescore":
+        run_rescore()
         return
 
     if command == "mark":
@@ -275,6 +308,7 @@ def main(argv: list[str] | None = None) -> None:
 
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
+    print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main mark <job_id> <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
 
