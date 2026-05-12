@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
+from dataclasses import dataclass
 from typing import Protocol
 
 from job_fit_agent.collectors.ashby import AshbyCollector
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
-from job_fit_agent.config import AppConfig, TargetProfile, load_company_watchlist, load_notification_config, load_target_profile
+from job_fit_agent.config import (
+    AppConfig,
+    TargetProfile,
+    load_company_watchlist,
+    load_discovery_queue,
+    load_notification_config,
+    load_target_profile,
+    save_discovery_queue,
+)
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.notifications.telegram import send_message
 from job_fit_agent.repository import (
@@ -27,6 +37,29 @@ LOGGER = logging.getLogger(__name__)
 
 class JobCollector(Protocol):
     def fetch_jobs(self, company: str) -> list[JobPosting]: ...
+
+
+@dataclass
+class ParsedJobUrl:
+    source: str
+    company: str
+    job_id: str
+    original_url: str
+
+
+def parse_job_url(job_url: str) -> ParsedJobUrl:
+    patterns = [
+        ("ashby", r"^https://jobs\.ashbyhq\.com/([^/]+)/([^/?#]+)"),
+        ("greenhouse", r"^https://boards\.greenhouse\.io/([^/]+)/jobs/([^/?#]+)"),
+        ("lever", r"^https://jobs\.lever\.co/([^/]+)/([^/?#]+)"),
+    ]
+    for source, pattern in patterns:
+        match = re.match(pattern, job_url)
+        if match:
+            return ParsedJobUrl(source=source, company=match.group(1), job_id=match.group(2), original_url=job_url)
+    raise ValueError(
+        "Unsupported job URL. Expected Ashby, Greenhouse, or Lever URL patterns."
+    )
 
 
 def group_jobs_by_classification(
@@ -264,6 +297,36 @@ def print_digest() -> None:
     _print_digest_rows("Saved near-fit jobs", near_fit_rows, "No saved near-fit jobs.")
 
 
+def learn_url(job_url: str) -> None:
+    parsed = parse_job_url(job_url)
+    target_profile = load_target_profile()
+    initialize()
+    collectors = _build_enabled_collectors(AppConfig())
+    collector = collectors.get(parsed.source)
+    if collector is None:
+        raise ValueError(f"Source '{parsed.source}' is not enabled.")
+    jobs = collector.fetch_jobs(parsed.company)
+    scored_jobs = [(job, score_job(job, target_profile)) for job in jobs]
+    for job, fit in scored_jobs:
+        upsert_job(job, fit)
+
+    queue = load_discovery_queue()
+    source_companies = getattr(queue, parsed.source)
+    if parsed.company not in source_companies:
+        source_companies.append(parsed.company)
+        save_discovery_queue(queue)
+
+    high_fit_count = len([1 for _, fit in scored_jobs if fit.classification == "high_fit"])
+    near_fit_count = len([1 for _, fit in scored_jobs if fit.classification == "near_fit"])
+    print(f"parsed source: {parsed.source}")
+    print(f"parsed company: {parsed.company}")
+    print(f"parsed job id: {parsed.job_id}")
+    print(f"jobs fetched: {len(scored_jobs)}")
+    print(f"high_fit jobs found: {high_fit_count}")
+    print(f"near_fit jobs found: {near_fit_count}")
+    print(f"Discovered company added to discovery queue: {parsed.source}/{parsed.company}")
+
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "run"
@@ -306,11 +369,22 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "learn-url":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main learn-url <job_url>")
+            return
+        try:
+            learn_url(args[1])
+        except ValueError as exc:
+            print(str(exc))
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main mark <job_id> <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
+    print("python -m job_fit_agent.main learn-url <job_url>")
 
 
 if __name__ == "__main__":
