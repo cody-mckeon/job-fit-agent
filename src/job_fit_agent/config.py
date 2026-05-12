@@ -91,6 +91,19 @@ def load_company_watchlist(path: str | Path | None = None) -> CompanyWatchlist:
     return CompanyWatchlist(**loaded)
 
 
+def save_company_watchlist(watchlist: CompanyWatchlist, path: str | Path | None = None) -> None:
+    """Persist company watchlist to YAML."""
+    config = AppConfig()
+    watchlist_path = Path(path) if path else config.company_watchlist_path
+    watchlist_path.parent.mkdir(parents=True, exist_ok=True)
+    yaml_text = (
+        f"ashby:\n{_serialize_list(watchlist.ashby)}"
+        f"greenhouse:\n{_serialize_list(watchlist.greenhouse)}"
+        f"lever:\n{_serialize_list(watchlist.lever)}"
+    )
+    watchlist_path.write_text(yaml_text, encoding="utf-8")
+
+
 def load_discovery_queue(path: str | Path | None = None) -> CompanyWatchlist:
     """Load discovered company queue from YAML."""
     config = AppConfig()

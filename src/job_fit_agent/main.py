@@ -17,6 +17,7 @@ from job_fit_agent.config import (
     load_discovery_queue,
     load_notification_config,
     load_target_profile,
+    save_company_watchlist,
     save_discovery_queue,
 )
 from job_fit_agent.models import FitScore, JobPosting
@@ -327,6 +328,34 @@ def learn_url(job_url: str) -> None:
     print(f"Discovered company added to discovery queue: {parsed.source}/{parsed.company}")
 
 
+def promote_discovery(source: str, company: str) -> None:
+    valid_sources = {"ashby", "greenhouse", "lever"}
+    if source not in valid_sources:
+        raise ValueError(f"Invalid source '{source}'. Expected one of: ashby, greenhouse, lever.")
+
+    queue = load_discovery_queue()
+    queued_companies = getattr(queue, source)
+    if company not in queued_companies:
+        raise ValueError(f"Company '{company}' was not found in discovery queue for source '{source}'.")
+
+    watchlist = load_company_watchlist()
+    watchlist_companies = getattr(watchlist, source)
+    already_in_watchlist = company in watchlist_companies
+    if not already_in_watchlist:
+        watchlist_companies.append(company)
+        watchlist_companies.sort()
+        save_company_watchlist(watchlist)
+
+    queued_companies.remove(company)
+    queued_companies.sort()
+    save_discovery_queue(queue)
+
+    if already_in_watchlist:
+        print(f"{source}/{company} already exists in company watchlist")
+        return
+    print(f"Promoted {source}/{company} to company watchlist")
+
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "run"
@@ -379,12 +408,23 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "promote-discovery":
+        if len(args) != 3:
+            print("Usage: python -m job_fit_agent.main promote-discovery <source> <company>")
+            return
+        try:
+            promote_discovery(args[1], args[2])
+        except ValueError as exc:
+            print(str(exc))
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main mark <job_id> <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
     print("python -m job_fit_agent.main learn-url <job_url>")
+    print("python -m job_fit_agent.main promote-discovery <source> <company>")
 
 
 if __name__ == "__main__":
