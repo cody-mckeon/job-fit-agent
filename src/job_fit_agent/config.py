@@ -48,6 +48,7 @@ class AppConfig(BaseModel):
 
     target_profile_path: Path = Field(default_factory=lambda: Path("config/target_profile.yaml"))
     company_watchlist_path: Path = Field(default_factory=lambda: Path("config/company_watchlist.yaml"))
+    discovery_queue_path: Path = Field(default_factory=lambda: Path("config/discovery_queue.yaml"))
     enable_lever: bool = False
     notifications_path: Path = Field(default_factory=lambda: Path("config/notifications.yaml"))
 
@@ -88,6 +89,35 @@ def load_company_watchlist(path: str | Path | None = None) -> CompanyWatchlist:
 
     loaded = _parse_simple_yaml(watchlist_path.read_text(encoding="utf-8"))
     return CompanyWatchlist(**loaded)
+
+
+def load_discovery_queue(path: str | Path | None = None) -> CompanyWatchlist:
+    """Load discovered company queue from YAML."""
+    config = AppConfig()
+    queue_path = Path(path) if path else config.discovery_queue_path
+    if not queue_path.exists():
+        return CompanyWatchlist()
+    loaded = _parse_simple_yaml(queue_path.read_text(encoding="utf-8"))
+    return CompanyWatchlist(**loaded)
+
+
+def save_discovery_queue(queue: CompanyWatchlist, path: str | Path | None = None) -> None:
+    """Persist discovered company queue to YAML."""
+    config = AppConfig()
+    queue_path = Path(path) if path else config.discovery_queue_path
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    yaml_text = (
+        f"ashby:\n{_serialize_list(queue.ashby)}"
+        f"greenhouse:\n{_serialize_list(queue.greenhouse)}"
+        f"lever:\n{_serialize_list(queue.lever)}"
+    )
+    queue_path.write_text(yaml_text, encoding="utf-8")
+
+
+def _serialize_list(items: list[str]) -> str:
+    if not items:
+        return "  []\n"
+    return "".join(f"  - {item}\n" for item in items)
 
 
 def load_notification_config(path: str | Path | None = None) -> NotificationConfig:

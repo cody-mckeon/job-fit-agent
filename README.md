@@ -26,6 +26,15 @@ ashby:
 python -m job_fit_agent.main
 ```
 
+Learn a company from a manually found job URL:
+
+```bash
+python -m job_fit_agent.main learn-url "https://jobs.ashbyhq.com/scrunch/abc123"
+```
+
+This command parses the source/company from the URL, fetches that company board, scores all jobs, persists them to SQLite, and adds the company to `config/discovery_queue.yaml`.
+`discovery_queue.yaml` is for discovered companies not yet promoted to the permanent `config/company_watchlist.yaml`.
+
 The CLI runs only enabled collectors, prints source-specific successful/failed companies, and aggregates jobs into a shared scoring pipeline.
 
 Current runtime flag in `AppConfig`:
