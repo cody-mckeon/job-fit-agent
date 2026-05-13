@@ -111,7 +111,7 @@ def test_remote_engineering_manager_is_low_fit() -> None:
     assert fit.classification == "low_fit"
 
 
-def test_blank_location_gets_location_not_specified_red_flag() -> None:
+def test_blank_location_maps_to_review_geographic_eligibility() -> None:
     job = _job(
         title="Product Manager",
         location="",
@@ -119,7 +119,7 @@ def test_blank_location_gets_location_not_specified_red_flag() -> None:
     )
 
     fit = score_job(job, TARGET_PROFILE)
-    assert "Location not specified" in fit.red_flags
+    assert job.geographic_eligibility == "review"
 
 
 def test_blank_location_does_not_receive_local_points() -> None:
@@ -200,7 +200,7 @@ def test_location_scoring_ignores_department_team_text() -> None:
     job.team = "London"
 
     fit = score_job(job, TARGET_PROFILE)
-    assert "Location not specified" in fit.red_flags
+    assert job.geographic_eligibility == "review"
     assert all("International location" not in flag for flag in fit.red_flags)
 
 
@@ -713,3 +713,51 @@ def test_remote_canada_only_viability_is_skip() -> None:
     fit = score_job(job, TARGET_PROFILE)
     assert fit.viability_level == "skip"
     assert "Remote role limited to non-US geography" in fit.viability_reasons
+
+
+def test_remote_usa_normalization_is_eligible() -> None:
+    job = _job("Product Manager", location="Remote USA", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.normalized_country == "US"
+    assert job.normalized_location_type == "remote"
+    assert job.geographic_eligibility == "eligible"
+    assert fit.viability_level == "apply_now"
+
+
+def test_remote_us_and_canada_is_review() -> None:
+    job = _job("Product Manager", location="Remote US & Canada", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "review"
+    assert fit.viability_level == "review"
+
+
+def test_foster_city_hybrid_is_ineligible() -> None:
+    job = _job("Product Manager", location="Foster City, CA (Hybrid)", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.normalized_city == "Foster City"
+    assert job.normalized_state == "CA"
+    assert job.normalized_location_type == "hybrid"
+    assert job.geographic_eligibility == "ineligible"
+    assert "Hybrid role outside Nevada" in fit.viability_reasons
+
+
+def test_las_vegas_hybrid_is_eligible() -> None:
+    job = _job("Product Manager", location="Las Vegas, NV (Hybrid)", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.normalized_state == "NV"
+    assert job.geographic_eligibility == "eligible"
+    assert fit.viability_level in {"apply_now", "review"}
+
+
+def test_mexico_argentina_peru_is_ineligible() -> None:
+    job = _job("Product Manager", location="Mexico; Argentina; Peru", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level == "skip"
+
+
+def test_remote_unspecified_is_review() -> None:
+    job = _job("Product Manager", location="Remote", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "review"
+    assert fit.viability_level == "review"

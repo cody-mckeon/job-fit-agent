@@ -115,43 +115,88 @@ REMOTE_US_TERMS = ("remote us", "us remote", "remote united states", "united sta
 REMOTE_NON_US_TERMS = ("mexico", "argentina", "peru", "latam", "emea", "apac", "canada only", "canada")
 NON_LOCAL_HYBRID_TERMS = ("foster city", "san francisco", "new york", "nyc", "seattle", "toronto")
 
+US_STATE_CODES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA",
+    "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
+    "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+}
+REMOTE_US_ALIASES = ("us remote", "remote us", "remote usa", "united states", "anywhere in us", "usa")
+NON_US_REGIONS = ("latam", "emea", "apac")
+
+
+def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]:
+    location = (location_raw or "").strip()
+    workplace = (workplace_type or "").strip().lower()
+    combined = f"{location.lower()} {workplace}".strip()
+    normalized_location_type = "unknown"
+    if "hybrid" in combined:
+        normalized_location_type = "hybrid"
+    elif "onsite" in combined or "on-site" in combined:
+        normalized_location_type = "onsite"
+    elif "remote" in combined:
+        normalized_location_type = "remote"
+
+    normalized_country = ""
+    normalized_state = ""
+    normalized_city = ""
+    geographic_eligibility = "review"
+
+    if any(alias in combined for alias in REMOTE_US_ALIASES):
+        normalized_country = "US"
+    has_multi_country = bool(re.search(r"\b(canada|mexico|argentina|peru)\b", combined))
+    if has_multi_country:
+        if re.search(r"\b(us|usa|united states)\b", combined):
+            geographic_eligibility = "review"
+        else:
+            geographic_eligibility = "ineligible"
+    if any(region in combined for region in NON_US_REGIONS):
+        geographic_eligibility = "ineligible"
+    if normalized_location_type == "remote" and normalized_country == "US" and not has_multi_country:
+        geographic_eligibility = "eligible"
+    elif normalized_location_type == "remote" and not location:
+        geographic_eligibility = "review"
+    elif not location:
+        geographic_eligibility = "review"
+
+    city_state_match = re.search(r"^\s*([^,;]+),\s*([A-Za-z]{2})\b", location)
+    if city_state_match:
+        normalized_city = city_state_match.group(1).strip()
+        state = city_state_match.group(2).upper()
+        if state in US_STATE_CODES:
+            normalized_state = state
+            normalized_country = "US"
+            if normalized_location_type == "hybrid":
+                geographic_eligibility = "eligible" if state == "NV" else "ineligible"
+
+    return {
+        "location_raw": location_raw or "",
+        "normalized_country": normalized_country,
+        "normalized_state": normalized_state,
+        "normalized_city": normalized_city,
+        "normalized_location_type": normalized_location_type,
+        "geographic_eligibility": geographic_eligibility,
+    }
+
 
 def evaluate_location_viability(location: str, workplace_type: str) -> tuple[str, list[str]]:
     """Evaluate explicit geographic viability for Cody."""
-    location_text = location.lower().strip()
-    workplace_type_text = workplace_type.lower().strip()
-    combined = f"{location_text} {workplace_type_text}".strip()
+    normalized = normalize_location(location, workplace_type)
+    eligibility = normalized["geographic_eligibility"]
+    location_type = normalized["normalized_location_type"]
+    state = normalized["normalized_state"]
+    location_text = (location or "").lower()
 
-    has_local_geo = any(term in combined for term in LOCAL_GEOGRAPHY_TERMS)
-    is_remote = "remote" in combined
-    is_hybrid = "hybrid" in combined
-    is_onsite = "onsite" in combined or "on-site" in combined
-    has_remote_us = any(term in combined for term in REMOTE_US_TERMS)
-    has_remote_non_us = any(term in combined for term in REMOTE_NON_US_TERMS)
-    has_known_non_local_hybrid = any(term in combined for term in NON_LOCAL_HYBRID_TERMS)
-
-    if is_remote and has_remote_non_us:
-        return "skip", ["Remote role limited to non-US geography"]
-
-    if is_remote and has_remote_us:
-        return "apply_now", ["Remote US role matches target geography"]
-
-    if is_hybrid and has_local_geo:
-        return "apply_now", ["Hybrid role in target Nevada geography"]
-
-    if is_hybrid and (has_known_non_local_hybrid or (location_text and not has_local_geo)):
-        return "stretch", ["Hybrid role outside target geography"]
-
-    if is_onsite and not has_local_geo:
-        return "skip", ["Onsite role outside target geography"]
-
-    if not location_text:
-        return "review", ["Location is unspecified; requires manual review"]
-
-    if has_local_geo:
-        return "review", ["Location aligns with target geography"]
-
-    return "review", ["Location requires manual geographic review"]
+    if eligibility == "eligible":
+        if location_type == "remote":
+            return "apply_now", ["Remote US role matches target geography"]
+        return "apply_now", ["Location aligns with target geography"]
+    if eligibility == "ineligible":
+        if any(term in location_text for term in REMOTE_NON_US_TERMS):
+            return "skip", ["Remote role restricted to LATAM", "Remote role limited to non-US geography"]
+        if location_type == "hybrid" and state and state != "NV":
+            return "stretch", ["Hybrid role outside Nevada", "Hybrid role outside target geography"]
+        return "skip", ["Location is outside target geography"]
+    return "review", ["Location requires manual review"]
 
 
 def extract_years_required(text: str) -> int | None:
@@ -269,7 +314,6 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
 
     if has_unknown_geo:
         score_delta += UNKNOWN_LOCATION_PENALTY
-        red_flags.append("Location not specified")
 
     if has_remote_us:
         score_delta += REMOTE_US_BONUS
@@ -321,6 +365,13 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
 
 def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     """Return full scoring details for a job posting."""
+    normalized_location = normalize_location(job.location, job.workplace_type)
+    job.location_raw = normalized_location["location_raw"]
+    job.normalized_country = normalized_location["normalized_country"]
+    job.normalized_state = normalized_location["normalized_state"]
+    job.normalized_city = normalized_location["normalized_city"]
+    job.normalized_location_type = normalized_location["normalized_location_type"]
+    job.geographic_eligibility = normalized_location["geographic_eligibility"]
     text = f"{job.title} {job.description} {job.location} {job.workplace_type} {job.department} {job.team}".lower()
     title_text = job.title.lower()
     score = 0
