@@ -25,6 +25,7 @@ from job_fit_agent.notifications.telegram import send_message
 from job_fit_agent.repository import (
     VALID_STATUSES,
     get_job_by_id,
+    get_jobs_by_status,
     get_top_jobs_by_classification,
     initialize,
     update_notes,
@@ -302,14 +303,22 @@ def run_rescore() -> None:
     print("Rescore complete")
     print(f"updated jobs count: {updated_count}")
 
-def print_digest() -> None:
+def print_digest(group_by_status: bool = False) -> None:
     initialize()
     high_fit_rows = get_top_jobs_by_classification("high_fit", limit=10)
     near_fit_rows = get_top_jobs_by_classification("near_fit", limit=10)
 
-    _print_digest_rows("Saved high-fit jobs", high_fit_rows, "No saved high-fit jobs.")
-    print()
-    _print_digest_rows("Saved near-fit jobs", near_fit_rows, "No saved near-fit jobs.")
+    if not group_by_status:
+        _print_digest_rows("Saved high-fit jobs", high_fit_rows, "No saved high-fit jobs.")
+        print()
+        _print_digest_rows("Saved near-fit jobs", near_fit_rows, "No saved near-fit jobs.")
+        return
+
+    print("Saved jobs grouped by status")
+    for status in sorted(VALID_STATUSES):
+        rows = [row for row in high_fit_rows + near_fit_rows if row["status"] == status]
+        _print_digest_rows(f"Status: {status}", rows, f"No jobs in status '{status}'.")
+        print()
 
 
 def learn_url(job_url: str) -> None:
@@ -375,7 +384,7 @@ def main(argv: list[str] | None = None) -> None:
     command = args[0] if args else "run"
 
     if command == "digest":
-        print_digest()
+        print_digest(group_by_status="--group-by-status" in args[1:])
         return
 
     if command == "run":
@@ -386,9 +395,9 @@ def main(argv: list[str] | None = None) -> None:
         run_rescore()
         return
 
-    if command == "mark":
+    if command in {"mark", "set-status"}:
         if len(args) != 3:
-            print("Usage: python -m job_fit_agent.main mark <job_id> <status>")
+            print("Usage: python -m job_fit_agent.main set-status <job_id> <status>")
             print(f"Valid statuses: {', '.join(sorted(VALID_STATUSES))}")
             return
         try:
@@ -398,6 +407,20 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Updated job {job_id} status to {job['status']}.")
         except ValueError as exc:
             print(str(exc))
+        return
+
+
+    if command == "list-status":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main list-status <status>")
+            print(f"Valid statuses: {', '.join(sorted(VALID_STATUSES))}")
+            return
+        try:
+            rows = get_jobs_by_status(args[1])
+        except ValueError as exc:
+            print(str(exc))
+            return
+        _print_digest_rows(f"Jobs with status '{args[1]}'", rows, f"No jobs with status '{args[1]}'.")
         return
 
     if command == "notes":
@@ -435,7 +458,8 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
-    print("python -m job_fit_agent.main mark <job_id> <status>")
+    print("python -m job_fit_agent.main set-status <job_id> <status>")
+    print("python -m job_fit_agent.main list-status <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
     print("python -m job_fit_agent.main learn-url <job_url>")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")

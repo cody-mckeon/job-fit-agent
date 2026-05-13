@@ -308,7 +308,7 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
             {
                 "score": 74,
                 "id": 2,
-                "status": "reviewing",
+                "status": "interested",
                 "title": "TPM",
                 "company": "openai",
                 "source": "greenhouse",
@@ -326,7 +326,7 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
     assert "Saved near-fit jobs" in output
     assert "id: 2" in output
     assert "score: 74" in output
-    assert "status: reviewing" in output
+    assert "status: interested" in output
     assert "title: TPM" in output
 
 
@@ -395,7 +395,7 @@ def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
 
 def test_digest_command_does_not_call_run_pipeline(monkeypatch) -> None:
     called = {"run": False}
-    monkeypatch.setattr("job_fit_agent.main.print_digest", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.print_digest", lambda group_by_status=False: None)
 
     def _fail_run() -> None:
         called["run"] = True
@@ -521,3 +521,28 @@ def test_rescore_updates_existing_jobs_without_notifications(monkeypatch, capsys
     assert "Rescore complete" in output
     assert "updated jobs count: 1" in output
     assert called["sent"] is False
+
+
+def test_set_status_command_updates_status(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: {"status": "interested"})
+    main(["set-status", "8", "interested"])
+    output = capsys.readouterr().out
+    assert "Updated job 8 status to interested." in output
+
+
+def test_list_status_command_prints_results(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.get_jobs_by_status", lambda status: [{"id": 8, "score": 80, "status": status, "classification": "near_fit", "title": "PM", "company": "openai", "source": "greenhouse", "url": "https://example.com/8", "viability_reasons": "[]", "red_flags": "[]"}])
+    main(["list-status", "interested"])
+    output = capsys.readouterr().out
+    assert "Jobs with status 'interested'" in output
+    assert "id: 8" in output
+
+
+def test_digest_grouped_by_status(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", lambda classification, limit=10: [{"id": 1, "score": 97, "status": "interested", "classification": classification, "title": "Staff PM", "company": "openai", "source": "greenhouse", "url": "https://example.com/1", "viability_reasons": "[]", "red_flags": "[]"}] if classification == "high_fit" else [])
+    main(["digest", "--group-by-status"])
+    output = capsys.readouterr().out
+    assert "Saved jobs grouped by status" in output
+    assert "Status: interested" in output

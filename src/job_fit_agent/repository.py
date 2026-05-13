@@ -12,7 +12,7 @@ from job_fit_agent.models import FitScore, JobPosting
 
 DB_PATH = Path("data/jobs.sqlite")
 
-VALID_STATUSES = {"new", "reviewing", "applied", "rejected", "archived"}
+VALID_STATUSES = {"new", "interested", "applying", "applied", "interviewing", "rejected", "archived"}
 
 
 @dataclass
@@ -202,6 +202,17 @@ def get_top_jobs(limit: int = 20, db_path: Path = DB_PATH) -> list[sqlite3.Row]:
     return rows
 
 
+
+
+def get_jobs_by_status(status: str, limit: int = 50, db_path: Path = DB_PATH) -> list[sqlite3.Row]:
+    _validate_status(status)
+    with _connect(db_path) as conn:
+        _ensure_schema(conn)
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE status = ? ORDER BY score DESC, last_seen_at DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    return rows
 def update_status(job_id: int, status: str, db_path: Path = DB_PATH) -> None:
     _validate_status(status)
     with _connect(db_path) as conn:
