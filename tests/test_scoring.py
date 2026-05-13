@@ -144,7 +144,7 @@ def test_remote_software_engineer_is_low_fit() -> None:
     assert fit.classification == "low_fit"
 
 
-def test_remote_product_engineer_is_low_fit() -> None:
+def test_remote_product_engineer_is_near_or_high_fit() -> None:
     job = _job(
         title="Product Engineer",
         location="Remote US",
@@ -152,7 +152,7 @@ def test_remote_product_engineer_is_low_fit() -> None:
     )
 
     fit = score_job(job, TARGET_PROFILE)
-    assert fit.classification == "low_fit"
+    assert fit.classification in {"near_fit", "high_fit"}
 
 
 def test_remote_member_of_technical_staff_is_low_fit() -> None:
@@ -618,6 +618,78 @@ def test_remote_usa_viability_is_apply_now() -> None:
     job.workplace_type = "Remote"
     fit = score_job(job, TARGET_PROFILE)
     assert fit.viability_level == "apply_now"
+
+
+def test_ai_product_engineer_role_scores_positively() -> None:
+    job = _job(
+        "AI Product Engineer",
+        location="Remote US",
+        description="Build agentic workflows, orchestration, internal tools, and rapid prototyping systems.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "high_fit"}
+    assert fit.total_score >= 45
+
+
+def test_workflow_automation_role_scores_positively() -> None:
+    job = _job(
+        "Workflow Automation Lead",
+        location="Remote US",
+        description="Own automation, integrations, APIs, and workflow systems for operations.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "high_fit"}
+
+
+def test_agentic_systems_role_scores_positively() -> None:
+    job = _job(
+        "AI Builder - Agentic Systems",
+        location="Remote US",
+        description="Build agents, prompt systems, RAG, and orchestration platforms.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "high_fit"}
+    assert "Agentic systems overlap" in fit.viability_reasons
+
+
+def test_infrastructure_sre_role_remains_low_fit() -> None:
+    job = _job(
+        "Infrastructure SRE",
+        location="Remote US",
+        description="Own Kubernetes, infrastructure reliability, distributed systems, and low latency systems.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
+def test_kubernetes_backend_role_remains_low_fit() -> None:
+    job = _job(
+        "Backend Engineer",
+        location="Remote US",
+        description="Build distributed systems with Kubernetes and networking stack focus.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
+def test_ai_workflow_platform_role_can_be_apply_now() -> None:
+    job = _job(
+        "AI Workflow Platform Product Engineer",
+        location="Remote US",
+        description="3+ years building AI-native workflow systems, orchestration, and internal AI tooling.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level == "apply_now"
+
+
+def test_product_engineer_with_10_plus_years_is_stretch_or_skip() -> None:
+    job = _job(
+        "Product Engineer",
+        location="Remote US",
+        description="Requires 10+ years building AI tooling and workflow automation systems.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level in {"stretch", "skip"}
     assert "Remote US role matches target geography" in fit.viability_reasons
 
 

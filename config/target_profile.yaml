@@ -112,3 +112,23 @@ local_priority_companies:
   - fanduel
   - playstudios
   - skillz
+
+preferred_role_families:
+  - product_management
+  - technical_product
+  - ai_builder
+  - product_engineering
+  - workflow_automation
+  - ai_operations
+  - product_operations
+  - product_analytics
+  - developer_tools
+
+disliked_role_families:
+  - infrastructure_engineering
+  - sre
+  - security_engineering
+  - recruiter
+  - hr
+  - finance
+  - legal

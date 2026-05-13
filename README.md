@@ -63,6 +63,18 @@ enable_lever = False
 
 These are **ranking boosts, not hard filters**. They improve ordering among already-relevant roles and do not replace role-family and location guardrails.
 
+## Targeting evolution: AI-native product builder/operator
+
+The scoring profile now targets not only traditional PM roles, but also adjacent AI-native builder/operator paths:
+
+- AI builder
+- Product engineering
+- Workflow automation
+- AI operations
+- Developer tools
+
+The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles.
+
 ## Test
 
 ```bash
