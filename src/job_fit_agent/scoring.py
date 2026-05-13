@@ -55,10 +55,50 @@ NEAR_FIT_TERMS = {
 PMM_HIGH_FIT_KEYWORDS = {"product analytics", "experimentation", "ai", "platform", "customer-facing web"}
 FORCED_LOW_FIT_TITLES = {
     "software engineer",
-    "product engineer",
     "member of technical staff",
     "infrastructure engineer",
     "engineering manager",
+}
+AI_BUILDER_KEYWORDS = {
+    "agents",
+    "agentic",
+    "workflows",
+    "orchestration",
+    "automation",
+    "copilots",
+    "llm",
+    "ai tooling",
+    "internal tools",
+    "developer tools",
+    "rapid prototyping",
+    "ai operations",
+    "prompt systems",
+    "workflow systems",
+    "ai platform",
+    "ai-native",
+    "operational ai",
+    "integrations",
+    "apis",
+    "openai",
+    "anthropic",
+    "langchain",
+    "mcp",
+    "rag",
+}
+AI_BUILDER_KEYWORD_BONUS = 6
+AI_BUILDER_BONUS_CAP = 30
+NEGATIVE_ENGINEERING_KEYWORDS = {
+    "distributed systems",
+    "compiler",
+    "kernel",
+    "c++",
+    "rust",
+    "low latency systems",
+    "networking stack",
+    "infrastructure reliability",
+    "kubernetes",
+    "sre",
+    "firmware",
 }
 
 NON_LOCAL_HYBRID_CITY_TERMS = {
@@ -132,8 +172,18 @@ def extract_years_required(text: str) -> int | None:
 
 ROLE_FAMILIES = {
     "product_management",
+    "technical_product",
+    "ai_builder",
+    "product_engineering",
+    "workflow_automation",
+    "ai_operations",
+    "developer_tools",
     "product_operations",
+    "product_analytics",
     "marketing",
+    "infrastructure_engineering",
+    "sre",
+    "security_engineering",
     "engineering",
     "data_science",
     "research",
@@ -159,6 +209,24 @@ def classify_role_family(title: str) -> str:
         return "customer_success"
     if "technical program manager" in normalized or "engineering program manager" in normalized:
         return "product_operations"
+    if "technical product manager" in normalized:
+        return "technical_product"
+    if any(term in normalized for term in ("ai operations", "ml ops", "ai ops")):
+        return "ai_operations"
+    if any(term in normalized for term in ("workflow automation", "automation specialist", "automation engineer")):
+        return "workflow_automation"
+    if any(term in normalized for term in ("developer tools", "devtools", "platform product")):
+        return "developer_tools"
+    if "product engineer" in normalized:
+        return "product_engineering"
+    if any(term in normalized for term in ("ai builder", "agent builder", "agentic", "ai platform")):
+        return "ai_builder"
+    if "sre" in normalized or "site reliability" in normalized:
+        return "sre"
+    if "infrastructure" in normalized:
+        return "infrastructure_engineering"
+    if "security engineer" in normalized:
+        return "security_engineering"
     if "engineer" in normalized or "developer" in normalized:
         return "engineering"
     if "product manager" in normalized or "technical product manager" in normalized:
@@ -275,6 +343,13 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             keyword_hits += 1
             score += BASE_KEYWORD_SCORE
             reasons.append(f"Keyword match: {keyword} (+{BASE_KEYWORD_SCORE})")
+    capability_boost = 0
+    for keyword in AI_BUILDER_KEYWORDS:
+        if keyword in text and capability_boost < AI_BUILDER_BONUS_CAP:
+            applied = min(AI_BUILDER_KEYWORD_BONUS, AI_BUILDER_BONUS_CAP - capability_boost)
+            capability_boost += applied
+            score += applied
+            reasons.append(f"AI builder capability match: {keyword} (+{applied})")
 
     company_name = job.company.strip().lower()
     priority_companies = {company.strip().lower() for company in target_profile.priority_companies}
@@ -314,6 +389,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         if keyword in text:
             score += points
             red_flags.append(f"Mismatch keyword: {keyword} ({points})")
+    hardcore_engineering_signal = any(keyword in text for keyword in NEGATIVE_ENGINEERING_KEYWORDS)
+    if hardcore_engineering_signal:
+        red_flags.append("Hardcore infrastructure/backend engineering emphasis detected")
 
     if not location_fit and title_hits > 0 and location_score <= EXCLUDED_LOCATION_PENALTY:
         red_flags.append("Role is title-aligned but location is not a fit")
@@ -333,10 +411,20 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         role_family = "unknown"
     has_forced_low_fit_title = any(term in job.title.lower() for term in FORCED_LOW_FIT_TITLES)
     has_location_blocker = location_score <= EXCLUDED_LOCATION_PENALTY
-    is_high_fit_role_match = has_strong_match and role_family in {"product_management", "product_operations"}
+    preferred_families = set(target_profile.preferred_role_families) if target_profile.preferred_role_families else set()
+    disliked_families = set(target_profile.disliked_role_families) if target_profile.disliked_role_families else set()
+    ai_native_families = {"ai_builder", "product_engineering", "workflow_automation", "ai_operations", "developer_tools", "technical_product"}
+    is_high_fit_role_match = has_strong_match and role_family in {"product_management", "product_operations", "technical_product"}
+    if role_family in ai_native_families and capability_boost >= 12:
+        is_high_fit_role_match = True
     if is_high_fit_role_match and not has_location_blocker:
         classification = "high_fit"
-    elif any(term in text for term in NEAR_FIT_TERMS) or role_family in {"marketing", "customer_success", "research", "executive"}:
+    elif (
+        any(term in text for term in NEAR_FIT_TERMS)
+        or role_family in {"marketing", "customer_success", "research", "executive"}
+        or (role_family in ai_native_families and capability_boost > 0)
+        or (role_family in preferred_families and role_family not in disliked_families)
+    ):
         classification = "near_fit"
     else:
         classification = "low_fit"
@@ -344,7 +432,11 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if onsite_non_local_block and is_high_fit_role_match:
         classification = "near_fit"
 
-    if role_family in {"engineering", "data_science"}:
+    if role_family in {"engineering", "data_science", "infrastructure_engineering", "sre", "security_engineering"}:
+        classification = "low_fit"
+    if hardcore_engineering_signal and role_family not in {"product_engineering", "workflow_automation", "ai_builder", "ai_operations", "developer_tools"}:
+        classification = "low_fit"
+    if hardcore_engineering_signal and capability_boost < 12:
         classification = "low_fit"
 
     if has_forced_low_fit_title:
@@ -380,9 +472,12 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         viability_score -= 35
         viability_reasons.append("Senior leadership role level is likely a stretch")
 
-    if "product engineer" in title_lower:
-        viability_score -= 25
-        viability_reasons.append("Product Engineer role is a lower fit for target profile")
+    if role_family in {"ai_builder", "workflow_automation", "ai_operations"} and capability_boost > 0:
+        viability_reasons.append("Strong AI workflow alignment")
+    if "agentic" in text or "agents" in text:
+        viability_reasons.append("Agentic systems overlap")
+    if "developer tools" in text or role_family == "developer_tools":
+        viability_reasons.append("Developer tooling overlap")
 
     if role_family == "engineering":
         viability_score -= 25

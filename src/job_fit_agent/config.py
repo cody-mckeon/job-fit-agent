@@ -22,6 +22,8 @@ class TargetProfile(BaseModel):
     priority_companies: list[str] = Field(default_factory=list)
     industry_bias: list[str] = Field(default_factory=list)
     local_priority_companies: list[str] = Field(default_factory=list)
+    preferred_role_families: list[str] = Field(default_factory=list)
+    disliked_role_families: list[str] = Field(default_factory=list)
 
 
 class CompanyWatchlist(BaseModel):
