@@ -158,6 +158,13 @@ def format_high_fit_notification(job: JobPosting, fit: FitScore) -> str:
     )
 
 
+def safe_row_value(row: object, key: str, default: object = None) -> object:
+    try:
+        return row[key]  # type: ignore[index]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
 def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str) -> None:
     print(section_title)
     if not rows:
@@ -169,13 +176,13 @@ def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str)
         print(f"id: {row['id']}")
         print(f"score: {row['score']}")
         print(f"status: {row['status']}")
-        print(f"classification: {row.get('classification', 'unknown')}")
-        print(f"viability_level: {row.get('viability_level', 'review')}")
+        print(f"classification: {safe_row_value(row, 'classification', 'unknown')}")
+        print(f"viability_level: {safe_row_value(row, 'viability_level', 'review')}")
         print(f"title: {row['title']}")
         print(f"company: {row['company']}")
         print(f"source: {row['source']}")
         print(f"url: {row['url']}")
-        viability_reasons_raw = row.get("viability_reasons", "[]")
+        viability_reasons_raw = safe_row_value(row, "viability_reasons", "[]")
         viability_reasons = json.loads(viability_reasons_raw) if viability_reasons_raw else []
         print(f"viability_reasons: {', '.join(viability_reasons) if viability_reasons else 'none'}")
         print(f"red_flags: {', '.join(red_flags) if red_flags else 'none'}")

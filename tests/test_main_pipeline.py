@@ -1,3 +1,5 @@
+import sqlite3
+
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import load_target_profile
 from job_fit_agent.main import collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main
@@ -413,6 +415,72 @@ def test_digest_command_does_not_print_no_new_matching_jobs(monkeypatch, capsys)
     output = capsys.readouterr().out
 
     assert "No new matching jobs found." not in output
+
+
+def test_digest_prints_sqlite_row_output(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE jobs (id INTEGER, score INTEGER, status TEXT, title TEXT, company TEXT, source TEXT, url TEXT, red_flags TEXT, classification TEXT, viability_level TEXT, viability_reasons TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO jobs VALUES (1, 97, 'new', 'Staff PM', 'openai', 'greenhouse', 'https://example.com/high_fit', '[]', 'high_fit', 'review', '[\"reason\"]')"
+    )
+    row = conn.execute("SELECT * FROM jobs").fetchone()
+    assert row is not None
+
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [row] if classification == "high_fit" else [],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "id: 1" in output
+    assert "classification: high_fit" in output
+    assert "viability_level: review" in output
+    assert "viability_reasons: reason" in output
+
+
+def test_safe_row_value_returns_default_for_missing_optional_field() -> None:
+    from job_fit_agent.main import safe_row_value
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE jobs (id INTEGER)")
+    conn.execute("INSERT INTO jobs VALUES (1)")
+    row = conn.execute("SELECT * FROM jobs").fetchone()
+    assert row is not None
+
+    assert safe_row_value(row, "classification", "unknown") == "unknown"
+
+
+def test_digest_does_not_crash_when_viability_fields_missing(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "score": 88,
+                "id": 3,
+                "status": "new",
+                "title": "Saved Existing High",
+                "company": "openai",
+                "source": "greenhouse",
+                "url": "https://example.com/saved_high",
+                "red_flags": "[]",
+            }
+        ]
+        if classification == "high_fit"
+        else [],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "viability_level: review" in output
+    assert "viability_reasons: none" in output
 
 
 def test_run_command_calls_run_pipeline(monkeypatch) -> None:
