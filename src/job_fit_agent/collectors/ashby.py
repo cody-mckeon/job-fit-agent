@@ -14,21 +14,68 @@ from job_fit_agent.models import JobPosting
 LOGGER = logging.getLogger(__name__)
 ASHBY_BOARD_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 
-def parse_ashby_sidebar_metadata(html: str) -> dict[str, str]:
-    """Parse visible sidebar metadata using label/value line scanning."""
-    soup = BeautifulSoup(html, "html.parser")
-    text = "\n".join(line.strip() for line in soup.get_text("\n").splitlines())
-    lines = [" ".join(line.split()) for line in text.splitlines()]
+def _normalize_text(value: str) -> str:
+    return " ".join(value.split())
 
+
+def dump_sidebar_metadata(html: str) -> dict[str, str]:
+    """Debug helper to inspect parsed Ashby sidebar metadata."""
+    metadata = parse_ashby_sidebar_metadata(html)
+    LOGGER.debug("Ashby sidebar metadata dump: %s", metadata)
+    return metadata
+
+
+def parse_ashby_sidebar_metadata(html: str) -> dict[str, str]:
+    """Parse visible sidebar metadata using semantic label/value traversal."""
+    soup = BeautifulSoup(html, "html.parser")
     labels = ("Location", "Location Type", "Employment Type", "Department", "Compensation")
+    label_set = {label.lower(): label for label in labels}
     metadata: dict[str, str] = {}
-    for idx, line in enumerate(lines):
-        if line not in labels:
+
+    def _first_text_from_container(node: Any, label_key: str) -> str:
+        for candidate in node.find_all(["p", "span", "div", "li"], recursive=True):
+            candidate_text = _normalize_text(candidate.get_text(" ", strip=True))
+            if not candidate_text:
+                continue
+            if candidate_text.lower() == label_key:
+                continue
+            return candidate_text
+        return ""
+
+    elements = soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "strong", "b", "span", "div", "dt"])
+    for element in elements:
+        label_text = _normalize_text(element.get_text(" ", strip=True))
+        if not label_text:
             continue
-        for nxt in lines[idx + 1 :]:
-            if nxt:
-                metadata[line] = nxt
-                break
+        canonical_label = label_set.get(label_text.lower())
+        if not canonical_label or canonical_label in metadata:
+            continue
+
+        value = ""
+        sibling = element.find_next_sibling()
+        while sibling and not value:
+            value = _normalize_text(sibling.get_text(" ", strip=True))
+            sibling = sibling.find_next_sibling() if not value else sibling
+
+        if not value and element.parent is not None:
+            parent_text = _first_text_from_container(element.parent, canonical_label.lower())
+            value = parent_text
+
+        if not value:
+            next_el = element.find_next(lambda tag: tag is not element and hasattr(tag, "get_text"))
+            if next_el is not None:
+                candidate = _normalize_text(next_el.get_text(" ", strip=True))
+                if candidate.lower() != canonical_label.lower():
+                    value = candidate
+
+        if value:
+            metadata[canonical_label] = value
+
+    if not metadata:
+        LOGGER.debug("Ashby sidebar metadata extraction failed: no semantic labels found")
+    elif "Location" not in metadata:
+        LOGGER.debug("Ashby sidebar metadata extraction incomplete: missing Location label")
+
     return metadata
 
 
@@ -168,7 +215,10 @@ class AshbyCollector:
             LOGGER.debug("Unable to fetch Ashby job page %s: %s", job_url, exc)
             return {}
 
-        return parse_ashby_sidebar_metadata(response.text)
+        metadata = parse_ashby_sidebar_metadata(response.text)
+        if not metadata:
+            LOGGER.debug("Ashby sidebar extraction failed for %s", job_url)
+        return metadata
 
     def _infer_workplace_type_from_location(self, location: str) -> str:
         normalized = location.lower()
