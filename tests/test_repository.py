@@ -3,6 +3,7 @@ import pytest
 
 from job_fit_agent.repository import (
     get_job_by_id,
+    get_jobs_by_status,
     get_new_jobs,
     get_top_jobs,
     get_top_jobs_by_classification,
@@ -97,12 +98,12 @@ def test_update_status_and_notes_and_get_by_id(tmp_path) -> None:
     upsert_job(_job("https://example.com/1"), _fit(90), db)
     row = get_top_jobs(limit=1, db_path=db)[0]
 
-    update_status(row["id"], "reviewing", db)
+    update_status(row["id"], "interested", db)
     update_notes(row["id"], "Strong referral", db)
     updated = get_job_by_id(row["id"], db)
 
     assert updated is not None
-    assert updated["status"] == "reviewing"
+    assert updated["status"] == "interested"
     assert updated["notes"] == "Strong referral"
 
 
@@ -137,7 +138,7 @@ def test_upsert_updates_scoring_fields_and_preserves_status_notes_first_seen(tmp
     job_id = row["id"]
     first_seen_at = row["first_seen_at"]
 
-    update_status(job_id, "reviewing", db)
+    update_status(job_id, "interested", db)
     update_notes(job_id, "keep this note", db)
 
     new_fit = FitScore(
@@ -151,9 +152,22 @@ def test_upsert_updates_scoring_fields_and_preserves_status_notes_first_seen(tmp
 
     updated = get_job_by_id(job_id, db)
     assert updated is not None
-    assert updated["status"] == "reviewing"
+    assert updated["status"] == "interested"
     assert updated["notes"] == "keep this note"
     assert updated["first_seen_at"] == first_seen_at
     assert updated["classification"] == "high_fit"
     assert updated["score"] == 95
     assert updated["red_flags"] == '["old red flag removed"]'
+
+
+def test_get_jobs_by_status_returns_only_matching_status(tmp_path) -> None:
+    db = tmp_path / "jobs.sqlite"
+    initialize(db)
+    upsert_job(_job("https://example.com/1"), _fit(90), db)
+    upsert_job(_job("https://example.com/2"), _fit(80), db)
+    rows = get_top_jobs(limit=2, db_path=db)
+    update_status(rows[0]["id"], "applying", db)
+
+    applying = get_jobs_by_status("applying", db_path=db)
+    assert len(applying) == 1
+    assert applying[0]["status"] == "applying"

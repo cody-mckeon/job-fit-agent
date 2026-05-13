@@ -95,3 +95,38 @@ Setup steps:
 2. Start a chat with your bot (or add it to a group).
 3. Obtain the chat ID (for groups, use the negative group ID format).
 4. Set `enabled: true` in `config/notifications.yaml` and run the pipeline.
+
+## Application workflow lifecycle
+
+Each job in SQLite has a workflow status to track progress from discovery to close-out.
+
+Valid statuses:
+- `new`
+- `interested`
+- `applying`
+- `applied`
+- `interviewing`
+- `rejected`
+- `archived`
+
+New jobs default to `new`. Re-scores update scoring fields but preserve your existing workflow status.
+
+Set a status:
+
+```bash
+python -m job_fit_agent.main set-status <job_id> <status>
+# example
+python -m job_fit_agent.main set-status 8 interested
+```
+
+List jobs by status:
+
+```bash
+python -m job_fit_agent.main list-status interested
+```
+
+Digest output includes status on each job. You can optionally group digest output by status:
+
+```bash
+python -m job_fit_agent.main digest --group-by-status
+```
