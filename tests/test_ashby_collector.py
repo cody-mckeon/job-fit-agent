@@ -277,3 +277,54 @@ def test_product_engineer_remote_usa_sidebar_location(monkeypatch):
     monkeypatch.setattr(requests, "get", _mock_get)
     jobs = AshbyCollector().fetch_jobs("anthropic")
     assert jobs[0].location == "Remote USA"
+from pathlib import Path
+
+
+def _fixture_html(name: str) -> str:
+    return Path(f"tests/fixtures/ashby/{name}").read_text(encoding="utf-8")
+
+
+def test_parse_sidebar_fixture_replit_foster_city_hybrid() -> None:
+    metadata = parse_ashby_sidebar_metadata(_fixture_html("replit_sidebar.html"))
+    assert metadata["Location"] == "Foster City, CA"
+    assert metadata["Location Type"] == "Hybrid"
+
+
+def test_parse_sidebar_fixture_linear_remote_usa() -> None:
+    metadata = parse_ashby_sidebar_metadata(_fixture_html("linear_sidebar.html"))
+    assert metadata["Location"] == "Remote USA"
+
+
+def test_parse_sidebar_fixture_perplexity_multi_country() -> None:
+    metadata = parse_ashby_sidebar_metadata(_fixture_html("perplexity_sidebar.html"))
+    assert metadata["Location"] == "Mexico / Argentina / Peru"
+
+
+def test_parse_sidebar_fixture_department_and_location_type() -> None:
+    metadata = parse_ashby_sidebar_metadata(_fixture_html("elevenlabs_sidebar.html"))
+    assert metadata["Department"] == "Growth"
+    assert metadata["Location Type"] == "Remote"
+
+
+def test_sidebar_location_not_blank_when_sidebar_exists(monkeypatch):
+    api_response = _mock_response({
+        "jobs": [
+            {
+                "title": "Product Manager",
+                "jobUrl": "https://jobs.example/sidebar-known",
+                "locationName": "United States",
+                "descriptionPlain": "Own roadmap.",
+            }
+        ]
+    })
+    html_response = _mock_response({}, text=_fixture_html("linear_sidebar.html"))
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    assert jobs[0].location != ""
+    assert jobs[0].location == "Remote USA"
