@@ -13,6 +13,12 @@ class JobPosting(BaseModel):
     url: str
     description: str
     workplace_type: str = ""
+    location_raw: str = ""
+    normalized_country: str = ""
+    normalized_state: str = ""
+    normalized_city: str = ""
+    normalized_location_type: str = ""
+    geographic_eligibility: str = "review"
     department: str = ""
     team: str = ""
     date_found: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
