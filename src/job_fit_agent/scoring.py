@@ -70,6 +70,48 @@ NON_LOCAL_HYBRID_CITY_TERMS = {
 }
 
 LOCAL_LOCATION_TERMS = ("las vegas", "henderson", "nevada", " nv", "remote us", "us remote", "remote united states")
+LOCAL_GEOGRAPHY_TERMS = ("las vegas", "henderson", "nevada")
+REMOTE_US_TERMS = ("remote us", "us remote", "remote united states", "united states", "usa")
+REMOTE_NON_US_TERMS = ("mexico", "argentina", "peru", "latam", "emea", "apac", "canada only", "canada")
+NON_LOCAL_HYBRID_TERMS = ("foster city", "san francisco", "new york", "nyc", "seattle", "toronto")
+
+
+def evaluate_location_viability(location: str, workplace_type: str) -> tuple[str, list[str]]:
+    """Evaluate explicit geographic viability for Cody."""
+    location_text = location.lower().strip()
+    workplace_type_text = workplace_type.lower().strip()
+    combined = f"{location_text} {workplace_type_text}".strip()
+
+    has_local_geo = any(term in combined for term in LOCAL_GEOGRAPHY_TERMS)
+    is_remote = "remote" in combined
+    is_hybrid = "hybrid" in combined
+    is_onsite = "onsite" in combined or "on-site" in combined
+    has_remote_us = any(term in combined for term in REMOTE_US_TERMS)
+    has_remote_non_us = any(term in combined for term in REMOTE_NON_US_TERMS)
+    has_known_non_local_hybrid = any(term in combined for term in NON_LOCAL_HYBRID_TERMS)
+
+    if is_remote and has_remote_non_us:
+        return "skip", ["Remote role limited to non-US geography"]
+
+    if is_remote and has_remote_us:
+        return "apply_now", ["Remote US role matches target geography"]
+
+    if is_hybrid and has_local_geo:
+        return "apply_now", ["Hybrid role in target Nevada geography"]
+
+    if is_hybrid and (has_known_non_local_hybrid or (location_text and not has_local_geo)):
+        return "stretch", ["Hybrid role outside target geography"]
+
+    if is_onsite and not has_local_geo:
+        return "skip", ["Onsite role outside target geography"]
+
+    if not location_text:
+        return "review", ["Location is unspecified; requires manual review"]
+
+    if has_local_geo:
+        return "review", ["Location aligns with target geography"]
+
+    return "review", ["Location requires manual geographic review"]
 
 
 def extract_years_required(text: str) -> int | None:
@@ -311,6 +353,15 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     viability_score = 0
     viability_reasons: list[str] = []
     viability_level = "apply_now"
+    location_viability_level, location_viability_reasons = evaluate_location_viability(job.location, job.workplace_type)
+    viability_reasons.extend(location_viability_reasons)
+
+    if location_viability_level == "skip":
+        viability_score -= 90
+    elif location_viability_level == "stretch":
+        viability_score -= 45
+    elif location_viability_level == "review":
+        viability_score -= 15
     years_required = extract_years_required(text)
     if years_required is not None:
         if years_required >= 10:
@@ -350,6 +401,10 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         viability_level = "stretch"
     elif viability_score <= -10:
         viability_level = "review"
+
+    location_viability_rank = {"apply_now": 0, "review": 1, "stretch": 2, "skip": 3}
+    if location_viability_rank[location_viability_level] > location_viability_rank[viability_level]:
+        viability_level = location_viability_level
 
     return FitScore(
         total_score=max(0, score),

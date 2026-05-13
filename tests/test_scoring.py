@@ -587,3 +587,57 @@ def test_stripe_staff_product_manager_with_10_years_not_apply_now() -> None:
     job = _job("Staff Product Manager", location="Remote USA", description="10+ years of experience in senior capacity and company-level product decisions", company="Stripe")
     fit = score_job(job, TARGET_PROFILE)
     assert fit.viability_level != "apply_now"
+
+
+def test_foster_city_hybrid_viability_is_stretch_or_skip() -> None:
+    job = _job(
+        "Technical Product Manager",
+        location="Foster City, CA",
+        description="Own AI analytics roadmap.",
+    )
+    job.workplace_type = "Hybrid"
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level in {"stretch", "skip"}
+    assert "Hybrid role outside target geography" in fit.viability_reasons
+
+
+def test_mexico_argentina_peru_remote_viability_is_skip() -> None:
+    job = _job(
+        "Product Manager",
+        location="Remote - Mexico; Argentina; Peru",
+        description="Own product roadmap.",
+    )
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level == "skip"
+    assert "Remote role limited to non-US geography" in fit.viability_reasons
+
+
+def test_remote_usa_viability_is_apply_now() -> None:
+    job = _job("Product Manager", location="USA", description="Own product roadmap.")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level == "apply_now"
+    assert "Remote US role matches target geography" in fit.viability_reasons
+
+
+def test_las_vegas_hybrid_viability_is_apply_now_or_review() -> None:
+    job = _job("Product Manager", location="Las Vegas, NV", description="Own product roadmap.")
+    job.workplace_type = "Hybrid"
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level in {"apply_now", "review"}
+
+
+def test_blank_remote_viability_is_review() -> None:
+    job = _job("Product Manager", location="", description="Own product roadmap.")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level == "review"
+
+
+def test_remote_canada_only_viability_is_skip() -> None:
+    job = _job("Product Manager", location="Remote - Canada only", description="Own product roadmap.")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level == "skip"
+    assert "Remote role limited to non-US geography" in fit.viability_reasons
