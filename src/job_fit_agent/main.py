@@ -130,6 +130,8 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
         print(f"score: {fit.total_score}")
         print(f"classification: {fit.classification}")
         print(f"role_family: {fit.role_family}")
+        print(f"viability_level: {fit.viability_level}")
+        print(f"viability_reasons: {", ".join(fit.viability_reasons) if fit.viability_reasons else "none"}")
         print(f"source: {job.source}")
         print(f"title: {job.title}")
         print(f"company: {job.company}")
@@ -167,10 +169,15 @@ def _print_digest_rows(section_title: str, rows: list[dict], empty_message: str)
         print(f"id: {row['id']}")
         print(f"score: {row['score']}")
         print(f"status: {row['status']}")
+        print(f"classification: {row.get('classification', 'unknown')}")
+        print(f"viability_level: {row.get('viability_level', 'review')}")
         print(f"title: {row['title']}")
         print(f"company: {row['company']}")
         print(f"source: {row['source']}")
         print(f"url: {row['url']}")
+        viability_reasons_raw = row.get("viability_reasons", "[]")
+        viability_reasons = json.loads(viability_reasons_raw) if viability_reasons_raw else []
+        print(f"viability_reasons: {', '.join(viability_reasons) if viability_reasons else 'none'}")
         print(f"red_flags: {', '.join(red_flags) if red_flags else 'none'}")
         print("-")
 
@@ -227,7 +234,7 @@ def run_pipeline() -> None:
         result = upsert_job(job, fit)
         if result.is_new and fit.classification in {"high_fit", "near_fit"}:
             new_matching.append((job, fit))
-        if result.is_new and fit.classification == "high_fit":
+        if result.is_new and fit.classification == "high_fit" and fit.viability_level == "apply_now":
             new_high_fit.append((job, fit))
 
     high_fit_jobs, near_fit_jobs, _ = group_jobs_by_classification(new_matching)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from job_fit_agent.config import TargetProfile
 from job_fit_agent.models import FitScore, JobPosting
 
@@ -68,6 +70,24 @@ NON_LOCAL_HYBRID_CITY_TERMS = {
 }
 
 LOCAL_LOCATION_TERMS = ("las vegas", "henderson", "nevada", " nv", "remote us", "us remote", "remote united states")
+
+
+def extract_years_required(text: str) -> int | None:
+    """Extract minimum years of experience required from job text."""
+    lowered = text.lower()
+    patterns = [
+        r"\b(at least\s+)?(\d{1,2})\s*\+\s*years\b",
+        r"\b(at least\s+)?(\d{1,2})\s+years\s+of\s+experience\b",
+        r"\bat least\s+(\d{1,2})\s+years\b",
+    ]
+    vals=[]
+    for pat in patterns:
+        for m in re.finditer(pat, lowered):
+            nums=[g for g in m.groups() if g and g.strip().isdigit()]
+            if nums:
+                vals.append(int(nums[-1]))
+    return max(vals) if vals else None
+
 ROLE_FAMILIES = {
     "product_management",
     "product_operations",
@@ -288,10 +308,56 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if has_forced_low_fit_title:
         classification = "low_fit"
 
+    viability_score = 0
+    viability_reasons: list[str] = []
+    viability_level = "apply_now"
+    years_required = extract_years_required(text)
+    if years_required is not None:
+        if years_required >= 10:
+            viability_score -= 50
+            viability_reasons.append(f"Minimum experience requirement is {years_required}+ years")
+        elif years_required >= 8:
+            viability_score -= 30
+            viability_reasons.append(f"Minimum experience requirement is {years_required}+ years")
+        elif years_required >= 5:
+            viability_score -= 10
+            viability_reasons.append(f"Role asks for {years_required}+ years; review seniority fit")
+
+    title_lower = job.title.lower()
+    is_exec_level = any(term in title_lower for term in ("staff", "head of", "director", "vp ", "vice president"))
+    if is_exec_level:
+        viability_score -= 35
+        viability_reasons.append("Senior leadership role level is likely a stretch")
+
+    if "product engineer" in title_lower:
+        viability_score -= 25
+        viability_reasons.append("Product Engineer role is a lower fit for target profile")
+
+    if role_family == "engineering":
+        viability_score -= 25
+        viability_reasons.append("Engineering role should not be apply_now for Cody")
+
+    has_senior_company_scope = ("10+ years" in text or (years_required or 0) >= 10) and (
+        "senior capacity" in text or "company-level product decisions" in text
+    )
+    if has_senior_company_scope:
+        viability_score -= 35
+        viability_reasons.append("10+ years plus senior/company-level decision scope")
+
+    if has_senior_company_scope or viability_score <= -70:
+        viability_level = "skip"
+    elif viability_score <= -35:
+        viability_level = "stretch"
+    elif viability_score <= -10:
+        viability_level = "review"
+
     return FitScore(
         total_score=max(0, score),
         classification=classification,
         role_family=role_family,
+        viability_score=viability_score,
+        viability_level=viability_level,
+        viability_reasons=viability_reasons,
         reasons=reasons,
         red_flags=red_flags,
     )

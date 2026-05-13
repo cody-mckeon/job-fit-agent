@@ -563,3 +563,27 @@ def test_foster_city_hybrid_product_manager_is_not_high_fit() -> None:
     fit = score_job(job, TARGET_PROFILE)
     assert fit.classification != "high_fit"
     assert "Hybrid in-office requirement outside Las Vegas/Nevada" in fit.red_flags
+
+
+def test_product_engineer_with_10_years_not_apply_now() -> None:
+    job = _job("Product Engineer", location="Remote USA", description="Requires 10+ years of experience in senior capacity.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level != "apply_now"
+
+
+def test_staff_product_manager_with_10_years_is_stretch_or_skip() -> None:
+    job = _job("Staff Product Manager", location="Remote USA", description="at least 10 years of experience and company-level product decisions")
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level in {"stretch", "skip"}
+
+
+def test_remote_product_manager_4_6_years_is_apply_now_or_review() -> None:
+    job = _job("Product Manager", location="Remote USA", description="4-6 years of experience with analytics")
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level in {"apply_now", "review"}
+
+
+def test_stripe_staff_product_manager_with_10_years_not_apply_now() -> None:
+    job = _job("Staff Product Manager", location="Remote USA", description="10+ years of experience in senior capacity and company-level product decisions", company="Stripe")
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.viability_level != "apply_now"
