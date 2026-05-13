@@ -14,6 +14,23 @@ from job_fit_agent.models import JobPosting
 LOGGER = logging.getLogger(__name__)
 ASHBY_BOARD_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 
+def parse_ashby_sidebar_metadata(html: str) -> dict[str, str]:
+    """Parse visible sidebar metadata using label/value line scanning."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = "\n".join(line.strip() for line in soup.get_text("\n").splitlines())
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+
+    labels = ("Location", "Location Type", "Employment Type", "Department", "Compensation")
+    metadata: dict[str, str] = {}
+    for idx, line in enumerate(lines):
+        if line not in labels:
+            continue
+        for nxt in lines[idx + 1 :]:
+            if nxt:
+                metadata[line] = nxt
+                break
+    return metadata
+
 
 class AshbyCollector:
     """Collects job postings from Ashby public posting API."""
@@ -143,35 +160,6 @@ class AshbyCollector:
         }
         return normalized in vague_terms
 
-    def _normalize_text(self, value: str) -> str:
-        return " ".join(value.split()).strip()
-
-    def _extract_sidebar_value(self, label_node: Any) -> str:
-        container = getattr(label_node, "parent", None)
-        if container is not None:
-            for candidate in container.find_all(["p", "span", "div", "li"], recursive=False):
-                candidate_text = self._normalize_text(candidate.get_text(" ", strip=True))
-                if candidate is label_node or not candidate_text:
-                    continue
-                if candidate_text.lower() != self._normalize_text(label_node.get_text(" ", strip=True)).lower():
-                    return candidate_text
-
-        for sibling in label_node.next_siblings:
-            if isinstance(sibling, str):
-                sibling_text = self._normalize_text(sibling)
-            else:
-                sibling_text = self._normalize_text(sibling.get_text(" ", strip=True))
-            if sibling_text:
-                return sibling_text
-
-        next_element = label_node.find_next(lambda tag: tag is not label_node and self._normalize_text(tag.get_text(" ", strip=True)))
-        if next_element is not None:
-            next_text = self._normalize_text(next_element.get_text(" ", strip=True))
-            label_text = self._normalize_text(label_node.get_text(" ", strip=True))
-            if next_text.lower() != label_text.lower():
-                return next_text
-        return ""
-
     def _fetch_sidebar_metadata_from_job_page(self, job_url: str) -> dict[str, str]:
         try:
             response = requests.get(job_url, timeout=self.timeout)
@@ -180,22 +168,7 @@ class AshbyCollector:
             LOGGER.debug("Unable to fetch Ashby job page %s: %s", job_url, exc)
             return {}
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        metadata: dict[str, str] = {}
-        supported_labels = ("Location", "Location Type", "Department", "Employment Type", "Compensation")
-
-        for label in supported_labels:
-            label_node = soup.find(string=lambda value: isinstance(value, str) and self._normalize_text(value).lower() == label.lower())
-            if label_node is None:
-                continue
-            parent = label_node.parent if hasattr(label_node, "parent") else None
-            if parent is None:
-                continue
-            value_text = self._extract_sidebar_value(parent)
-            if value_text:
-                metadata[label] = value_text
-
-        return metadata
+        return parse_ashby_sidebar_metadata(response.text)
 
     def _infer_workplace_type_from_location(self, location: str) -> str:
         normalized = location.lower()

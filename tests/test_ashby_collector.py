@@ -228,3 +228,52 @@ def test_fetch_jobs_sidebar_location_prevents_location_not_specified(monkeypatch
     jobs = AshbyCollector().fetch_jobs("anthropic")
     fit = score_job(jobs[0], load_target_profile())
     assert "Location not specified" not in fit.red_flags
+
+from job_fit_agent.collectors.ashby import parse_ashby_sidebar_metadata
+
+
+def test_parse_sidebar_remote_usa_location() -> None:
+    metadata = parse_ashby_sidebar_metadata("""
+    <aside>
+      <div>Location</div>
+      <div>Remote USA</div>
+      <div>Location Type</div>
+      <div>Remote</div>
+      <div>Department</div>
+      <div>Engineering &amp; Product</div>
+    </aside>
+    """)
+    assert metadata["Location"] == "Remote USA"
+    assert metadata["Location Type"] == "Remote"
+    assert metadata["Department"] == "Engineering & Product"
+
+
+def test_parse_sidebar_foster_city_hybrid_location() -> None:
+    metadata = parse_ashby_sidebar_metadata("""
+    <div>Location</div>
+    <div>Foster City, CA (Hybrid)</div>
+    """)
+    assert metadata["Location"] == "Foster City, CA (Hybrid)"
+
+
+def test_product_engineer_remote_usa_sidebar_location(monkeypatch):
+    api_response = _mock_response({
+        "jobs": [
+            {
+                "title": "Product Engineer",
+                "jobUrl": "https://jobs.example/product-eng-remote",
+                "locationName": "United States",
+                "descriptionPlain": "Build products",
+            }
+        ]
+    })
+    html_response = _mock_response({}, text="<div>Location</div><div>Remote USA</div><div>Location Type</div><div>Remote</div>")
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    assert jobs[0].location == "Remote USA"

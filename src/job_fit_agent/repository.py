@@ -50,6 +50,9 @@ def initialize(db_path: Path = DB_PATH) -> None:
                 classification TEXT,
                 role_family TEXT,
                 score INTEGER,
+                viability_score INTEGER DEFAULT 0,
+                viability_level TEXT DEFAULT "review",
+                viability_reasons TEXT DEFAULT "[]",
                 reasons TEXT,
                 red_flags TEXT,
                 first_seen_at TEXT,
@@ -71,6 +74,12 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if "notes" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN notes TEXT DEFAULT ""')
         conn.execute('UPDATE jobs SET notes = "" WHERE notes IS NULL')
+    if "viability_score" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN viability_score INTEGER DEFAULT 0')
+    if "viability_level" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN viability_level TEXT DEFAULT "review"')
+    if "viability_reasons" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN viability_reasons TEXT DEFAULT "[]"')
 
 
 def _validate_status(status: str) -> None:
@@ -88,11 +97,12 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
     now = _utc_now_iso()
     reasons = json.dumps(fit.reasons)
     red_flags = json.dumps(fit.red_flags)
+    viability_reasons = json.dumps(fit.viability_reasons)
 
     with _connect(db_path) as conn:
         _ensure_schema(conn)
         existing = conn.execute(
-            "SELECT classification, role_family, score, reasons, red_flags FROM jobs WHERE url = ?",
+            "SELECT classification, role_family, score, viability_score, viability_level, viability_reasons, reasons, red_flags FROM jobs WHERE url = ?",
             (job.url,),
         ).fetchone()
         if existing is None:
@@ -100,8 +110,8 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
                 """
                 INSERT INTO jobs (
                     source, company, title, location, workplace_type, department, team,
-                    url, classification, role_family, score, reasons, red_flags, first_seen_at, last_seen_at, status, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    url, classification, role_family, score, viability_score, viability_level, viability_reasons, reasons, red_flags, first_seen_at, last_seen_at, status, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.source,
@@ -115,6 +125,9 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
                     fit.classification,
                     fit.role_family,
                     fit.total_score,
+                    fit.viability_score,
+                    fit.viability_level,
+                    viability_reasons,
                     reasons,
                     red_flags,
                     now,
@@ -130,6 +143,9 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
                 existing["classification"] != fit.classification,
                 existing["role_family"] != fit.role_family,
                 existing["score"] != fit.total_score,
+                existing["viability_score"] != fit.viability_score,
+                existing["viability_level"] != fit.viability_level,
+                existing["viability_reasons"] != viability_reasons,
                 existing["reasons"] != reasons,
                 existing["red_flags"] != red_flags,
             ]
@@ -140,7 +156,7 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
             UPDATE jobs
             SET source = ?, company = ?, title = ?, location = ?, workplace_type = ?,
                 department = ?, team = ?, classification = ?, role_family = ?, score = ?,
-                reasons = ?, red_flags = ?, last_seen_at = ?
+                viability_score = ?, viability_level = ?, viability_reasons = ?, reasons = ?, red_flags = ?, last_seen_at = ?
             WHERE url = ?
             """,
             (
@@ -154,6 +170,9 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
                 fit.classification,
                 fit.role_family,
                 fit.total_score,
+                fit.viability_score,
+                fit.viability_level,
+                viability_reasons,
                 reasons,
                 red_flags,
                 now,
