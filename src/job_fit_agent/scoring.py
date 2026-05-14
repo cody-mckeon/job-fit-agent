@@ -404,6 +404,13 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     job.normalized_city = normalized_location["normalized_city"]
     job.normalized_location_type = normalized_location["normalized_location_type"]
     job.geographic_eligibility = normalized_location["geographic_eligibility"]
+    has_cursor_blank_location_limitation = (
+        job.source.lower() == "ashby"
+        and job.company.strip().lower() == "cursor"
+        and not job.location_raw.strip()
+    )
+    if has_cursor_blank_location_limitation:
+        job.geographic_eligibility = "review"
     text = f"{job.title} {job.description} {job.location} {job.workplace_type} {job.department} {job.team}".lower()
     title_text = job.title.lower()
     score = 0
@@ -583,6 +590,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     location_viability_rank = {"apply_now": 0, "review": 1, "stretch": 2, "skip": 3}
     if location_viability_rank[location_viability_level] > location_viability_rank[viability_level]:
         viability_level = location_viability_level
+    if has_cursor_blank_location_limitation:
+        viability_level = "review" if viability_level == "apply_now" else viability_level
+        viability_reasons.append("Location unavailable from source; manual review required")
 
     return FitScore(
         total_score=max(0, score),

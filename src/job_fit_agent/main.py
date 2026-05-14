@@ -453,7 +453,8 @@ def location_audit() -> None:
                FROM jobs"""
         ).fetchall()
 
-    blank_by_company: dict[tuple[str, str], list[str]] = {}
+    blank_known_limitations_by_company: dict[tuple[str, str], list[str]] = {}
+    blank_needs_debug_by_company: dict[tuple[str, str], list[str]] = {}
     region_by_company: dict[tuple[str, str], list[tuple[str, str]]] = {}
     conflicts: list[sqlite3.Row] = []
 
@@ -469,7 +470,11 @@ def location_audit() -> None:
         combined = f"{lower_raw} {workplace_type}"
 
         if not raw:
-            blank_by_company.setdefault((source, company), []).append(url)
+            key = (source, company)
+            if source.lower() == "ashby" and company.lower() == "cursor":
+                blank_known_limitations_by_company.setdefault(key, []).append(url)
+            else:
+                blank_needs_debug_by_company.setdefault(key, []).append(url)
         if any(term in lower_raw for term in REGION_ONLY_TERMS):
             region_by_company.setdefault((source, company), []).append((raw, url))
         if ("remote" in combined and "hybrid" in combined) or ("remote" in combined and "non-us" in combined):
@@ -481,10 +486,10 @@ def location_audit() -> None:
         ):
             conflicts.append(row)
 
-    print("A. Blank location_raw by company")
-    if not blank_by_company:
+    print("A. Blank location_raw needing debugging")
+    if not blank_needs_debug_by_company:
         print("none")
-    for (source, company), urls in sorted(blank_by_company.items(), key=lambda item: len(item[1]), reverse=True):
+    for (source, company), urls in sorted(blank_needs_debug_by_company.items(), key=lambda item: len(item[1]), reverse=True):
         print(f"{source}/{company}: {len(urls)}")
         for sample in urls[:5]:
             print(f"  - {sample}")
@@ -508,7 +513,7 @@ def location_audit() -> None:
 
     print("\nD. Top sample URLs to debug")
     debug_urls = []
-    for urls in blank_by_company.values():
+    for urls in blank_needs_debug_by_company.values():
         debug_urls.extend(urls[:2])
     for samples in region_by_company.values():
         debug_urls.extend([u for _, u in samples[:2]])
@@ -519,6 +524,15 @@ def location_audit() -> None:
         if url and url not in seen:
             seen.add(url)
             print(f"- {url}")
+
+    print("\nE. Known source limitations")
+    if not blank_known_limitations_by_company:
+        print("none")
+    for (source, company), urls in sorted(blank_known_limitations_by_company.items(), key=lambda item: len(item[1]), reverse=True):
+        print(f"{source}/{company}: {len(urls)}")
+        print("  - blank location_raw may be unavailable in source metadata; manual review required")
+        for sample in urls[:5]:
+            print(f"  - {sample}")
 
 
 def main(argv: list[str] | None = None) -> None:

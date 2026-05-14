@@ -707,6 +707,15 @@ def test_blank_remote_viability_is_review() -> None:
     assert fit.viability_level == "review"
 
 
+def test_cursor_blank_location_is_known_limitation_review() -> None:
+    job = _job("Product Manager", location="", description="Own product roadmap.", company="cursor")
+    job.source = "ashby"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "review"
+    assert fit.viability_level != "apply_now"
+    assert "Location unavailable from source; manual review required" in fit.viability_reasons
+
+
 def test_remote_canada_only_viability_is_skip() -> None:
     job = _job("Product Manager", location="Remote - Canada only", description="Own product roadmap.")
     job.workplace_type = "Remote"

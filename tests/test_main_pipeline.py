@@ -566,6 +566,10 @@ def test_location_audit_reports_blank_and_region_only(tmp_path, monkeypatch, cap
         )
         conn.execute(
             "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("ashby", "cursor", "https://jobs.ashbyhq.com/cursor/d", "", "unknown", "review", ""),
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)",
             ("ashby", "linear", "https://jobs.ashbyhq.com/linear/b", "Europe", "remote", "ineligible", "Remote"),
         )
         conn.execute(
@@ -574,10 +578,13 @@ def test_location_audit_reports_blank_and_region_only(tmp_path, monkeypatch, cap
         )
     location_audit()
     output = capsys.readouterr().out
-    assert "A. Blank location_raw by company" in output
+    assert "A. Blank location_raw needing debugging" in output
     assert "ashby/elevenlabs: 1" in output
+    assert "ashby/cursor: 1" not in output.split("A. Blank location_raw needing debugging")[1].split("B. Region-only locations by company")[0]
     assert "B. Region-only locations by company" in output
     assert "ashby/linear: 2" in output
+    assert "E. Known source limitations" in output
+    assert "ashby/cursor: 1" in output
 
 
 def test_location_audit_command_runs(monkeypatch) -> None:
