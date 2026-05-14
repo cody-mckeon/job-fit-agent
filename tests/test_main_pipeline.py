@@ -614,6 +614,9 @@ def test_prep_application_creates_package_and_files(monkeypatch, tmp_path):
         "notes": "",
     }
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "base_resume.md").write_text("- Perplexity — PM — 2024-Present\n", encoding="utf-8")
     monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 8 else None)
     updated = []
     monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: updated.append((job_id, status)))
@@ -648,6 +651,75 @@ def test_prep_application_missing_job_prints_clear_error(monkeypatch, capsys):
     main(["prep-application", "999"])
     output = capsys.readouterr().out
     assert "Job not found: 999" in output
+
+
+def test_prep_application_missing_base_resume_prints_clear_error(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    job = {
+        "id": 8,
+        "title": "Product Manager Builder",
+        "company": "Perplexity",
+        "source": "ashby",
+        "url": "https://example.com/job/8",
+        "score": 88,
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": '["Strong alignment"]',
+        "red_flags": '["seniority stretch"]',
+        "viability_reasons": '["remote_eligible"]',
+        "status": "new",
+        "notes": "",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+
+    main(["prep-application", "8"])
+
+    output = capsys.readouterr().out
+    assert "Missing profile/base_resume.md. Add your base resume before running prep-application." in output
+
+
+def test_prep_application_tailored_resume_uses_base_resume_and_preserves_entities(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "profile_context.yaml").write_text("strengths:\n  - workflow automation\n", encoding="utf-8")
+    (profile_dir / "resume_rules.yaml").write_text("rules:\n  - Preserve company names\n  - Preserve dates\n", encoding="utf-8")
+    (profile_dir / "base_resume.md").write_text(
+        "- Perplexity — Product Manager — 2024-Present\n- Walmart — Product Ops — 2021-2023\n",
+        encoding="utf-8",
+    )
+    job = {
+        "id": 8,
+        "title": "Product Manager Builder",
+        "company": "Perplexity",
+        "source": "ashby",
+        "url": "https://example.com/job/8",
+        "score": 88,
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": '["Strong alignment"]',
+        "red_flags": '["seniority stretch"]',
+        "viability_reasons": '["remote_eligible"]',
+        "status": "new",
+        "notes": "",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 8 else None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "8"])
+
+    resume_text = (tmp_path / "applications" / "perplexity_product_manager_builder_8" / "tailored_resume_draft.md").read_text(encoding="utf-8")
+    assert "Perplexity — Product Manager — 2024-Present" in resume_text
+    assert "Walmart — Product Ops — 2021-2023" in resume_text
+    assert "Placeholder Company" not in resume_text
 
 
 def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_path):

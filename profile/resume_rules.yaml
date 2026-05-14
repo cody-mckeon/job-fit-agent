@@ -1,0 +1,9 @@
+rules:
+  - Do not fabricate employment history
+  - Do not fabricate metrics
+  - Preserve company names
+  - Preserve job titles
+  - Preserve dates
+  - Keep claims grounded in base_resume.md
+  - Use [insert metric if available] for unknown metrics
+  - Tailor emphasis, not truth
