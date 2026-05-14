@@ -7,7 +7,12 @@ import sys
 from dataclasses import dataclass
 from typing import Protocol
 
-from job_fit_agent.collectors.ashby import AshbyCollector
+from pathlib import Path
+
+import requests
+from bs4 import BeautifulSoup
+
+from job_fit_agent.collectors.ashby import AshbyCollector, extract_ashby_hydration_data
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import (
@@ -356,6 +361,34 @@ def learn_url(job_url: str) -> None:
     print(f"Discovered company added to discovery queue: {parsed.source}/{parsed.company}")
 
 
+def debug_ashby_url(job_url: str) -> None:
+    response = requests.get(job_url, timeout=15)
+    response.raise_for_status()
+    html = response.text
+
+    debug_path = Path("debug/ashby_debug.html")
+    debug_path.parent.mkdir(parents=True, exist_ok=True)
+    debug_path.write_text(html, encoding="utf-8")
+
+    soup = BeautifulSoup(html, "html.parser")
+    title = soup.title.get_text(strip=True) if soup.title else ""
+    has_next_data = '__NEXT_DATA__' in html
+    has_hydration_json = bool(extract_ashby_hydration_data(html))
+
+    print(f"title: {title}")
+    print(f"has __NEXT_DATA__: {has_next_data}")
+    for token in ["Foster City", "Remote USA", "Mexico", "Argentina", "Peru"]:
+        print(f"contains '{token}': {token in html}")
+    print(f"has hydration JSON metadata: {has_hydration_json}")
+
+    metadata = extract_ashby_hydration_data(html)
+    if metadata:
+        print(f"hydration location: {metadata.get('Location', '')}")
+        print(f"hydration workplace type: {metadata.get('Location Type', '')}")
+        print(f"hydration department: {metadata.get('Department', '')}")
+        print(f"hydration team: {metadata.get('Team', '')}")
+
+
 def promote_discovery(source: str, company: str) -> None:
     valid_sources = {"ashby", "greenhouse", "lever"}
     if source not in valid_sources:
@@ -450,6 +483,13 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "debug-ashby-url":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main debug-ashby-url <job_url>")
+            return
+        debug_ashby_url(args[1])
+        return
+
     if command == "promote-discovery":
         if len(args) != 3:
             print("Usage: python -m job_fit_agent.main promote-discovery <source> <company>")
@@ -468,6 +508,7 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
     print("python -m job_fit_agent.main learn-url <job_url>")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
+    print("python -m job_fit_agent.main debug-ashby-url <job_url>")
 
 
 if __name__ == "__main__":
