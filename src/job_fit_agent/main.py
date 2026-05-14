@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import sqlite3
+import subprocess
 import sys
 from dataclasses import dataclass
 from typing import Protocol
@@ -813,7 +814,7 @@ Apply now only if key requirements and location constraints are confirmed; other
 
     (app_dir / "fit_summary.md").write_text(fit_summary, encoding="utf-8")
     (app_dir / "resume_strategy.md").write_text(resume_strategy, encoding="utf-8")
-    (app_dir / "tailored_resume_draft.md").write_text(tailored_resume, encoding="utf-8")
+    (app_dir / "resume_draft.md").write_text(tailored_resume, encoding="utf-8")
     (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
     (app_dir / "application_questions.md").write_text(questions, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
@@ -824,6 +825,45 @@ Apply now only if key requirements and location constraints are confirmed; other
     print("Application package created:")
     print(f"{app_dir}/")
 
+
+
+def _sanitize_resume_name_component(value: str) -> str:
+    sanitized = re.sub(r"\s+", "_", value.strip())
+    sanitized = sanitized.replace("/", "")
+    sanitized = re.sub(r"[^A-Za-z0-9_]", "", sanitized)
+    sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+    return sanitized or "Unknown"
+
+
+def export_resume_pdf(job_id: int) -> None:
+    initialize()
+    job = get_job_by_id(job_id)
+    if not job:
+        raise ValueError(f"Job not found: {job_id}")
+    app_dir = Path("applications") / f"{_slugify(job['company'] or 'company')}_{_slugify(job['title'] or 'role')}_{job_id}"
+    resume_path = app_dir / "resume_draft.md"
+    if not resume_path.exists():
+        legacy_resume_path = app_dir / "tailored_resume_draft.md"
+        if legacy_resume_path.exists():
+            print("Using legacy tailored_resume_draft.md. Consider regenerating application package.")
+            resume_path = legacy_resume_path
+        else:
+            print(f"Missing resume draft markdown: {resume_path}")
+            return
+
+    company = _sanitize_resume_name_component(str(job["company"]))
+    role = _sanitize_resume_name_component(str(job["title"]))
+    output_pdf = app_dir / f"Cody_McKeon_{company}_{role}_Resume.pdf"
+    subprocess.run(
+        [
+            "pandoc",
+            str(resume_path),
+            "-o",
+            str(output_pdf),
+        ],
+        check=True,
+    )
+    print(f"Resume PDF exported: {output_pdf}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -923,6 +963,18 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Job not found: {args[1]}")
         return
 
+    if command == "export-resume-pdf":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main export-resume-pdf <job_id>")
+            return
+        try:
+            export_resume_pdf(int(args[1]))
+        except ValueError:
+            print(f"Job not found: {args[1]}")
+        except subprocess.CalledProcessError as exc:
+            print(f"Failed to export PDF: {exc}")
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
@@ -934,6 +986,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
     print("python -m job_fit_agent.main location-audit")
     print("python -m job_fit_agent.main prep-application <job_id>")
+    print("python -m job_fit_agent.main export-resume-pdf <job_id>")
 
 
 if __name__ == "__main__":

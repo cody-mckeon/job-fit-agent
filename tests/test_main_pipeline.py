@@ -628,7 +628,7 @@ def test_prep_application_creates_package_and_files(monkeypatch, tmp_path):
     expected_files = {
         "fit_summary.md",
         "resume_strategy.md",
-        "tailored_resume_draft.md",
+        "resume_draft.md",
         "recruiter_note.md",
         "application_questions.md",
         "risk_flags.md",
@@ -716,7 +716,7 @@ def test_prep_application_tailored_resume_uses_base_resume_and_preserves_entitie
 
     main(["prep-application", "8"])
 
-    resume_text = (tmp_path / "applications" / "perplexity_product_manager_builder_8" / "tailored_resume_draft.md").read_text(encoding="utf-8")
+    resume_text = (tmp_path / "applications" / "perplexity_product_manager_builder_8" / "resume_draft.md").read_text(encoding="utf-8")
     assert "Perplexity — Product Manager — 2024-Present" in resume_text
     assert "Walmart — Product Ops — 2021-2023" in resume_text
     assert "Placeholder Company" not in resume_text
@@ -760,7 +760,7 @@ def test_prep_application_changes_headline_and_prioritizes_ai_projects(monkeypat
 
     app_dir = tmp_path / "applications" / "acme_ai_ai_product_manager_20"
     strategy_text = (app_dir / "resume_strategy.md").read_text(encoding="utf-8")
-    resume_text = (app_dir / "tailored_resume_draft.md").read_text(encoding="utf-8")
+    resume_text = (app_dir / "resume_draft.md").read_text(encoding="utf-8")
     assert "## Recommended headline" in strategy_text
     assert "Job Fit Agent" in strategy_text
     assert "RWLV Priority Governor Agent" in strategy_text
@@ -797,7 +797,7 @@ def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
 
     main(["prep-application", "30"])
     app_dir = tmp_path / "applications" / "beta_product_manager_30"
-    for name in ["fit_summary.md", "resume_strategy.md", "tailored_resume_draft.md", "recruiter_note.md", "application_questions.md", "risk_flags.md"]:
+    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "recruiter_note.md", "application_questions.md", "risk_flags.md"]:
         assert (app_dir / name).exists()
 
 
@@ -829,6 +829,42 @@ def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_pat
     main(["prep-application", "12"])
 
     assert called == []
+
+
+def test_export_resume_pdf_uses_new_filename_and_output_naming(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "acme_ai_product_manager_core_api_5"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "resume_draft.md").write_text("# Resume", encoding="utf-8")
+    job = {"id": 5, "company": "Acme / AI", "title": "Product Manager (Core/API)"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    called = {}
+
+    def fake_run(cmd, check):
+        called["cmd"] = cmd
+        called["check"] = check
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["export-resume-pdf", "5"])
+    assert called["check"] is True
+    assert called["cmd"][0] == "pandoc"
+    assert called["cmd"][1].endswith("resume_draft.md")
+    assert called["cmd"][-1].endswith("Cody_McKeon_Acme_AI_Product_Manager_CoreAPI_Resume.pdf")
+
+
+def test_export_resume_pdf_uses_legacy_file_with_notice(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "beta_product_manager_6"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "tailored_resume_draft.md").write_text("# Legacy Resume", encoding="utf-8")
+    job = {"id": 6, "company": "Beta", "title": "Product Manager"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", lambda *args, **kwargs: None)
+    main(["export-resume-pdf", "6"])
+    output = capsys.readouterr().out
+    assert "Using legacy tailored_resume_draft.md. Consider regenerating application package." in output
 
 
 def _build_sqlite_job_row(**overrides):

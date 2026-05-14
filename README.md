@@ -154,10 +154,22 @@ python -m job_fit_agent.main prep-application 8
 This creates `applications/<company>_<role_slug>_<job_id>/` with:
 - `fit_summary.md`
 - `resume_strategy.md`
-- `tailored_resume_draft.md`
+- `resume_draft.md`
 - `recruiter_note.md`
 - `application_questions.md`
 - `risk_flags.md`
+
+Export an upload-ready resume PDF for a prepared application package:
+
+```bash
+python -m job_fit_agent.main export-resume-pdf <job_id>
+```
+
+Generated filename format:
+- `Cody_McKeon_<Company>_<Role>_Resume.pdf`
+- Example: `Cody_McKeon_Linear_Product_Manager_Resume.pdf`
+
+Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.md` exists, the exporter uses the legacy file and prints a regeneration reminder.
 
 Recommended application prep workflow:
 1. `digest`
