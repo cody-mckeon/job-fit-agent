@@ -788,6 +788,31 @@ def test_latam_apac_japan_and_country_remote_rules() -> None:
         assert fit.viability_level == "skip"
 
 
+
+
+def test_united_kingdom_remote_is_ineligible() -> None:
+    job = _job("Product Manager", location="Remote United Kingdom")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "ineligible"
+    assert "Remote role restricted to United Kingdom" in fit.viability_reasons
+
+
+def test_australia_remote_is_ineligible() -> None:
+    job = _job("Product Manager", location="Remote Australia")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "ineligible"
+    assert "Remote role restricted to Australia / ANZ" in fit.viability_reasons
+
+
+def test_anz_remote_is_ineligible() -> None:
+    job = _job("Product Manager", location="Remote ANZ")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "ineligible"
+    assert "Remote role restricted to Australia / ANZ" in fit.viability_reasons
+
 def test_north_america_remote_is_review() -> None:
     job = _job("Product Manager", location="Remote North America")
     job.workplace_type = "Remote"

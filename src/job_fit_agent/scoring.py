@@ -112,7 +112,7 @@ NON_LOCAL_HYBRID_CITY_TERMS = {
 LOCAL_LOCATION_TERMS = ("las vegas", "henderson", "nevada", " nv", "remote us", "us remote", "remote united states")
 LOCAL_GEOGRAPHY_TERMS = ("las vegas", "henderson", "nevada")
 REMOTE_US_TERMS = ("remote us", "us remote", "remote united states", "united states", "usa")
-REMOTE_NON_US_TERMS = ("mexico", "argentina", "peru", "latam", "emea", "apac", "canada only", "canada")
+REMOTE_NON_US_TERMS = ("mexico", "argentina", "peru", "latam", "emea", "apac", "canada only", "canada", "united kingdom", "uk", "england", "london", "australia", "anz", "japan", "europe", "western europe")
 NON_LOCAL_HYBRID_TERMS = ("foster city", "san francisco", "new york", "nyc", "seattle", "toronto")
 
 US_STATE_CODES = {
@@ -121,7 +121,24 @@ US_STATE_CODES = {
     "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 }
 REMOTE_US_ALIASES = ("us remote", "remote us", "remote usa", "remote united states", "united states", "anywhere in us", "usa")
-NON_US_REGIONS = ("latam", "emea", "apac", "europe", "western europe", "japan", "mexico", "argentina", "peru")
+NON_US_REGIONS = (
+    "latam",
+    "emea",
+    "apac",
+    "europe",
+    "western europe",
+    "japan",
+    "mexico",
+    "argentina",
+    "peru",
+    "united kingdom",
+    "uk",
+    "england",
+    "london",
+    "australia",
+    "anz",
+    "canada only",
+)
 REVIEW_REGIONS = ("north america",)
 
 
@@ -196,12 +213,16 @@ def evaluate_location_viability(location: str, workplace_type: str) -> tuple[str
     if eligibility == "ineligible":
         if "europe" in location_text or "western europe" in location_text:
             return "skip", ["Remote role restricted to Europe"]
+        if any(term in location_text for term in ("united kingdom", " uk", "england", "london")):
+            return "skip", ["Remote role restricted to United Kingdom", "Remote role limited to non-US geography"]
+        if "australia" in location_text or "anz" in location_text:
+            return "skip", ["Remote role restricted to Australia / ANZ", "Remote role limited to non-US geography"]
         if "latam" in location_text:
-            return "skip", ["Remote role restricted to LATAM"]
-        if "apac" in location_text:
-            return "skip", ["Remote role restricted to APAC"]
-        if any(term in location_text for term in REMOTE_NON_US_TERMS):
             return "skip", ["Remote role restricted to LATAM", "Remote role limited to non-US geography"]
+        if "apac" in location_text:
+            return "skip", ["Remote role restricted to APAC", "Remote role limited to non-US geography"]
+        if any(term in location_text for term in REMOTE_NON_US_TERMS):
+            return "skip", ["Remote role limited to non-US geography"]
         if location_type == "hybrid" and state and state != "NV":
             return "stretch", ["Hybrid role outside Nevada", "Hybrid role outside target geography"]
         return "skip", ["Location is outside target geography"]
