@@ -536,7 +536,9 @@ def location_audit() -> None:
             print(f"  - {sample}")
 
 
-PROFILE_CONTEXT_PATH = Path("config/profile_context.yaml")
+PROFILE_CONTEXT_PATH = Path("profile/profile_context.yaml")
+PROFILE_BASE_RESUME_PATH = Path("profile/base_resume.md")
+PROFILE_RESUME_RULES_PATH = Path("profile/resume_rules.yaml")
 PROFILE_DEFAULT_CONTEXT = {
     "target_positioning": "AI-native product builder/operator",
     "strengths": [
@@ -577,6 +579,39 @@ def _load_profile_context() -> dict:
     return {**PROFILE_DEFAULT_CONTEXT, **loaded}
 
 
+def _load_base_resume() -> str | None:
+    if not PROFILE_BASE_RESUME_PATH.exists():
+        return None
+    return PROFILE_BASE_RESUME_PATH.read_text(encoding="utf-8").strip()
+
+
+def _load_resume_rules() -> list[str]:
+    if not PROFILE_RESUME_RULES_PATH.exists():
+        PROFILE_RESUME_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PROFILE_RESUME_RULES_PATH.write_text(
+            yaml.safe_dump(
+                {
+                    "rules": [
+                        "Do not fabricate employment history",
+                        "Do not fabricate metrics",
+                        "Preserve company names",
+                        "Preserve job titles",
+                        "Preserve dates",
+                        "Keep claims grounded in base_resume.md",
+                        "Use [insert metric if available] for unknown metrics",
+                        "Tailor emphasis, not truth",
+                    ]
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+    with PROFILE_RESUME_RULES_PATH.open("r", encoding="utf-8") as handle:
+        loaded = yaml.safe_load(handle) or {}
+    rules = loaded.get("rules") or []
+    return [str(rule) for rule in rules]
+
+
 def prep_application(job_id: int) -> None:
     initialize()
     job = get_job_by_id(job_id)
@@ -584,7 +619,13 @@ def prep_application(job_id: int) -> None:
         print(f"Job not found: {job_id}")
         return
 
+    base_resume = _load_base_resume()
+    if base_resume is None:
+        print("Missing profile/base_resume.md. Add your base resume before running prep-application.")
+        return
+
     profile_context = _load_profile_context()
+    resume_rules = _load_resume_rules()
     role_slug = _slugify(job["title"] or "role")
     company_slug = _slugify(job["company"] or "company")
     app_dir = Path("applications") / f"{company_slug}_{role_slug}_{job_id}"
@@ -661,15 +702,24 @@ def prep_application(job_id: int) -> None:
 - Location and work authorization alignment
 """
 
+    strengths = profile_context.get("strengths", [])[:3]
+    top_strengths = ", ".join(strengths) if strengths else "product systems, workflow automation, and analytics"
+    resume_rule_text = "\n".join(f"- {rule}" for rule in resume_rules)
+
     tailored_resume = f"""# Tailored Resume Draft
 
 ## Positioning
-AI-native product builder/operator focused on workflow automation, product systems, and product analytics.
+AI-native product builder/operator focused on {top_strengths}.
+
+## Tailored Summary
+Aligned to {job['company']}'s {job['title']} role by emphasizing directly relevant work from the base resume only.
 
 ## Experience Highlights
-- Resorts World: web analytics and product systems work, including instrumentation and insight workflows. [insert metric if available]
-- OpenClaw + job-fit-agent: built agent-driven workflow automation for discovery, scoring, and application prep. [insert metric if available]
-- Walmart (prior): ecommerce/product marketing/project operations support across cross-functional teams. [insert metric if available]
+{base_resume}
+
+## Selected Projects
+- job-fit-agent: role discovery, scoring, and prep workflows that support repeatable application operations. [insert metric if available]
+- OpenClaw workflow automation for product/operations processes. [insert metric if available]
 
 ## Targeted Value for {job['company']} - {job['title']}
 - Build repeatable AI-assisted operating workflows for product and operations teams.
@@ -679,6 +729,9 @@ AI-native product builder/operator focused on workflow automation, product syste
 ## Notes
 - Do not add metrics unless validated from source records.
 - Keep claims scoped to verified ownership and contribution.
+
+## Resume Rules Applied
+{resume_rule_text}
 """
 
     recruiter_note = f"""Hi, I am interested in the {job['title']} role at {job['company']}.
