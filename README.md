@@ -158,7 +158,10 @@ python -m job_fit_agent.main location-audit
 ```
 
 `location-audit` prints:
-- Blank `location_raw` by source/company with sample URLs.
+- Blank `location_raw` needing debugging by source/company with sample URLs.
 - Region-only `location_raw` values by source/company (e.g. Europe, EMEA, APAC, LATAM, North America).
 - Conflicting metadata (e.g. remote+hybrid signal conflicts, remote geography mismatches).
 - Top sample URLs to debug next.
+- Known source limitations (e.g. Ashby/Cursor blank `location_raw` where metadata is unavailable upstream).
+
+Some job boards do not consistently expose complete location metadata in HTML, JSON-LD, or hydration/app-data payloads. In known cases (currently Ashby/Cursor), blank location metadata is treated as a source limitation and is routed to manual review instead of being treated as an extraction/parser failure.
