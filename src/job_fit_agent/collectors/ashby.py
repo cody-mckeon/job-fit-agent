@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -16,6 +17,58 @@ ASHBY_BOARD_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 
 def _normalize_text(value: str) -> str:
     return " ".join(value.split())
+
+
+def extract_ashby_hydration_data(html: str) -> dict[str, str]:
+    """Extract metadata from Next.js hydration payload when present."""
+    soup = BeautifulSoup(html, "html.parser")
+    script = soup.find("script", id="__NEXT_DATA__")
+    if script is None:
+        return {}
+
+    raw_payload = script.string or script.get_text(strip=True)
+    if not raw_payload:
+        return {}
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        LOGGER.debug("Ashby hydration payload present but invalid JSON")
+        return {}
+
+    metadata: dict[str, str] = {}
+
+    def _walk(node: Any) -> None:
+        if isinstance(node, dict):
+            key = str(node.get("key") or "").strip().lower()
+            value = str(node.get("value") or "").strip()
+            if key in {"location", "workplace type", "department", "team"} and value:
+                mapping = {
+                    "location": "Location",
+                    "workplace type": "Location Type",
+                    "department": "Department",
+                    "team": "Team",
+                }
+                metadata[mapping[key]] = value
+
+            for dict_key, dict_val in node.items():
+                lowered = dict_key.lower()
+                text = str(dict_val or "").strip() if not isinstance(dict_val, (dict, list)) else ""
+                if lowered in {"location", "locationname"} and text:
+                    metadata.setdefault("Location", text)
+                elif lowered in {"workplacetype", "locationtype"} and text:
+                    metadata.setdefault("Location Type", text)
+                elif lowered == "department" and text:
+                    metadata.setdefault("Department", text)
+                elif lowered == "team" and text:
+                    metadata.setdefault("Team", text)
+                _walk(dict_val)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(payload)
+    return metadata
 
 
 def dump_sidebar_metadata(html: str) -> dict[str, str]:
@@ -146,7 +199,7 @@ class AshbyCollector:
 
         team = self._extract_field_name(job, ("teamName", "team"))
         if not team:
-            team = sidebar_metadata.get("Employment Type", "")
+            team = sidebar_metadata.get("Team", "") or sidebar_metadata.get("Employment Type", "")
 
         description = str(job.get("descriptionPlain") or job.get("description") or "").strip()
 
@@ -215,9 +268,13 @@ class AshbyCollector:
             LOGGER.debug("Unable to fetch Ashby job page %s: %s", job_url, exc)
             return {}
 
+        hydration_metadata = extract_ashby_hydration_data(response.text)
+        if hydration_metadata:
+            return hydration_metadata
+
         metadata = parse_ashby_sidebar_metadata(response.text)
         if not metadata:
-            LOGGER.debug("Ashby sidebar extraction failed for %s", job_url)
+            LOGGER.debug("Ashby metadata extraction failed for %s", job_url)
         return metadata
 
     def _infer_workplace_type_from_location(self, location: str) -> str:

@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import requests
 
-from job_fit_agent.collectors.ashby import AshbyCollector
+from job_fit_agent.collectors.ashby import AshbyCollector, extract_ashby_hydration_data
 from job_fit_agent.config import load_target_profile
 from job_fit_agent.scoring import score_job
 
@@ -328,3 +328,37 @@ def test_sidebar_location_not_blank_when_sidebar_exists(monkeypatch):
     jobs = AshbyCollector().fetch_jobs("anthropic")
     assert jobs[0].location != ""
     assert jobs[0].location == "Remote USA"
+
+
+def test_extract_ashby_hydration_data_from_next_data_fixture() -> None:
+    metadata = extract_ashby_hydration_data(_fixture_html("with_next_data.html"))
+    assert metadata["Location"] == "Remote USA"
+    assert metadata["Location Type"] == "Remote"
+    assert metadata["Department"] == "Growth"
+    assert metadata["Team"] == "Platform"
+
+
+def test_fetch_jobs_prefers_hydration_metadata_over_sidebar(monkeypatch):
+    api_response = _mock_response({
+        "jobs": [
+            {
+                "title": "Senior Product Manager",
+                "jobUrl": "https://jobs.example/next-data",
+                "locationName": "United States",
+                "descriptionPlain": "Own roadmap.",
+            }
+        ]
+    })
+    html_response = _mock_response({}, text=_fixture_html("with_next_data.html"))
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+    jobs = AshbyCollector().fetch_jobs("anthropic")
+    assert jobs[0].location == "Remote USA"
+    assert jobs[0].workplace_type == "Remote"
+    assert jobs[0].department == "Growth"
+    assert jobs[0].team == "Platform"
