@@ -12,7 +12,12 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
-from job_fit_agent.collectors.ashby import AshbyCollector, extract_ashby_hydration_data
+from job_fit_agent.collectors.ashby import (
+    AshbyCollector,
+    extract_ashby_app_data_metadata,
+    extract_ashby_hydration_data,
+    extract_ashby_json_ld_metadata,
+)
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import (
@@ -374,12 +379,16 @@ def debug_ashby_url(job_url: str) -> None:
     title = soup.title.get_text(strip=True) if soup.title else ""
     has_next_data = '__NEXT_DATA__' in html
     has_hydration_json = bool(extract_ashby_hydration_data(html))
+    app_data = extract_ashby_app_data_metadata(html)
+    json_ld = extract_ashby_json_ld_metadata(html)
 
     print(f"title: {title}")
     print(f"has __NEXT_DATA__: {has_next_data}")
     for token in ["Foster City", "Remote USA", "Mexico", "Argentina", "Peru"]:
         print(f"contains '{token}': {token in html}")
     print(f"has hydration JSON metadata: {has_hydration_json}")
+    print(f"app_data_found: {bool(app_data)}")
+    print(f"json_ld_found: {bool(json_ld)}")
 
     metadata = extract_ashby_hydration_data(html)
     if metadata:
@@ -387,6 +396,16 @@ def debug_ashby_url(job_url: str) -> None:
         print(f"hydration workplace type: {metadata.get('Location Type', '')}")
         print(f"hydration department: {metadata.get('Department', '')}")
         print(f"hydration team: {metadata.get('Team', '')}")
+    merged = {}
+    for source in (json_ld, app_data):
+        merged.update(source)
+    if merged:
+        print(f"extracted location_raw: {merged.get('Location', '')}")
+        print(f"extracted workplace_type: {merged.get('Location Type', '')}")
+        print(f"extracted department: {merged.get('Department', '')}")
+        print(f"extracted city: {merged.get('city', '')}")
+        print(f"extracted state: {merged.get('state', '')}")
+        print(f"extracted country: {merged.get('country', '')}")
 
 
 def promote_discovery(source: str, company: str) -> None:
