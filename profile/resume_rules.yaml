@@ -1,9 +1,18 @@
 rules:
-  - Do not fabricate employment history
-  - Do not fabricate metrics
-  - Preserve company names
-  - Preserve job titles
-  - Preserve dates
-  - Keep claims grounded in base_resume.md
-  - Use [insert metric if available] for unknown metrics
-  - Tailor emphasis, not truth
+  - Tailor emphasis, not truth.
+  - Use profile/base_resume.md as the source of truth for employment history.
+  - Use profile/profile_context.yaml as supplemental context for positioning and projects.
+  - Preserve company names.
+  - Preserve employment dates.
+  - Preserve education.
+  - Do not invent metrics.
+  - Use "[insert metric if available]" when a quantified result would help but no verified number exists.
+  - It is acceptable to rewrite bullets to better match a job description.
+  - It is acceptable to change the resume headline for a specific role.
+  - It is acceptable to rewrite the professional summary for a specific role.
+  - It is acceptable to reorder skills and tools based on job relevance.
+  - It is acceptable to swap project emphasis between Job Fit Agent and RWLV Priority Governor Agent.
+  - Do not overclaim software engineering depth.
+  - Do not imply the RWLV Priority Governor Agent has full organizational adoption unless stated by Cody.
+  - Do not imply the Job Fit Agent is a commercial product unless stated by Cody.
+  - Keep the tailored resume concise and recruiter-readable.
