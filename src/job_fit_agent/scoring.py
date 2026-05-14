@@ -120,8 +120,9 @@ US_STATE_CODES = {
     "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
     "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 }
-REMOTE_US_ALIASES = ("us remote", "remote us", "remote usa", "united states", "anywhere in us", "usa")
-NON_US_REGIONS = ("latam", "emea", "apac")
+REMOTE_US_ALIASES = ("us remote", "remote us", "remote usa", "remote united states", "united states", "anywhere in us", "usa")
+NON_US_REGIONS = ("latam", "emea", "apac", "europe", "western europe", "japan", "mexico", "argentina", "peru")
+REVIEW_REGIONS = ("north america",)
 
 
 def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]:
@@ -151,6 +152,8 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
             geographic_eligibility = "ineligible"
     if any(region in combined for region in NON_US_REGIONS):
         geographic_eligibility = "ineligible"
+    if any(region in combined for region in REVIEW_REGIONS):
+        geographic_eligibility = "review"
     if normalized_location_type == "remote" and normalized_country == "US" and not has_multi_country:
         geographic_eligibility = "eligible"
     elif normalized_location_type == "remote" and not location:
@@ -191,11 +194,19 @@ def evaluate_location_viability(location: str, workplace_type: str) -> tuple[str
             return "apply_now", ["Remote US role matches target geography"]
         return "apply_now", ["Location aligns with target geography"]
     if eligibility == "ineligible":
+        if "europe" in location_text or "western europe" in location_text:
+            return "skip", ["Remote role restricted to Europe"]
+        if "latam" in location_text:
+            return "skip", ["Remote role restricted to LATAM"]
+        if "apac" in location_text:
+            return "skip", ["Remote role restricted to APAC"]
         if any(term in location_text for term in REMOTE_NON_US_TERMS):
             return "skip", ["Remote role restricted to LATAM", "Remote role limited to non-US geography"]
         if location_type == "hybrid" and state and state != "NV":
             return "stretch", ["Hybrid role outside Nevada", "Hybrid role outside target geography"]
         return "skip", ["Location is outside target geography"]
+    if eligibility == "review" and "north america" in location_text:
+        return "review", ["Remote North America requires manual review"]
     return "review", ["Location requires manual review"]
 
 

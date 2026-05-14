@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 import sys
 from dataclasses import dataclass
 from typing import Protocol
@@ -33,6 +34,7 @@ from job_fit_agent.config import (
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.notifications.telegram import send_message
 from job_fit_agent.repository import (
+    DB_PATH,
     VALID_STATUSES,
     get_job_by_id,
     get_jobs_by_status,
@@ -436,6 +438,89 @@ def promote_discovery(source: str, company: str) -> None:
     print(f"Promoted {source}/{company} to company watchlist")
 
 
+REGION_ONLY_TERMS = (
+    "europe", "emea", "apac", "latam", "north america", "western europe",
+    "japan", "canada", "mexico", "argentina", "peru",
+)
+
+
+def location_audit() -> None:
+    initialize()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT source, company, url, location_raw, normalized_location_type, geographic_eligibility, workplace_type
+               FROM jobs"""
+        ).fetchall()
+
+    blank_by_company: dict[tuple[str, str], list[str]] = {}
+    region_by_company: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    conflicts: list[sqlite3.Row] = []
+
+    for row in rows:
+        source = row["source"] or ""
+        company = row["company"] or ""
+        url = row["url"] or ""
+        raw = (row["location_raw"] or "").strip()
+        lower_raw = raw.lower()
+        normalized_location_type = (row["normalized_location_type"] or "").lower()
+        geographic_eligibility = (row["geographic_eligibility"] or "review").lower()
+        workplace_type = (row["workplace_type"] or "").lower()
+        combined = f"{lower_raw} {workplace_type}"
+
+        if not raw:
+            blank_by_company.setdefault((source, company), []).append(url)
+        if any(term in lower_raw for term in REGION_ONLY_TERMS):
+            region_by_company.setdefault((source, company), []).append((raw, url))
+        if ("remote" in combined and "hybrid" in combined) or ("remote" in combined and "non-us" in combined):
+            conflicts.append(row)
+        if "remote" in combined and "north america" in combined and geographic_eligibility != "review":
+            conflicts.append(row)
+        if "remote" in combined and geographic_eligibility == "ineligible" and any(
+            term in lower_raw for term in ("us", "usa", "united states")
+        ):
+            conflicts.append(row)
+
+    print("A. Blank location_raw by company")
+    if not blank_by_company:
+        print("none")
+    for (source, company), urls in sorted(blank_by_company.items(), key=lambda item: len(item[1]), reverse=True):
+        print(f"{source}/{company}: {len(urls)}")
+        for sample in urls[:5]:
+            print(f"  - {sample}")
+
+    print("\nB. Region-only locations by company")
+    if not region_by_company:
+        print("none")
+    for (source, company), samples in sorted(region_by_company.items(), key=lambda item: len(item[1]), reverse=True):
+        print(f"{source}/{company}: {len(samples)}")
+        for raw, sample_url in samples[:5]:
+            print(f"  - {raw} :: {sample_url}")
+
+    print("\nC. Conflicting metadata")
+    if not conflicts:
+        print("none")
+    for row in conflicts[:20]:
+        print(
+            f"{row['source']}/{row['company']} | {row['location_raw']} | {row['normalized_location_type']} | "
+            f"{row['geographic_eligibility']} | {row['url']}"
+        )
+
+    print("\nD. Top sample URLs to debug")
+    debug_urls = []
+    for urls in blank_by_company.values():
+        debug_urls.extend(urls[:2])
+    for samples in region_by_company.values():
+        debug_urls.extend([u for _, u in samples[:2]])
+    for row in conflicts[:10]:
+        debug_urls.append(row["url"])
+    seen = set()
+    for url in debug_urls:
+        if url and url not in seen:
+            seen.add(url)
+            print(f"- {url}")
+
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "run"
@@ -519,6 +604,10 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "location-audit":
+        location_audit()
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
@@ -528,6 +617,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main learn-url <job_url>")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
+    print("python -m job_fit_agent.main location-audit")
 
 
 if __name__ == "__main__":

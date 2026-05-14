@@ -142,3 +142,23 @@ Digest output includes status on each job. You can optionally group digest outpu
 ```bash
 python -m job_fit_agent.main digest --group-by-status
 ```
+
+## Location extraction debugging and audit
+
+Use `debug-ashby-url` when you are investigating a single Ashby job page extraction issue in detail:
+
+```bash
+python -m job_fit_agent.main debug-ashby-url "https://jobs.ashbyhq.com/<company>/<job-id>"
+```
+
+Use `location-audit` when you want a scalable cross-company audit of stored jobs to find location extraction/normalization gaps:
+
+```bash
+python -m job_fit_agent.main location-audit
+```
+
+`location-audit` prints:
+- Blank `location_raw` by source/company with sample URLs.
+- Region-only `location_raw` values by source/company (e.g. Europe, EMEA, APAC, LATAM, North America).
+- Conflicting metadata (e.g. remote+hybrid signal conflicts, remote geography mismatches).
+- Top sample URLs to debug next.
