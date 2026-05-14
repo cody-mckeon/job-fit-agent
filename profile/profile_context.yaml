@@ -1,19 +1,95 @@
 target_positioning: AI-native product builder/operator
-strengths:
-  - workflow automation
-  - product analytics
-  - product systems
-  - digital experience
+
+positioning_variants:
+  ai_product_builder:
+    headline: "AI-Native Product Builder | Workflow Automation, Product Systems & Agentic Operations"
+  technical_product_manager:
+    headline: "Technical Product Manager | AI Workflows, Product Analytics & Digital Experience"
+  product_systems_operator:
+    headline: "Product Systems Operator | Workflow Automation, Analytics Instrumentation & AI Enablement"
+
+preferred_themes:
   - AI agents
-  - agentic operations
+  - agentic workflows
+  - workflow automation
+  - product systems
+  - product analytics
+  - digital experience
+  - analytics instrumentation
+  - API-connected workflows
+  - internal tools
+  - operational AI
+  - developer tools
   - cross-functional execution
+  - privacy and consent governance
+  - experimentation and measurement
+
 current_projects:
-  - job-fit-agent
-  - OpenClaw workflow automation
-  - Resorts World web analytics/product systems
-  - Pendo/GTM/OneTrust instrumentation
-constraints:
-  - Remote US preferred
-  - Hybrid only in Las Vegas/Henderson/Nevada
-  - Avoid fabricating metrics
-  - Avoid overclaiming software engineering depth
+  job_fit_agent:
+    name: "Job Fit Agent"
+    description: "Python-based job discovery and career intelligence agent that collects roles from Ashby and Greenhouse, scores role fit, evaluates geographic/seniority viability, stores results in SQLite, and sends Telegram notifications through GitHub Actions."
+    technologies:
+      - Python
+      - SQLite
+      - GitHub Actions
+      - Telegram Bot API
+      - Ashby
+      - Greenhouse
+      - pytest
+    themes:
+      - job intelligence
+      - automation
+      - scoring
+      - persistence
+      - notifications
+      - agentic workflow foundation
+
+  rwlv_priority_governor:
+    name: "RWLV Priority Governor Agent"
+    description: "OpenClaw-based workflow agent that helps triage active web/product work, prioritize Asana tasks, and send Telegram briefings using GPT-5.5. Built to reduce operational friction across shifting priorities and limited engineering/vendor capacity."
+    technologies:
+      - OpenClaw
+      - GPT-5.5
+      - Telegram
+      - Asana
+      - Python
+      - Markdown configuration
+      - Cron / scheduled automation
+    themes:
+      - agentic operations
+      - prioritization
+      - workflow routing
+      - operational AI
+      - product operations
+      - internal automation
+
+resume_tailoring_permissions:
+  may_change:
+    - resume headline
+    - professional summary
+    - core skills
+    - tools and platforms
+    - job description bullets
+    - project descriptions
+    - project ordering
+    - keyword emphasis
+    - selected accomplishments
+  must_preserve:
+    - company names
+    - employment dates
+    - education
+    - factual project ownership
+    - factual tool usage
+  must_not_do:
+    - fabricate metrics
+    - fabricate employers
+    - fabricate certifications
+    - claim expert-level software engineering depth without support
+    - imply production adoption if project is still in MVP/prototype stage
+    - auto-submit applications
+  preferred_style:
+    - direct
+    - credible
+    - specific
+    - product-oriented
+    - AI-forward but not hype-driven
