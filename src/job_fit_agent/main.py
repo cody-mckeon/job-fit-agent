@@ -11,6 +11,7 @@ from typing import Protocol
 from pathlib import Path
 
 import requests
+import yaml
 from bs4 import BeautifulSoup
 
 from job_fit_agent.collectors.ashby import (
@@ -535,6 +536,193 @@ def location_audit() -> None:
             print(f"  - {sample}")
 
 
+PROFILE_CONTEXT_PATH = Path("config/profile_context.yaml")
+PROFILE_DEFAULT_CONTEXT = {
+    "target_positioning": "AI-native product builder/operator",
+    "strengths": [
+        "workflow automation",
+        "product analytics",
+        "product systems",
+        "digital experience",
+        "AI agents",
+        "agentic operations",
+        "cross-functional execution",
+    ],
+    "current_projects": [
+        "job-fit-agent",
+        "OpenClaw workflow automation",
+        "Resorts World web analytics/product systems",
+        "Pendo/GTM/OneTrust instrumentation",
+    ],
+    "constraints": [
+        "Remote US preferred",
+        "Hybrid only in Las Vegas/Henderson/Nevada",
+        "Avoid fabricating metrics",
+        "Avoid overclaiming software engineering depth",
+    ],
+}
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "role"
+
+
+def _load_profile_context() -> dict:
+    if not PROFILE_CONTEXT_PATH.exists():
+        PROFILE_CONTEXT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PROFILE_CONTEXT_PATH.write_text(yaml.safe_dump(PROFILE_DEFAULT_CONTEXT, sort_keys=False), encoding="utf-8")
+        return PROFILE_DEFAULT_CONTEXT
+    with PROFILE_CONTEXT_PATH.open("r", encoding="utf-8") as handle:
+        loaded = yaml.safe_load(handle) or {}
+    return {**PROFILE_DEFAULT_CONTEXT, **loaded}
+
+
+def prep_application(job_id: int) -> None:
+    initialize()
+    job = get_job_by_id(job_id)
+    if job is None:
+        print(f"Job not found: {job_id}")
+        return
+
+    profile_context = _load_profile_context()
+    role_slug = _slugify(job["title"] or "role")
+    company_slug = _slugify(job["company"] or "company")
+    app_dir = Path("applications") / f"{company_slug}_{role_slug}_{job_id}"
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    reasons = json.loads(job["reasons"] or "[]")
+    red_flags = json.loads(job["red_flags"] or "[]")
+    viability_reasons = json.loads(job["viability_reasons"] or "[]")
+    description = (job["notes"] or "").strip()
+
+    decision = "review first"
+    if job["classification"] == "high_fit" and job["viability_level"] == "apply_now":
+        decision = "apply"
+    elif job["classification"] == "near_fit":
+        decision = "stretch"
+    elif job["classification"] == "low_fit":
+        decision = "skip"
+
+    fit_summary = f"""# Fit Summary
+
+- job title: {job['title']}
+- company: {job['company']}
+- source: {job['source']}
+- URL: {job['url']}
+- score: {job['score']}
+- classification: {job['classification']}
+- viability_level: {job['viability_level']}
+- location_raw: {job['location_raw'] or job['location']}
+- geographic_eligibility: {job['geographic_eligibility']}
+
+## Why this role is interesting
+{chr(10).join(f'- {r}' for r in reasons[:5]) or '- Opportunity appears aligned to target role scope.'}
+
+## Why Cody may fit
+{chr(10).join(f'- {r}' for r in reasons[:5]) or '- Background in product systems and workflow automation appears relevant.'}
+
+## Why Cody may not fit
+{chr(10).join(f'- {f}' for f in (red_flags or ['Potential scope/seniority mismatch requires review.']))}
+
+## Recommended application decision
+- {decision}
+"""
+
+    resume_strategy = f"""# Resume Strategy
+
+## Top 5 resume themes to emphasize
+- AI-native product builder/operator execution
+- Workflow automation and agentic operations
+- Product systems design and instrumentation
+- Product analytics and experimentation
+- Cross-functional delivery across product, engineering, and operations
+
+## Bullets from Cody's experience to emphasize
+- Resorts World web/product analytics and product systems ownership
+- OpenClaw and job-fit-agent workflow automation projects
+- Instrumentation work with Pendo, GTM, and OneTrust
+- Prior Walmart ecommerce/product marketing/project operations collaboration
+
+## Keywords to include naturally
+- product systems
+- workflow automation
+- product analytics
+- AI agents
+- agentic operations
+
+## Keywords to avoid overclaiming
+- principal software engineer
+- deep backend architecture ownership
+- production ML research leadership
+
+## Likely recruiter concerns
+- Direct domain depth for this specific role and industry
+- Seniority scope versus years in closely matched titles
+- Location and work authorization alignment
+"""
+
+    tailored_resume = f"""# Tailored Resume Draft
+
+## Positioning
+AI-native product builder/operator focused on workflow automation, product systems, and product analytics.
+
+## Experience Highlights
+- Resorts World: web analytics and product systems work, including instrumentation and insight workflows. [insert metric if available]
+- OpenClaw + job-fit-agent: built agent-driven workflow automation for discovery, scoring, and application prep. [insert metric if available]
+- Walmart (prior): ecommerce/product marketing/project operations support across cross-functional teams. [insert metric if available]
+
+## Targeted Value for {job['company']} - {job['title']}
+- Build repeatable AI-assisted operating workflows for product and operations teams.
+- Improve product instrumentation and analytics quality to support roadmap decisions.
+- Create practical agentic workflows that reduce manual process overhead.
+
+## Notes
+- Do not add metrics unless validated from source records.
+- Keep claims scoped to verified ownership and contribution.
+"""
+
+    recruiter_note = f"""Hi, I am interested in the {job['title']} role at {job['company']}.
+I focus on AI-native product building with workflow automation, product systems, and product analytics.
+In my current work, I lead web analytics and product systems initiatives and build agentic workflows for operational execution.
+I also developed projects like job-fit-agent and OpenClaw automation that align with practical product operations outcomes.
+If helpful, I can share a concise summary of relevant work and why it maps to this role.
+"""
+
+    questions = f"""# Application Questions
+
+No structured application questions were stored for this job posting.
+
+- Suggested answer draft: Prepare concise responses tailored to {job['company']} and {job['title']} using verified examples.
+- Verify before submitting: years of relevant experience, location preferences, compensation expectations, and work authorization details.
+"""
+
+    risk_flags = f"""# Risk Flags
+
+- location risk: {job['location_raw'] or job['location']} (eligibility: {job['geographic_eligibility']})
+- seniority risk: {job['title']} may imply scope beyond verified experience level; review required
+- experience requirement risk: {', '.join(red_flags) if red_flags else 'No explicit stored requirement risks; validate against JD details'}
+- role mismatch risk: classification={job['classification']}, viability={job['viability_level']}
+- compensation/location ambiguity: compensation not stored in current record; confirm during application
+
+## Recommendation
+Apply now only if key requirements and location constraints are confirmed; otherwise review first and refine positioning before submitting.
+"""
+
+    (app_dir / "fit_summary.md").write_text(fit_summary, encoding="utf-8")
+    (app_dir / "resume_strategy.md").write_text(resume_strategy, encoding="utf-8")
+    (app_dir / "tailored_resume_draft.md").write_text(tailored_resume, encoding="utf-8")
+    (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
+    (app_dir / "application_questions.md").write_text(questions, encoding="utf-8")
+    (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
+
+    if job["status"] == "new":
+        update_status(job_id, "interested")
+
+    print("Application package created:")
+    print(f"{app_dir}/")
+
+
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "run"
@@ -622,6 +810,16 @@ def main(argv: list[str] | None = None) -> None:
         location_audit()
         return
 
+    if command == "prep-application":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main prep-application <job_id>")
+            return
+        try:
+            prep_application(int(args[1]))
+        except ValueError:
+            print(f"Job not found: {args[1]}")
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
@@ -632,6 +830,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
     print("python -m job_fit_agent.main location-audit")
+    print("python -m job_fit_agent.main prep-application <job_id>")
 
 
 if __name__ == "__main__":

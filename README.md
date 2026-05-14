@@ -143,6 +143,29 @@ Digest output includes status on each job. You can optionally group digest outpu
 python -m job_fit_agent.main digest --group-by-status
 ```
 
+Prepare an application package for a specific saved job:
+
+```bash
+python -m job_fit_agent.main prep-application <job_id>
+# example
+python -m job_fit_agent.main prep-application 8
+```
+
+This creates `applications/<company>_<role_slug>_<job_id>/` with:
+- `fit_summary.md`
+- `resume_strategy.md`
+- `tailored_resume_draft.md`
+- `recruiter_note.md`
+- `application_questions.md`
+- `risk_flags.md`
+
+Recommended application prep workflow:
+1. `digest`
+2. `set-status <job_id> interested`
+3. `prep-application <job_id>`
+4. Review/edit package artifacts
+5. Apply manually
+
 ## Location extraction debugging and audit
 
 Use `debug-ashby-url` when you are investigating a single Ashby job page extraction issue in detail:

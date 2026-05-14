@@ -592,3 +592,89 @@ def test_location_audit_command_runs(monkeypatch) -> None:
     monkeypatch.setattr("job_fit_agent.main.location_audit", lambda: called.__setitem__("ok", True))
     main(["location-audit"])
     assert called["ok"] is True
+
+def test_prep_application_creates_package_and_files(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    job = {
+        "id": 8,
+        "title": "Product Manager Builder",
+        "company": "Perplexity",
+        "source": "ashby",
+        "url": "https://example.com/job/8",
+        "score": 88,
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": '["Strong alignment"]',
+        "red_flags": '["seniority stretch"]',
+        "viability_reasons": '["remote_eligible"]',
+        "status": "new",
+        "notes": "",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 8 else None)
+    updated = []
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: updated.append((job_id, status)))
+
+    main(["prep-application", "8"])
+
+    app_dir = tmp_path / "applications" / "perplexity_product_manager_builder_8"
+    assert app_dir.exists()
+    expected_files = {
+        "fit_summary.md",
+        "resume_strategy.md",
+        "tailored_resume_draft.md",
+        "recruiter_note.md",
+        "application_questions.md",
+        "risk_flags.md",
+    }
+    assert expected_files.issubset({p.name for p in app_dir.iterdir()})
+    fit_text = (app_dir / "fit_summary.md").read_text(encoding="utf-8")
+    assert "Product Manager Builder" in fit_text
+    assert "Perplexity" in fit_text
+    assert "https://example.com/job/8" in fit_text
+    risk_text = (app_dir / "risk_flags.md").read_text(encoding="utf-8").lower()
+    assert "location risk" in risk_text
+    assert "seniority risk" in risk_text
+    assert updated == [(8, "interested")]
+
+
+def test_prep_application_missing_job_prints_clear_error(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: None)
+
+    main(["prep-application", "999"])
+    output = capsys.readouterr().out
+    assert "Job not found: 999" in output
+
+
+def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    job = {
+        "id": 12,
+        "title": "Senior Product Manager",
+        "company": "Acme",
+        "source": "greenhouse",
+        "url": "https://example.com/job/12",
+        "score": 70,
+        "classification": "near_fit",
+        "viability_level": "review",
+        "location_raw": "Las Vegas, NV",
+        "location": "Las Vegas, NV",
+        "geographic_eligibility": "review",
+        "reasons": "[]",
+        "red_flags": "[]",
+        "viability_reasons": "[]",
+        "status": "applied",
+        "notes": "",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    called = []
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: called.append((job_id, status)))
+
+    main(["prep-application", "12"])
+
+    assert called == []
