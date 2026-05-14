@@ -679,7 +679,7 @@ def prep_application(job_id: int) -> None:
     red_flags = json.loads(job["red_flags"] or "[]")
     viability_reasons = json.loads(job["viability_reasons"] or "[]")
     description = (job["notes"] or "").strip()
-    role_family = (job.get("role_family") or "").strip()
+    role_family = (safe_row_value(job, "role_family", "") or "").strip()
 
     decision = "review first"
     if job["classification"] == "high_fit" and job["viability_level"] == "apply_now":
