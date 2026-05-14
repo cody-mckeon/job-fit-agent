@@ -720,6 +720,85 @@ def test_prep_application_tailored_resume_uses_base_resume_and_preserves_entitie
     assert "Perplexity — Product Manager — 2024-Present" in resume_text
     assert "Walmart — Product Ops — 2021-2023" in resume_text
     assert "Placeholder Company" not in resume_text
+    assert "## Positioning" in resume_text
+    assert "AI-native product builder/operator" in resume_text
+    assert "[insert metric if available]" in resume_text
+
+
+
+def test_prep_application_changes_headline_and_prioritizes_ai_projects(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "profile_context.yaml").write_text("strengths:\n  - AI agents\n", encoding="utf-8")
+    (profile_dir / "resume_rules.yaml").write_text("rules:\n  - Preserve company names\n", encoding="utf-8")
+    (profile_dir / "base_resume.md").write_text("- Resorts World — Product Systems — 2022-Present\n", encoding="utf-8")
+    job = {
+        "id": 20,
+        "title": "AI Product Manager",
+        "company": "Acme AI",
+        "source": "ashby",
+        "url": "https://example.com/job/20",
+        "score": 92,
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": '["Strong alignment"]',
+        "red_flags": "[]",
+        "viability_reasons": '["ai_role"]',
+        "role_family": "ai_product",
+        "status": "new",
+        "notes": "Agentic workflow automation role.",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "20"])
+
+    app_dir = tmp_path / "applications" / "acme_ai_ai_product_manager_20"
+    strategy_text = (app_dir / "resume_strategy.md").read_text(encoding="utf-8")
+    resume_text = (app_dir / "tailored_resume_draft.md").read_text(encoding="utf-8")
+    assert "## Recommended headline" in strategy_text
+    assert "Job Fit Agent" in strategy_text
+    assert "RWLV Priority Governor Agent" in strategy_text
+    assert "Job Fit Agent" in resume_text
+    assert "RWLV Priority Governor Agent" in resume_text
+
+
+def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "base_resume.md").write_text("- Acme — PM — 2020-2024\n", encoding="utf-8")
+    job = {
+        "id": 30,
+        "title": "Product Manager",
+        "company": "Beta",
+        "source": "lever",
+        "url": "https://example.com/job/30",
+        "score": 80,
+        "classification": "near_fit",
+        "viability_level": "review",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": "[]",
+        "red_flags": "[]",
+        "viability_reasons": "[]",
+        "status": "new",
+        "notes": "",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "30"])
+    app_dir = tmp_path / "applications" / "beta_product_manager_30"
+    for name in ["fit_summary.md", "resume_strategy.md", "tailored_resume_draft.md", "recruiter_note.md", "application_questions.md", "risk_flags.md"]:
+        assert (app_dir / name).exists()
 
 
 def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_path):

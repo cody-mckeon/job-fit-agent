@@ -612,6 +612,50 @@ def _load_resume_rules() -> list[str]:
     return [str(rule) for rule in rules]
 
 
+
+
+def _select_projects_for_role(job_title: str, role_family: str, description: str) -> list[str]:
+    text = f"{job_title} {role_family} {description}".lower()
+    ai_terms = ("ai", "agent", "llm", "workflow", "automation", "builder")
+    analytics_terms = ("analytics", "measurement", "instrumentation", "experimentation", "insights")
+    hospitality_terms = ("hospitality", "resort", "digital experience", "guest", "api", "integration")
+
+    if any(term in text for term in ai_terms):
+        return [
+            "Job Fit Agent",
+            "RWLV Priority Governor Agent",
+            "Web Product Measurement Framework",
+        ]
+    if any(term in text for term in analytics_terms):
+        return [
+            "Web Product Measurement Framework",
+            "Resorts World analytics/instrumentation work",
+            "Job Fit Agent",
+        ]
+    if any(term in text for term in hospitality_terms):
+        return [
+            "Resorts World digital experience work",
+            "Hospitality API Integration Exploration",
+            "Web Product Measurement Framework",
+        ]
+    return [
+        "Job Fit Agent",
+        "RWLV Priority Governor Agent",
+        "Web Product Measurement Framework",
+    ]
+
+
+def _project_bullet(project_name: str) -> str:
+    bullets = {
+        "Job Fit Agent": "Job Fit Agent: role discovery, scoring, and prep workflows that support repeatable application operations.",
+        "RWLV Priority Governor Agent": "RWLV Priority Governor Agent: workflow automation for intake prioritization and execution rhythm management.",
+        "Web Product Measurement Framework": "Web Product Measurement Framework: event taxonomy, instrumentation standards, and analytics QA for decision-ready reporting.",
+        "Hospitality API Integration Exploration": "Hospitality API Integration Exploration: scoped integration discovery for digital experience improvements across hospitality touchpoints.",
+        "Resorts World analytics/instrumentation work": "Resorts World analytics/instrumentation work: analytics implementation and instrumentation quality improvements for product measurement.",
+        "Resorts World digital experience work": "Resorts World digital experience work: digital journey optimization and product systems support for guest-facing experiences.",
+    }
+    return bullets.get(project_name, f"{project_name}: relevant project experience.")
+
 def prep_application(job_id: int) -> None:
     initialize()
     job = get_job_by_id(job_id)
@@ -635,6 +679,7 @@ def prep_application(job_id: int) -> None:
     red_flags = json.loads(job["red_flags"] or "[]")
     viability_reasons = json.loads(job["viability_reasons"] or "[]")
     description = (job["notes"] or "").strip()
+    role_family = (job.get("role_family") or "").strip()
 
     decision = "review first"
     if job["classification"] == "high_fit" and job["viability_level"] == "apply_now":
@@ -660,51 +705,55 @@ def prep_application(job_id: int) -> None:
 {chr(10).join(f'- {r}' for r in reasons[:5]) or '- Opportunity appears aligned to target role scope.'}
 
 ## Why Cody may fit
-{chr(10).join(f'- {r}' for r in reasons[:5]) or '- Background in product systems and workflow automation appears relevant.'}
+{chr(10).join(f'- {r}' for r in (reasons[:3] + viability_reasons[:2])) or '- Background in product systems and workflow automation appears relevant.'}
 
 ## Why Cody may not fit
 {chr(10).join(f'- {f}' for f in (red_flags or ['Potential scope/seniority mismatch requires review.']))}
+
+## Recommended resume angle
+- Lead with direct overlap in role family, strongest matching projects, and verified ownership from base_resume.md.
 
 ## Recommended application decision
 - {decision}
 """
 
+    prioritized_projects = _select_projects_for_role(job["title"], role_family, description)
+    top_projects = prioritized_projects[:2]
+
     resume_strategy = f"""# Resume Strategy
 
-## Top 5 resume themes to emphasize
-- AI-native product builder/operator execution
-- Workflow automation and agentic operations
-- Product systems design and instrumentation
-- Product analytics and experimentation
-- Cross-functional delivery across product, engineering, and operations
+## Recommended headline
+- {job['title']} | AI-native Product Builder and Workflow Automation Operator
 
-## Bullets from Cody's experience to emphasize
-- Resorts World web/product analytics and product systems ownership
-- OpenClaw and job-fit-agent workflow automation projects
-- Instrumentation work with Pendo, GTM, and OneTrust
-- Prior Walmart ecommerce/product marketing/project operations collaboration
+## Recommended summary angle
+- Position Cody as a product-focused builder/operator who uses AI-assisted workflows, product systems, and analytics discipline to execute.
 
-## Keywords to include naturally
-- product systems
+## Top skills to emphasize
 - workflow automation
 - product analytics
+- product systems
 - AI agents
-- agentic operations
+- cross-functional execution
 
-## Keywords to avoid overclaiming
-- principal software engineer
-- deep backend architecture ownership
-- production ML research leadership
+## Top projects to include
+{chr(10).join(f'- {p}' for p in prioritized_projects)}
 
-## Likely recruiter concerns
-- Direct domain depth for this specific role and industry
-- Seniority scope versus years in closely matched titles
-- Location and work authorization alignment
+## Bullets to strengthen
+- Outcomes framed with verified scope and ownership from base_resume.md.
+- Cross-functional execution details relevant to {job['company']} and {job['title']}.
+- Project detail that maps to {role_family or 'the role family implied by the JD'} without inventing metrics.
+
+## Risks to avoid overclaiming
+- Do not claim unverified production adoption.
+- Do not add unverified metrics, dates, employers, or certifications.
+- Do not imply expert-level software engineering depth beyond documented ownership.
 """
 
     strengths = profile_context.get("strengths", [])[:3]
     top_strengths = ", ".join(strengths) if strengths else "product systems, workflow automation, and analytics"
     resume_rule_text = "\n".join(f"- {rule}" for rule in resume_rules)
+
+    project_lines = "\n".join(f"- {_project_bullet(name)} [insert metric if available]" for name in top_projects)
 
     tailored_resume = f"""# Tailored Resume Draft
 
@@ -718,8 +767,7 @@ Aligned to {job['company']}'s {job['title']} role by emphasizing directly releva
 {base_resume}
 
 ## Selected Projects
-- job-fit-agent: role discovery, scoring, and prep workflows that support repeatable application operations. [insert metric if available]
-- OpenClaw workflow automation for product/operations processes. [insert metric if available]
+{project_lines}
 
 ## Targeted Value for {job['company']} - {job['title']}
 - Build repeatable AI-assisted operating workflows for product and operations teams.
@@ -756,6 +804,8 @@ No structured application questions were stored for this job posting.
 - experience requirement risk: {', '.join(red_flags) if red_flags else 'No explicit stored requirement risks; validate against JD details'}
 - role mismatch risk: classification={job['classification']}, viability={job['viability_level']}
 - compensation/location ambiguity: compensation not stored in current record; confirm during application
+
+- overclaiming risk: avoid adding unverified metrics, employers, dates, certifications, production adoption, or expert engineering claims
 
 ## Recommendation
 Apply now only if key requirements and location constraints are confirmed; otherwise review first and refine positioning before submitting.
