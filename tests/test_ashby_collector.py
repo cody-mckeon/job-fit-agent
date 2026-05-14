@@ -2,9 +2,14 @@ from unittest.mock import Mock
 
 import requests
 
-from job_fit_agent.collectors.ashby import AshbyCollector, extract_ashby_hydration_data
+from job_fit_agent.collectors.ashby import (
+    AshbyCollector,
+    extract_ashby_app_data_metadata,
+    extract_ashby_hydration_data,
+    extract_ashby_json_ld_metadata,
+)
 from job_fit_agent.config import load_target_profile
-from job_fit_agent.scoring import score_job
+from job_fit_agent.scoring import normalize_location, score_job
 
 
 def _mock_response(payload: dict, text: str = "") -> Mock:
@@ -362,3 +367,66 @@ def test_fetch_jobs_prefers_hydration_metadata_over_sidebar(monkeypatch):
     assert jobs[0].workplace_type == "Remote"
     assert jobs[0].department == "Growth"
     assert jobs[0].team == "Platform"
+
+
+ASHBY_REPLIT_HTML = """
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting","jobLocation":{"address":{"addressLocality":"Foster City","addressRegion":"California","addressCountry":"USA"}},"jobLocationType":"TELECOMMUTE","applicantLocationRequirements":{"name":"USA"}}
+</script>
+<script>
+window.__appData = {"posting":{"locationName":"Foster City, CA","locationExternalName":"Foster City, CA","address":{"postalAddress":{"addressLocality":"Foster City","addressRegion":"California","addressCountry":"USA"}},"isRemote":true,"workplaceType":"Hybrid","departmentName":"Product Management","teamName":"Product Management"}};
+</script>
+<p>Are you able to work from our Foster City, CA HQ 3 days per week?</p>
+"""
+
+
+def test_extract_ashby_app_data_and_json_ld_metadata() -> None:
+    app = extract_ashby_app_data_metadata(ASHBY_REPLIT_HTML)
+    json_ld = extract_ashby_json_ld_metadata(ASHBY_REPLIT_HTML)
+    assert app["Location"] == "Foster City, CA"
+    assert app["Location Type"] == "Hybrid"
+    assert app["city"] == "Foster City"
+    assert json_ld["Location Type"] == "TELECOMMUTE"
+
+
+def test_app_data_overrides_json_ld_workplace_type(monkeypatch):
+    api_response = _mock_response({"jobs": [{"title": "PM", "jobUrl": "https://jobs.example/replit", "descriptionPlain": "desc"}]})
+    html_response = _mock_response({}, text=ASHBY_REPLIT_HTML)
+
+    def _mock_get(url, timeout):
+        return api_response if "posting-api/job-board" in url else html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+    job = AshbyCollector().fetch_jobs("replit")[0]
+    assert job.location == "Foster City, CA"
+    assert job.workplace_type == "Hybrid"
+    fit = score_job(job, load_target_profile())
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level in {"skip", "stretch"}
+
+
+def test_json_ld_fallback_when_app_data_missing(monkeypatch):
+    api_response = _mock_response({"jobs": [{"title": "PM", "jobUrl": "https://jobs.example/jld", "descriptionPlain": "desc"}]})
+    html_response = _mock_response({}, text="""
+    <script type="application/ld+json">
+    {"@type":"JobPosting","jobLocation":{"address":{"addressLocality":"Foster City","addressRegion":"CA","addressCountry":"USA"}},"jobLocationType":"TELECOMMUTE","applicantLocationRequirements":{"name":"USA"}}
+    </script>
+    """)
+    monkeypatch.setattr(requests, "get", lambda url, timeout: api_response if "posting-api/job-board" in url else html_response)
+    job = AshbyCollector().fetch_jobs("replit")[0]
+    assert job.location == "Foster City, CA"
+
+
+def test_location_viability_cases() -> None:
+    remote = normalize_location("Remote USA", "Remote")
+    assert remote["geographic_eligibility"] == "eligible"
+
+    multi_country = normalize_location("Mexico; Argentina; Peru", "Remote")
+    assert multi_country["geographic_eligibility"] == "ineligible"
+
+    hybrid_fc = normalize_location("Foster City, CA", "Hybrid")
+    assert hybrid_fc["normalized_city"] == "Foster City"
+    assert hybrid_fc["normalized_state"] in {"CA", "California"}
+    assert hybrid_fc["normalized_country"] in {"US", "USA"}
+    assert hybrid_fc["normalized_location_type"] == "hybrid"
+    assert hybrid_fc["geographic_eligibility"] == "ineligible"

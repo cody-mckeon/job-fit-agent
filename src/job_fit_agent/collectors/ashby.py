@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -76,6 +77,103 @@ def dump_sidebar_metadata(html: str) -> dict[str, str]:
     metadata = parse_ashby_sidebar_metadata(html)
     LOGGER.debug("Ashby sidebar metadata dump: %s", metadata)
     return metadata
+
+
+def extract_ashby_app_data_metadata(html: str) -> dict[str, str]:
+    """Extract metadata from window.__appData assignment."""
+    match = re.search(r"window\.__appData\s*=\s*(\{.*?\})\s*;", html, flags=re.DOTALL)
+    if not match:
+        return {}
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        LOGGER.debug("Ashby appData payload present but invalid JSON")
+        return {}
+
+    posting = payload.get("posting") if isinstance(payload, dict) else None
+    if not isinstance(posting, dict):
+        return {}
+
+    metadata: dict[str, str] = {}
+    location = str(posting.get("locationExternalName") or posting.get("locationName") or "").strip()
+    if location:
+        metadata["Location"] = location
+
+    workplace = str(posting.get("workplaceType") or "").strip()
+    if workplace:
+        metadata["Location Type"] = workplace
+
+    department = str(posting.get("departmentExternalName") or posting.get("departmentName") or "").strip()
+    if department:
+        metadata["Department"] = department
+
+    team = str(posting.get("teamExternalName") or posting.get("teamName") or "").strip()
+    if team:
+        metadata["Team"] = team
+
+    is_remote = posting.get("isRemote")
+    if isinstance(is_remote, bool):
+        metadata["is_remote"] = str(is_remote)
+
+    postal = posting.get("address", {}).get("postalAddress", {}) if isinstance(posting.get("address"), dict) else {}
+    if isinstance(postal, dict):
+        for source_key, target_key in (
+            ("addressLocality", "city"),
+            ("addressRegion", "state"),
+            ("addressCountry", "country"),
+        ):
+            value = str(postal.get(source_key) or "").strip()
+            if value:
+                metadata[target_key] = value
+
+    applicant_country = ""
+    app_req = posting.get("applicantLocationRequirements")
+    if isinstance(app_req, dict):
+        applicant_country = str(app_req.get("name") or "").strip()
+    if applicant_country:
+        metadata["applicant_country"] = applicant_country
+    return metadata
+
+
+def extract_ashby_json_ld_metadata(html: str) -> dict[str, str]:
+    """Extract metadata from JobPosting JSON-LD."""
+    soup = BeautifulSoup(html, "html.parser")
+    scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
+    for script in scripts:
+        raw = script.string or script.get_text(strip=True)
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        nodes = payload if isinstance(payload, list) else [payload]
+        for node in nodes:
+            if not isinstance(node, dict) or str(node.get("@type", "")).lower() != "jobposting":
+                continue
+            metadata: dict[str, str] = {}
+            job_location = node.get("jobLocation")
+            if isinstance(job_location, dict):
+                address = job_location.get("address", {})
+                if isinstance(address, dict):
+                    for source_key, target_key in (
+                        ("addressLocality", "city"),
+                        ("addressRegion", "state"),
+                        ("addressCountry", "country"),
+                    ):
+                        value = str(address.get(source_key) or "").strip()
+                        if value:
+                            metadata[target_key] = value
+            location_type = str(node.get("jobLocationType") or "").strip()
+            if location_type:
+                metadata["Location Type"] = location_type
+            app_req = node.get("applicantLocationRequirements")
+            if isinstance(app_req, dict):
+                app_name = str(app_req.get("name") or "").strip()
+                if app_name:
+                    metadata["applicant_country"] = app_name
+            return metadata
+    return {}
 
 
 def parse_ashby_sidebar_metadata(html: str) -> dict[str, str]:
@@ -175,17 +273,22 @@ class AshbyCollector:
         location = self._extract_location(job)
         workplace_type = self._extract_workplace_type(job)
 
-        sidebar_metadata = self._fetch_sidebar_metadata_from_job_page(url)
+        page_metadata = self._fetch_sidebar_metadata_from_job_page(url)
 
         used_sidebar_location = False
         if self._is_blank_or_vague_location(location):
-            sidebar_location = sidebar_metadata.get("Location", "")
+            sidebar_location = page_metadata.get("Location", "")
             if sidebar_location:
                 location = sidebar_location
                 used_sidebar_location = True
+            else:
+                built = self._build_location_from_metadata(page_metadata)
+                if built:
+                    location = built
+                    used_sidebar_location = True
 
         if not workplace_type:
-            sidebar_workplace_type = sidebar_metadata.get("Location Type", "")
+            sidebar_workplace_type = page_metadata.get("Location Type", "")
             if sidebar_workplace_type:
                 workplace_type = self._normalize_workplace_type(sidebar_workplace_type)
             elif used_sidebar_location and location:
@@ -195,11 +298,11 @@ class AshbyCollector:
 
         department = self._extract_field_name(job, ("departmentName", "department"))
         if not department:
-            department = sidebar_metadata.get("Department", "")
+            department = page_metadata.get("Department", "")
 
         team = self._extract_field_name(job, ("teamName", "team"))
         if not team:
-            team = sidebar_metadata.get("Team", "") or sidebar_metadata.get("Employment Type", "")
+            team = page_metadata.get("Team", "") or page_metadata.get("Employment Type", "")
 
         description = str(job.get("descriptionPlain") or job.get("description") or "").strip()
 
@@ -268,11 +371,16 @@ class AshbyCollector:
             LOGGER.debug("Unable to fetch Ashby job page %s: %s", job_url, exc)
             return {}
 
-        hydration_metadata = extract_ashby_hydration_data(response.text)
-        if hydration_metadata:
-            return hydration_metadata
+        html = response.text
+        app_metadata = extract_ashby_app_data_metadata(html)
+        json_ld_metadata = extract_ashby_json_ld_metadata(html)
+        hydration_metadata = extract_ashby_hydration_data(html)
+        sidebar_metadata = parse_ashby_sidebar_metadata(html)
 
-        metadata = parse_ashby_sidebar_metadata(response.text)
+        metadata: dict[str, str] = {}
+        for source in (sidebar_metadata, json_ld_metadata, hydration_metadata, app_metadata):
+            metadata.update({k: v for k, v in source.items() if v})
+
         if not metadata:
             LOGGER.debug("Ashby metadata extraction failed for %s", job_url)
         return metadata
@@ -314,4 +422,21 @@ class AshbyCollector:
                 text = str(value or "").strip()
                 if text:
                     return text
+        return ""
+
+    def _build_location_from_metadata(self, metadata: dict[str, str]) -> str:
+        city = metadata.get("city", "").strip()
+        state = metadata.get("state", "").strip()
+        country = metadata.get("country", "").strip()
+        applicant_country = metadata.get("applicant_country", "").strip()
+        workplace = self._normalize_workplace_type(metadata.get("Location Type", ""))
+
+        if city and state:
+            return f"{city}, {state}"
+        if workplace == "Remote":
+            basis = applicant_country or country
+            if basis:
+                return f"Remote {basis}"
+        if city or state or country:
+            return ", ".join(part for part in (city, state, country) if part)
         return ""
