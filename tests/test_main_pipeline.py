@@ -829,3 +829,85 @@ def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_pat
     main(["prep-application", "12"])
 
     assert called == []
+
+
+def _build_sqlite_job_row(**overrides):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE jobs (
+            id INTEGER, title TEXT, company TEXT, source TEXT, url TEXT, score INTEGER,
+            classification TEXT, viability_level TEXT, location_raw TEXT, location TEXT,
+            geographic_eligibility TEXT, reasons TEXT, red_flags TEXT, viability_reasons TEXT,
+            status TEXT, notes TEXT, role_family TEXT
+        )"""
+    )
+    base = {
+        "id": 15,
+        "title": "Product Manager Builder",
+        "company": "Perplexity",
+        "source": "ashby",
+        "url": "https://example.com/job/15",
+        "score": 88,
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": '["Strong alignment"]',
+        "red_flags": "[]",
+        "viability_reasons": "[]",
+        "status": "new",
+        "notes": "",
+        "role_family": "ai_product",
+    }
+    base.update(overrides)
+    conn.execute(
+        "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        tuple(base[key] for key in [
+            "id", "title", "company", "source", "url", "score", "classification", "viability_level",
+            "location_raw", "location", "geographic_eligibility", "reasons", "red_flags",
+            "viability_reasons", "status", "notes", "role_family"
+        ]),
+    )
+    row = conn.execute("SELECT * FROM jobs").fetchone()
+    assert row is not None
+    return conn, row
+
+
+def test_prep_application_accepts_sqlite_row(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "base_resume.md").write_text("- Perplexity — PM — 2024-Present\n", encoding="utf-8")
+    conn, row = _build_sqlite_job_row()
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: row if job_id == 15 else None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    try:
+        main(["prep-application", "15"])
+    finally:
+        conn.close()
+
+    app_dir = tmp_path / "applications" / "perplexity_product_manager_builder_15"
+    assert app_dir.exists()
+
+
+def test_prep_application_sqlite_row_missing_optional_fields_uses_defaults(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "base_resume.md").write_text("- Perplexity — PM — 2024-Present\n", encoding="utf-8")
+    conn, row = _build_sqlite_job_row(location_raw=None, notes=None, role_family=None)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: row)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    try:
+        main(["prep-application", "15"])
+    finally:
+        conn.close()
+
+    strategy_text = (tmp_path / "applications" / "perplexity_product_manager_builder_15" / "resume_strategy.md").read_text(encoding="utf-8")
+    assert "the role family implied by the JD" in strategy_text
