@@ -2,7 +2,8 @@ import sqlite3
 
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import load_target_profile
-from job_fit_agent.main import collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main
+from job_fit_agent.main import collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
+from job_fit_agent.repository import initialize
 from job_fit_agent.models import JobPosting
 
 
@@ -546,3 +547,41 @@ def test_digest_grouped_by_status(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
     assert "Saved jobs grouped by status" in output
     assert "Status: interested" in output
+
+
+def test_location_audit_reports_blank_and_region_only(tmp_path, monkeypatch, capsys) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    monkeypatch.setattr("job_fit_agent.main.DB_PATH", db_path)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: initialize(db_path))
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """CREATE TABLE jobs (
+            source TEXT, company TEXT, url TEXT, location_raw TEXT, normalized_location_type TEXT,
+            geographic_eligibility TEXT, workplace_type TEXT
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("ashby", "elevenlabs", "https://jobs.ashbyhq.com/elevenlabs/a", "", "unknown", "review", ""),
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("ashby", "linear", "https://jobs.ashbyhq.com/linear/b", "Europe", "remote", "ineligible", "Remote"),
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("ashby", "linear", "https://jobs.ashbyhq.com/linear/c", "North America", "remote", "review", "Remote"),
+        )
+    location_audit()
+    output = capsys.readouterr().out
+    assert "A. Blank location_raw by company" in output
+    assert "ashby/elevenlabs: 1" in output
+    assert "B. Region-only locations by company" in output
+    assert "ashby/linear: 2" in output
+
+
+def test_location_audit_command_runs(monkeypatch) -> None:
+    called = {"ok": False}
+    monkeypatch.setattr("job_fit_agent.main.location_audit", lambda: called.__setitem__("ok", True))
+    main(["location-audit"])
+    assert called["ok"] is True

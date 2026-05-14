@@ -761,3 +761,36 @@ def test_remote_unspecified_is_review() -> None:
     fit = score_job(job, TARGET_PROFILE)
     assert job.geographic_eligibility == "review"
     assert fit.viability_level == "review"
+
+
+def test_europe_remote_is_ineligible() -> None:
+    job = _job("Product Manager", location="Remote Europe")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "ineligible"
+    assert "Remote role restricted to Europe" in fit.viability_reasons
+
+
+def test_western_europe_remote_is_ineligible() -> None:
+    job = _job("Product Manager", location="Remote Western Europe")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "ineligible"
+    assert "Remote role restricted to Europe" in fit.viability_reasons
+
+
+def test_latam_apac_japan_and_country_remote_rules() -> None:
+    for raw in ("Remote LATAM", "Remote APAC", "Remote Japan", "Remote Mexico", "Remote Argentina", "Remote Peru"):
+        job = _job("Product Manager", location=raw)
+        job.workplace_type = "Remote"
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "ineligible"
+        assert fit.viability_level == "skip"
+
+
+def test_north_america_remote_is_review() -> None:
+    job = _job("Product Manager", location="Remote North America")
+    job.workplace_type = "Remote"
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "review"
+    assert "Remote North America requires manual review" in fit.viability_reasons
