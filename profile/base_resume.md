@@ -5,38 +5,45 @@ Las Vegas / Henderson Metro
 mckeonc0827@gmail.com  
 https://github.com/cody-mckeon  
 
-## Technical Product Manager | AI Systems | Digital Product | API Integrations
+## Technical Product Manager | AI Workflows | Product Systems | Agentic Operations
 
 ## Professional Summary
 
-Technical Product Manager with experience spanning digital products, enterprise systems, analytics, API-connected solutions, and workflow automation. Skilled at translating business needs into product requirements, defining measurable solutions, and partnering cross-functionally across engineering, design, analytics, vendors, and stakeholders to deliver improvements in user experience, operational efficiency, and business outcomes.
+AI-native product builder focused on designing and shipping digital products powered by analytics instrumentation, API-connected systems, workflow automation, and agentic operations. Blends product strategy with hands-on technical execution to turn ambiguous operational needs into usable, measurable product workflows.
 
-Strong blend of product thinking, systems thinking, and delivery execution, supported by a Computer Science degree and hands-on experience bridging business and technical teams.
+Experienced building and orchestrating AI-heavy product systems across Python, OpenClaw, GPT-5.5, GitHub Actions, Telegram, and analytics platforms, with a strong emphasis on practical delivery, iteration speed, and cross-functional execution.
 
 ## Core Skills
 
 - Technical Product Management
-- Agile / Waterfall Delivery
+- AI Workflow Automation
+- Agentic Operations
 - Product Analytics
-- API Integrations
-- AI Agents / Workflow Automation
-- Digital Product Strategy
-- Systems Design
-- Cross-functional Stakeholder Management
-- Workflow Automation
+- Product Systems Design
+- Digital Experience Strategy
+- Analytics Instrumentation
+- API-Connected Workflows
 - Requirements Gathering
-- Digital Experience Optimization
+- Cross-functional Execution
+- Workflow Triage & Prioritization
+- Privacy, Consent & Tag Governance
 
 ## Tools & Platforms
 
+- OpenClaw
+- GPT-5.5
+- OpenAI API
+- Python
+- GitHub / GitHub Actions
+- SQLite
+- Telegram Bot API
+- Asana
 - Pendo
 - GA4
 - Google Tag Manager
 - OneTrust
 - Figma
-- Asana
-- WordPress
-- Slack
+- pytest
 
 ## Professional Experience
 
@@ -72,17 +79,19 @@ Dec 2018 – Jul 2023
 
 ## Projects
 
-### AI Workflow Triage Agent  
-**Python, OpenAI API**
+### Job Fit Agent  
+**Python, SQLite, GitHub Actions, Telegram Bot API, Ashby, Greenhouse, pytest**
 
-- Built an AI-enabled triage concept focused on routing requests, reducing operational friction, and improving workflow prioritization.
+- Built an AI-assisted job discovery and scoring workflow to evaluate role fit and prioritize opportunities.
+- Implemented geographic and seniority viability checks to filter roles against practical candidacy constraints.
+- Added persistence and status tracking across opportunities to support repeatable application operations.
+- Integrated Telegram notifications for workflow updates and application milestones.
+- Developed application preparation support, including resume PDF export for submission readiness.
 
-### Web Product Measurement Framework  
-**Pendo, GA4, GTM**
+### RWLV Priority Governor Agent  
+**OpenClaw, GPT-5.5, Telegram, Asana, Python, Markdown Configuration**
 
-- Developed product measurement frameworks using behavioral analytics, event tracking, and website instrumentation to support digital product decisions.
-
-### Hospitality API Integration Exploration  
-**Vegas Loop / Partner Integrations**
-
-- Explored hospitality-related API integration opportunities connecting digital guest experiences, partner systems, and operational workflows.
+- Designed a lightweight agentic operations workflow for active web and product work triage.
+- Structured Asana prioritization flows and Telegram briefings to keep stakeholders aligned on shifting priorities.
+- Accounted for limited engineering and vendor capacity while maintaining decision velocity.
+- Built operating patterns to rebalance work continuously across changing business needs.
