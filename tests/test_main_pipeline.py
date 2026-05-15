@@ -905,10 +905,17 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
         assert forbidden not in submit_text
     assert "Builder summary." in submit_text
     assert "Second paragraph." not in submit_text
-    assert "Skill A, Skill B" in submit_text
-    assert "\n- Skill A\n" not in submit_text
-    assert "Tool A, Tool B" in submit_text
-    assert "\n- Tool A\n" not in submit_text
+    assert "## Core Skills" in submit_text
+    core_skills_body = _section_body(submit_text, "Core Skills")
+    assert core_skills_body == "Skill A, Skill B"
+    assert ", " in core_skills_body
+    assert not any(line.startswith("- ") or line.startswith("•") for line in core_skills_body.splitlines())
+
+    assert "## Tools & Platforms" in submit_text
+    tools_body = _section_body(submit_text, "Tools & Platforms")
+    assert tools_body == "Tool A, Tool B"
+    assert ", " in tools_body
+    assert not any(line.startswith("- ") or line.startswith("•") for line in tools_body.splitlines())
 
 
 def test_export_resume_pdf_rejects_forbidden_internal_phrases(monkeypatch, tmp_path, capsys):
@@ -946,6 +953,25 @@ def test_export_resume_pdf_check_can_assert_generated_pdf_exists(monkeypatch, tm
     assert pdf_path.exists()
     assert pdf_path.stat().st_size > 0
 
+
+
+
+def _section_body(markdown_text: str, section_name: str) -> str:
+    lines = markdown_text.splitlines()
+    heading = f"## {section_name}"
+    start = None
+    for idx, line in enumerate(lines):
+        if line.strip() == heading:
+            start = idx + 1
+            break
+    if start is None:
+        return ""
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    end = start
+    while end < len(lines) and not lines[end].startswith("## "):
+        end += 1
+    return "\n".join(lines[start:end]).strip()
 
 def _build_sqlite_job_row(**overrides):
     conn = sqlite3.connect(":memory:")
