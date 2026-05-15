@@ -836,6 +836,10 @@ def _sanitize_resume_name_component(value: str) -> str:
     return sanitized or "Unknown"
 
 
+def format_inline_list(items: list[str]) -> str:
+    return ", ".join(item.strip() for item in items if item.strip())
+
+
 def _normalize_submit_resume(markdown_text: str) -> str:
     normalized = markdown_text.replace("\r\n", "\n")
     lines = normalized.split("\n")
@@ -857,12 +861,14 @@ def _normalize_submit_resume(markdown_text: str) -> str:
                 if stripped:
                     if stripped.startswith("- "):
                         bullet_values.append(stripped[2:].strip())
+                    elif stripped.startswith("•"):
+                        bullet_values.append(stripped[1:].strip())
                     else:
                         return
                 section_end += 1
             if not bullet_values:
                 return
-            lines[section_start:section_end] = [", ".join(bullet_values)]
+            lines[section_start:section_end] = [format_inline_list(bullet_values)]
             return
 
     _convert_section("Core Skills")
