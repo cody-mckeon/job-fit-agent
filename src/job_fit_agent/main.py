@@ -840,8 +840,22 @@ def format_inline_list(items: list[str]) -> str:
     return ", ".join(item.strip() for item in items if item.strip())
 
 
+def section(title: str, body: str) -> str:
+    return f"\n## {title}\n\n{body.strip()}\n"
+
+
 def _normalize_submit_resume(markdown_text: str) -> str:
     normalized = markdown_text.replace("\r\n", "\n")
+    section_order = [
+        "Professional Summary",
+        "Core Skills",
+        "Tools & Platforms",
+        "Professional Experience",
+        "Projects",
+        "Education",
+    ]
+    for section_name in section_order:
+        normalized = re.sub(rf"([^\n])\s*(##\s+{re.escape(section_name)})", r"\1\n\2", normalized)
     lines = normalized.split("\n")
 
     def _convert_section(section_name: str) -> None:
@@ -901,7 +915,29 @@ def _normalize_submit_resume(markdown_text: str) -> str:
             lines[paragraph_start:paragraph_end] = [paragraphs[0]]
         break
 
-    return "\n".join(lines).strip() + "\n"
+    normalized_text = "\n".join(lines).strip() + "\n"
+
+    heading_pattern = re.compile(r"^\s*##\s+(.+?)\s*$")
+    section_bodies: dict[str, list[str]] = {name: [] for name in section_order}
+    current_section: str | None = None
+    for raw_line in normalized_text.splitlines():
+        match = heading_pattern.match(raw_line)
+        if match:
+            heading_name = match.group(1).strip()
+            current_section = heading_name if heading_name in section_bodies else None
+            continue
+        if current_section is not None:
+            section_bodies[current_section].append(raw_line)
+
+    normalized_sections: list[str] = []
+    for section_name in section_order:
+        body = "\n".join(section_bodies[section_name]).strip()
+        if body:
+            normalized_sections.append(section(section_name, body))
+
+    if normalized_sections:
+        return "".join(normalized_sections).lstrip("\n")
+    return normalized_text
 
 
 def export_resume_pdf(job_id: int) -> None:
