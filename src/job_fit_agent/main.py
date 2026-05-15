@@ -828,6 +828,25 @@ Apply now only if key requirements and location constraints are confirmed; other
 
 
 
+RESUME_SUBMIT_HEADER = """# Cody McKeon
+
+Las Vegas / Henderson Metro  
+760-669-9343 | mckeonc0827@gmail.com | https://github.com/cody-mckeon  
+
+**Technical Product Manager | AI Workflows | Product Systems | Agentic Operations**
+"""
+
+
+def _ensure_submit_resume_header(markdown_text: str) -> str:
+    body = markdown_text.replace("\r\n", "\n")
+    body_without_h1 = re.sub(r"^\s*#\s+.+\n+", "", body, count=1, flags=re.MULTILINE)
+    body_without_contact = re.sub(r"^\s*Las Vegas / Henderson Metro\s*\n?", "", body_without_h1, count=1, flags=re.MULTILINE)
+    body_without_contact = re.sub(r"^\s*760-669-9343\s*\|\s*mckeonc0827@gmail\.com\s*\|\s*https://github\.com/cody-mckeon\s*\n?", "", body_without_contact, count=1, flags=re.MULTILINE)
+    body_without_headline = re.sub(r"^\s*\*\*Technical Product Manager \| AI Workflows \| Product Systems \| Agentic Operations\*\*\s*\n?", "", body_without_contact, count=1, flags=re.MULTILINE)
+    body_without_headline = body_without_headline.lstrip("\n")
+    return f"{RESUME_SUBMIT_HEADER}\n{body_without_headline.lstrip()}" if body_without_headline.strip() else f"{RESUME_SUBMIT_HEADER}\n"
+
+
 def _sanitize_resume_name_component(value: str) -> str:
     sanitized = re.sub(r"\s+", "_", value.strip())
     sanitized = sanitized.replace("/", "")
@@ -936,8 +955,8 @@ def _normalize_submit_resume(markdown_text: str) -> str:
             normalized_sections.append(section(section_name, body))
 
     if normalized_sections:
-        return "".join(normalized_sections).lstrip("\n")
-    return normalized_text
+        return _ensure_submit_resume_header("".join(normalized_sections).lstrip("\n"))
+    return _ensure_submit_resume_header(normalized_text)
 
 
 def export_resume_pdf(job_id: int) -> None:

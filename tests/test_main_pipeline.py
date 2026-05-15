@@ -905,6 +905,9 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
     for forbidden in ["Tailored Resume Draft", "Positioning", "Tailored Summary", "Experience Highlights", "Targeted Value", "Notes", "Resume Rules Applied", "[insert metric if available]"]:
         assert forbidden not in submit_text
     assert "Builder summary." in submit_text
+    assert submit_text.startswith("# Cody McKeon\n")
+    assert "760-669-9343 | mckeonc0827@gmail.com | https://github.com/cody-mckeon" in submit_text
+    assert "**Technical Product Manager | AI Workflows | Product Systems | Agentic Operations**" in submit_text
     assert "Second paragraph." not in submit_text
     assert "## Core Skills" in submit_text
     assert "\n\n## Core Skills\n\n" in submit_text
@@ -920,6 +923,7 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
     assert ", " in tools_body
     assert not any(line.startswith("- ") or line.startswith("•") for line in tools_body.splitlines())
     assert not re.search(r"[^\n][ \t]+##\s+(Core Skills|Tools & Platforms|Professional Experience)", submit_text)
+    assert "Experience Highlights" not in submit_text
 
 
 def test_normalize_submit_resume_section_spacing_and_inline_lists():
@@ -976,6 +980,25 @@ def test_export_resume_pdf_check_can_assert_generated_pdf_exists(monkeypatch, tm
     pdf_path = app_dir / "Cody_McKeon_Acme_Product_Manager_Resume.pdf"
     assert pdf_path.exists()
     assert pdf_path.stat().st_size > 0
+
+
+def test_export_resume_pdf_output_includes_cody_name(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "acme_product_manager_71"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "submit_resume.md").write_text("# Cody McKeon\n\n## Professional Summary\nSummary\n", encoding="utf-8")
+    job = {"id": 71, "company": "Acme", "title": "Product Manager"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+
+    def fake_run(cmd, check):
+        output_path = Path(cmd[-1])
+        output_path.write_text("%PDF-1.7\nCody McKeon\n", encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["export-resume-pdf", "71"])
+    pdf_path = app_dir / "Cody_McKeon_Acme_Product_Manager_Resume.pdf"
+    assert "Cody McKeon" in pdf_path.read_text(encoding="utf-8")
 
 
 
