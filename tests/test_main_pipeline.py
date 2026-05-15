@@ -1,9 +1,10 @@
 import sqlite3
+import re
 from pathlib import Path
 
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import load_target_profile
-from job_fit_agent.main import collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
+from job_fit_agent.main import _normalize_submit_resume, collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
 from job_fit_agent.repository import initialize
 from job_fit_agent.models import JobPosting
 
@@ -906,16 +907,39 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
     assert "Builder summary." in submit_text
     assert "Second paragraph." not in submit_text
     assert "## Core Skills" in submit_text
+    assert "\n\n## Core Skills\n\n" in submit_text
     core_skills_body = _section_body(submit_text, "Core Skills")
     assert core_skills_body == "Skill A, Skill B"
     assert ", " in core_skills_body
     assert not any(line.startswith("- ") or line.startswith("•") for line in core_skills_body.splitlines())
 
     assert "## Tools & Platforms" in submit_text
+    assert "\n\n## Tools & Platforms\n\n" in submit_text
     tools_body = _section_body(submit_text, "Tools & Platforms")
     assert tools_body == "Tool A, Tool B"
     assert ", " in tools_body
     assert not any(line.startswith("- ") or line.startswith("•") for line in tools_body.splitlines())
+    assert not re.search(r"[^\n][ \t]+##\s+(Core Skills|Tools & Platforms|Professional Experience)", submit_text)
+
+
+def test_normalize_submit_resume_section_spacing_and_inline_lists():
+    raw_resume = (
+        "## Professional Summary\nSummary line.\n\n"
+        "## Core Skills\nSkill A, Skill B"
+        " ## Tools & Platforms\nTool A, Tool B"
+        "\n## Professional Experience\nCompany Role\n\n"
+        "## Projects\nProject details\n\n"
+        "## Education\nSchool details\n"
+    )
+    normalized = _normalize_submit_resume(raw_resume)
+    assert "\n\n## Core Skills\n\n" in normalized
+    assert "\n\n## Tools & Platforms\n\n" in normalized
+    assert "\n\n## Professional Experience\n\n" in normalized
+    assert not re.search(r"[^\n][ \t]+##\s+(Core Skills|Tools & Platforms|Professional Experience)", normalized)
+    assert _section_body(normalized, "Core Skills") == "Skill A, Skill B"
+    assert _section_body(normalized, "Tools & Platforms") == "Tool A, Tool B"
+    assert not any(line.startswith("- ") for line in _section_body(normalized, "Core Skills").splitlines())
+    assert not any(line.startswith("- ") for line in _section_body(normalized, "Tools & Platforms").splitlines())
 
 
 def test_export_resume_pdf_rejects_forbidden_internal_phrases(monkeypatch, tmp_path, capsys):
