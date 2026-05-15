@@ -1,4 +1,5 @@
 import sqlite3
+from pathlib import Path
 
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import load_target_profile
@@ -850,6 +851,9 @@ def test_export_resume_pdf_uses_submit_resume_and_output_naming(monkeypatch, tmp
     assert called["check"] is True
     assert called["cmd"][0] == "pandoc"
     assert called["cmd"][1].endswith("submit_resume.md")
+    assert "geometry:margin=0.5in" in called["cmd"]
+    assert "fontsize=10pt" in called["cmd"]
+    assert "pagestyle=empty" in called["cmd"]
     assert called["cmd"][-1].endswith("Cody_McKeon_Acme_AI_Product_Manager_CoreAPI_Resume.pdf")
 
 
@@ -871,7 +875,7 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
     profile_dir = tmp_path / "profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
     (profile_dir / "base_resume.md").write_text(
-        "# Cody McKeon\n\n## Professional Summary\nBuilder summary.\n",
+        "# Cody McKeon\n\n## Professional Summary\nBuilder summary.\n\nSecond paragraph.\n\n## Core Skills\n- Skill A\n- Skill B\n\n## Tools & Platforms\n- Tool A\n- Tool B\n",
         encoding="utf-8",
     )
     job = {
@@ -899,6 +903,12 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
     submit_text = (tmp_path / "applications" / "gamma_product_manager_31" / "submit_resume.md").read_text(encoding="utf-8")
     for forbidden in ["Tailored Resume Draft", "Positioning", "Tailored Summary", "Experience Highlights", "Targeted Value", "Notes", "Resume Rules Applied", "[insert metric if available]"]:
         assert forbidden not in submit_text
+    assert "Builder summary." in submit_text
+    assert "Second paragraph." not in submit_text
+    assert "Skill A, Skill B" in submit_text
+    assert "\n- Skill A\n" not in submit_text
+    assert "Tool A, Tool B" in submit_text
+    assert "\n- Tool A\n" not in submit_text
 
 
 def test_export_resume_pdf_rejects_forbidden_internal_phrases(monkeypatch, tmp_path, capsys):
@@ -915,6 +925,26 @@ def test_export_resume_pdf_rejects_forbidden_internal_phrases(monkeypatch, tmp_p
     output = capsys.readouterr().out
     assert "submit_resume.md contains forbidden internal content" in output
     assert called["ran"] is False
+
+
+def test_export_resume_pdf_check_can_assert_generated_pdf_exists(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "acme_product_manager_70"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "submit_resume.md").write_text("# Resume", encoding="utf-8")
+    job = {"id": 70, "company": "Acme", "title": "Product Manager"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+
+    def fake_run(cmd, check):
+        output_path = Path(cmd[-1])
+        output_path.write_bytes(b"%PDF-1.7\nmock")
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["export-resume-pdf", "70"])
+    pdf_path = app_dir / "Cody_McKeon_Acme_Product_Manager_Resume.pdf"
+    assert pdf_path.exists()
+    assert pdf_path.stat().st_size > 0
 
 
 def _build_sqlite_job_row(**overrides):
