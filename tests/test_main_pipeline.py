@@ -722,7 +722,7 @@ def test_prep_application_tailored_resume_uses_base_resume_and_preserves_entitie
     assert "Placeholder Company" not in resume_text
     assert "## Positioning" in resume_text
     assert "AI-native product builder/operator" in resume_text
-    assert "[insert metric if available]" in resume_text
+    assert "[insert metric if available]" not in resume_text
 
 
 
@@ -797,7 +797,7 @@ def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
 
     main(["prep-application", "30"])
     app_dir = tmp_path / "applications" / "beta_product_manager_30"
-    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "recruiter_note.md", "application_questions.md", "risk_flags.md"]:
+    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "application_questions.md", "risk_flags.md"]:
         assert (app_dir / name).exists()
 
 
@@ -831,11 +831,11 @@ def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_pat
     assert called == []
 
 
-def test_export_resume_pdf_uses_new_filename_and_output_naming(monkeypatch, tmp_path):
+def test_export_resume_pdf_uses_submit_resume_and_output_naming(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     app_dir = tmp_path / "applications" / "acme_ai_product_manager_core_api_5"
     app_dir.mkdir(parents=True, exist_ok=True)
-    (app_dir / "resume_draft.md").write_text("# Resume", encoding="utf-8")
+    (app_dir / "submit_resume.md").write_text("# Resume", encoding="utf-8")
     job = {"id": 5, "company": "Acme / AI", "title": "Product Manager (Core/API)"}
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
@@ -849,22 +849,72 @@ def test_export_resume_pdf_uses_new_filename_and_output_naming(monkeypatch, tmp_
     main(["export-resume-pdf", "5"])
     assert called["check"] is True
     assert called["cmd"][0] == "pandoc"
-    assert called["cmd"][1].endswith("resume_draft.md")
+    assert called["cmd"][1].endswith("submit_resume.md")
     assert called["cmd"][-1].endswith("Cody_McKeon_Acme_AI_Product_Manager_CoreAPI_Resume.pdf")
 
 
-def test_export_resume_pdf_uses_legacy_file_with_notice(monkeypatch, tmp_path, capsys):
+def test_export_resume_pdf_requires_submit_resume(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     app_dir = tmp_path / "applications" / "beta_product_manager_6"
     app_dir.mkdir(parents=True, exist_ok=True)
-    (app_dir / "tailored_resume_draft.md").write_text("# Legacy Resume", encoding="utf-8")
     job = {"id": 6, "company": "Beta", "title": "Product Manager"}
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
     monkeypatch.setattr("job_fit_agent.main.subprocess.run", lambda *args, **kwargs: None)
     main(["export-resume-pdf", "6"])
     output = capsys.readouterr().out
-    assert "Using legacy tailored_resume_draft.md. Consider regenerating application package." in output
+    assert "Missing submit_resume.md. Run prep-application <job_id> first." in output
+
+
+def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "base_resume.md").write_text(
+        "# Cody McKeon\n\n## Professional Summary\nBuilder summary.\n",
+        encoding="utf-8",
+    )
+    job = {
+        "id": 31,
+        "title": "Product Manager",
+        "company": "Gamma",
+        "source": "lever",
+        "url": "https://example.com/job/31",
+        "score": 80,
+        "classification": "near_fit",
+        "viability_level": "review",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": "[]",
+        "red_flags": "[]",
+        "viability_reasons": "[]",
+        "status": "new",
+        "notes": "",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    main(["prep-application", "31"])
+    submit_text = (tmp_path / "applications" / "gamma_product_manager_31" / "submit_resume.md").read_text(encoding="utf-8")
+    for forbidden in ["Tailored Resume Draft", "Positioning", "Tailored Summary", "Experience Highlights", "Targeted Value", "Notes", "Resume Rules Applied", "[insert metric if available]"]:
+        assert forbidden not in submit_text
+
+
+def test_export_resume_pdf_rejects_forbidden_internal_phrases(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "acme_product_manager_7"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "submit_resume.md").write_text("# Resume\n\n## Notes\n", encoding="utf-8")
+    job = {"id": 7, "company": "Acme", "title": "Product Manager"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    called = {"ran": False}
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", lambda *args, **kwargs: called.__setitem__("ran", True))
+    main(["export-resume-pdf", "7"])
+    output = capsys.readouterr().out
+    assert "submit_resume.md contains forbidden internal content" in output
+    assert called["ran"] is False
 
 
 def _build_sqlite_job_row(**overrides):
