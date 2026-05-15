@@ -754,7 +754,7 @@ def prep_application(job_id: int) -> None:
     top_strengths = ", ".join(strengths) if strengths else "product systems, workflow automation, and analytics"
     resume_rule_text = "\n".join(f"- {rule}" for rule in resume_rules)
 
-    project_lines = "\n".join(f"- {_project_bullet(name)} [insert metric if available]" for name in top_projects)
+    project_lines = "\n".join(f"- {_project_bullet(name)}" for name in top_projects)
 
     tailored_resume = f"""# Tailored Resume Draft
 
@@ -815,6 +815,7 @@ Apply now only if key requirements and location constraints are confirmed; other
     (app_dir / "fit_summary.md").write_text(fit_summary, encoding="utf-8")
     (app_dir / "resume_strategy.md").write_text(resume_strategy, encoding="utf-8")
     (app_dir / "resume_draft.md").write_text(tailored_resume, encoding="utf-8")
+    (app_dir / "submit_resume.md").write_text(base_resume.strip() + "\n", encoding="utf-8")
     (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
     (app_dir / "application_questions.md").write_text(questions, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
@@ -841,15 +842,23 @@ def export_resume_pdf(job_id: int) -> None:
     if not job:
         raise ValueError(f"Job not found: {job_id}")
     app_dir = Path("applications") / f"{_slugify(job['company'] or 'company')}_{_slugify(job['title'] or 'role')}_{job_id}"
-    resume_path = app_dir / "resume_draft.md"
+    resume_path = app_dir / "submit_resume.md"
     if not resume_path.exists():
-        legacy_resume_path = app_dir / "tailored_resume_draft.md"
-        if legacy_resume_path.exists():
-            print("Using legacy tailored_resume_draft.md. Consider regenerating application package.")
-            resume_path = legacy_resume_path
-        else:
-            print(f"Missing resume draft markdown: {resume_path}")
-            return
+        print("Missing submit_resume.md. Run prep-application <job_id> first.")
+        return
+
+    forbidden_phrases = [
+        "Tailored Resume Draft",
+        "Resume Rules Applied",
+        "Targeted Value",
+        "Notes",
+        "[insert metric if available]",
+    ]
+    resume_text = resume_path.read_text(encoding="utf-8")
+    found_forbidden = [phrase for phrase in forbidden_phrases if phrase in resume_text]
+    if found_forbidden:
+        print("submit_resume.md contains forbidden internal content: " + ", ".join(found_forbidden))
+        return
 
     company = _sanitize_resume_name_component(str(job["company"]))
     role = _sanitize_resume_name_component(str(job["title"]))
