@@ -815,7 +815,7 @@ Apply now only if key requirements and location constraints are confirmed; other
     (app_dir / "fit_summary.md").write_text(fit_summary, encoding="utf-8")
     (app_dir / "resume_strategy.md").write_text(resume_strategy, encoding="utf-8")
     (app_dir / "resume_draft.md").write_text(tailored_resume, encoding="utf-8")
-    (app_dir / "submit_resume.md").write_text(base_resume.strip() + "\n", encoding="utf-8")
+    (app_dir / "submit_resume.md").write_text(_normalize_submit_resume(base_resume), encoding="utf-8")
     (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
     (app_dir / "application_questions.md").write_text(questions, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
@@ -834,6 +834,68 @@ def _sanitize_resume_name_component(value: str) -> str:
     sanitized = re.sub(r"[^A-Za-z0-9_]", "", sanitized)
     sanitized = re.sub(r"_+", "_", sanitized).strip("_")
     return sanitized or "Unknown"
+
+
+def _normalize_submit_resume(markdown_text: str) -> str:
+    normalized = markdown_text.replace("\r\n", "\n")
+    lines = normalized.split("\n")
+
+    def _convert_section(section_name: str) -> None:
+        heading = f"## {section_name}"
+        for idx, line in enumerate(lines):
+            if line.strip() != heading:
+                continue
+            section_start = idx + 1
+            while section_start < len(lines) and not lines[section_start].strip():
+                section_start += 1
+            section_end = section_start
+            bullet_values: list[str] = []
+            while section_end < len(lines):
+                stripped = lines[section_end].strip()
+                if stripped.startswith("## "):
+                    break
+                if stripped:
+                    if stripped.startswith("- "):
+                        bullet_values.append(stripped[2:].strip())
+                    else:
+                        return
+                section_end += 1
+            if not bullet_values:
+                return
+            lines[section_start:section_end] = [", ".join(bullet_values)]
+            return
+
+    _convert_section("Core Skills")
+    _convert_section("Tools & Platforms")
+
+    summary_heading = "## Professional Summary"
+    for idx, line in enumerate(lines):
+        if line.strip() != summary_heading:
+            continue
+        paragraph_start = idx + 1
+        while paragraph_start < len(lines) and not lines[paragraph_start].strip():
+            paragraph_start += 1
+        paragraph_end = paragraph_start
+        paragraphs: list[str] = []
+        current_chunk: list[str] = []
+        while paragraph_end < len(lines):
+            stripped = lines[paragraph_end].strip()
+            if stripped.startswith("## "):
+                break
+            if not stripped:
+                if current_chunk:
+                    paragraphs.append(" ".join(current_chunk))
+                    current_chunk = []
+            else:
+                current_chunk.append(stripped)
+            paragraph_end += 1
+        if current_chunk:
+            paragraphs.append(" ".join(current_chunk))
+        if paragraphs:
+            lines[paragraph_start:paragraph_end] = [paragraphs[0]]
+        break
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def export_resume_pdf(job_id: int) -> None:
@@ -867,6 +929,14 @@ def export_resume_pdf(job_id: int) -> None:
         [
             "pandoc",
             str(resume_path),
+            "-V",
+            "geometry:margin=0.5in",
+            "-V",
+            "fontsize=10pt",
+            "-V",
+            "pagestyle=empty",
+            "-V",
+            "linestretch=1.15",
             "-o",
             str(output_pdf),
         ],
