@@ -75,6 +75,26 @@ The scoring profile now targets not only traditional PM roles, but also adjacent
 
 The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles.
 
+
+## Company discovery workflow
+
+Discovery terms are seeded in `config/discovery_terms.yaml`.
+New discoveries are stored in `data/discovered_companies.yaml` with review status and are **not** automatically added to the main watchlist.
+
+```bash
+python -m job_fit_agent.main discover-companies
+python -m job_fit_agent.main approve-company <company>
+python -m job_fit_agent.main reject-company <company>
+```
+
+Workflow:
+1. `discover-companies`
+2. Review `data/discovered_companies.yaml`
+3. `approve-company <company>` to promote known-source companies into `config/company_watchlist.yaml`
+4. `python -m job_fit_agent.main run`
+
+Unknown-source discoveries stay in review (approved status only) until their source is known.
+
 ## Test
 
 ```bash
