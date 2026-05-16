@@ -53,6 +53,24 @@ class AppConfig(BaseModel):
     discovery_queue_path: Path = Field(default_factory=lambda: Path("config/discovery_queue.yaml"))
     enable_lever: bool = False
     notifications_path: Path = Field(default_factory=lambda: Path("config/notifications.yaml"))
+    discovery_terms_path: Path = Field(default_factory=lambda: Path("config/discovery_terms.yaml"))
+    discovered_companies_path: Path = Field(default_factory=lambda: Path("data/discovered_companies.yaml"))
+
+
+class DiscoveryTerms(BaseModel):
+    terms: list[str] = Field(default_factory=list)
+
+
+class DiscoveredCompany(BaseModel):
+    company: str
+    source_guess: str = "unknown"
+    careers_url: str = ""
+    reason_discovered: str = ""
+    status: str = "new"
+
+
+class DiscoveredCompanies(BaseModel):
+    companies: list[DiscoveredCompany] = Field(default_factory=list)
 
 
 def _parse_simple_yaml(yaml_text: str) -> dict[str, list[str]]:
@@ -150,3 +168,31 @@ def load_notification_config(path: str | Path | None = None) -> NotificationConf
         notification_config.telegram.chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
 
     return notification_config
+
+
+def load_discovery_terms(path: str | Path | None = None) -> DiscoveryTerms:
+    config = AppConfig()
+    terms_path = Path(path) if path else config.discovery_terms_path
+    if not terms_path.exists():
+        return DiscoveryTerms()
+    loaded = yaml.safe_load(terms_path.read_text(encoding="utf-8")) or {}
+    terms = loaded.get("terms", []) if isinstance(loaded, dict) else []
+    return DiscoveryTerms(terms=[str(term) for term in terms])
+
+
+def load_discovered_companies(path: str | Path | None = None) -> DiscoveredCompanies:
+    config = AppConfig()
+    discovered_path = Path(path) if path else config.discovered_companies_path
+    if not discovered_path.exists():
+        return DiscoveredCompanies()
+    loaded = yaml.safe_load(discovered_path.read_text(encoding="utf-8")) or {}
+    companies = loaded.get("companies", []) if isinstance(loaded, dict) else []
+    return DiscoveredCompanies(companies=[DiscoveredCompany(**company) for company in companies])
+
+
+def save_discovered_companies(companies: DiscoveredCompanies, path: str | Path | None = None) -> None:
+    config = AppConfig()
+    discovered_path = Path(path) if path else config.discovered_companies_path
+    discovered_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"companies": [company.model_dump() for company in companies.companies]}
+    discovered_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")

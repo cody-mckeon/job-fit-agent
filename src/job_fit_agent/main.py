@@ -25,12 +25,17 @@ from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.config import (
     AppConfig,
+    DiscoveredCompanies,
+    DiscoveredCompany,
     TargetProfile,
     load_company_watchlist,
+    load_discovered_companies,
+    load_discovery_terms,
     load_discovery_queue,
     load_notification_config,
     load_target_profile,
     save_company_watchlist,
+    save_discovered_companies,
     save_discovery_queue,
 )
 from job_fit_agent.models import FitScore, JobPosting
@@ -438,6 +443,79 @@ def promote_discovery(source: str, company: str) -> None:
         print(f"{source}/{company} already exists in company watchlist")
         return
     print(f"Promoted {source}/{company} to company watchlist")
+
+
+def _guess_source_from_url(careers_url: str) -> str:
+    lower = careers_url.lower()
+    if "ashbyhq.com" in lower:
+        return "ashby"
+    if "greenhouse.io" in lower:
+        return "greenhouse"
+    if "lever.co" in lower:
+        return "lever"
+    return "unknown"
+
+
+def _company_from_url(careers_url: str) -> str:
+    cleaned = careers_url.replace("https://", "").replace("http://", "")
+    host = cleaned.split("/")[0]
+    parts = [part for part in host.split(".") if part and part not in {"www", "jobs", "careers"}]
+    return parts[0] if parts else host
+
+
+def discover_companies() -> None:
+    terms = load_discovery_terms().terms
+    discovered = load_discovered_companies()
+    existing_names = {entry.company.lower() for entry in discovered.companies}
+    added_count = 0
+
+    for term in terms:
+        company = _slugify(term).replace("_", "-")
+        if company.lower() in existing_names:
+            continue
+        discovered.companies.append(
+            DiscoveredCompany(
+                company=company,
+                source_guess="unknown",
+                careers_url="",
+                reason_discovered=f"Seed term match: {term}",
+                status="new",
+            )
+        )
+        existing_names.add(company.lower())
+        added_count += 1
+
+    save_discovered_companies(discovered)
+    print(f"Discovery complete. Added {added_count} new companies for review.")
+
+
+def approve_company(company: str) -> None:
+    discovered = load_discovered_companies()
+    target = next((entry for entry in discovered.companies if entry.company.lower() == company.lower()), None)
+    if target is None:
+        raise ValueError(f"Company '{company}' not found in discovered companies.")
+
+    target.status = "approved"
+    source = target.source_guess or _guess_source_from_url(target.careers_url)
+    if source in {"ashby", "greenhouse", "lever"}:
+        watchlist = load_company_watchlist()
+        source_list = getattr(watchlist, source)
+        if target.company not in source_list:
+            source_list.append(target.company)
+            source_list.sort()
+            save_company_watchlist(watchlist)
+    save_discovered_companies(discovered)
+    print(f"Approved company: {target.company}")
+
+
+def reject_company(company: str) -> None:
+    discovered = load_discovered_companies()
+    target = next((entry for entry in discovered.companies if entry.company.lower() == company.lower()), None)
+    if target is None:
+        raise ValueError(f"Company '{company}' not found in discovered companies.")
+    target.status = "rejected"
+    save_discovered_companies(discovered)
+    print(f"Rejected company: {target.company}")
 
 
 REGION_ONLY_TERMS = (
@@ -1089,6 +1167,30 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "discover-companies":
+        discover_companies()
+        return
+
+    if command == "approve-company":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main approve-company <company>")
+            return
+        try:
+            approve_company(args[1])
+        except ValueError as exc:
+            print(str(exc))
+        return
+
+    if command == "reject-company":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main reject-company <company>")
+            return
+        try:
+            reject_company(args[1])
+        except ValueError as exc:
+            print(str(exc))
+        return
+
     if command == "location-audit":
         location_audit()
         return
@@ -1123,6 +1225,9 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
     print("python -m job_fit_agent.main learn-url <job_url>")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
+    print("python -m job_fit_agent.main discover-companies")
+    print("python -m job_fit_agent.main approve-company <company>")
+    print("python -m job_fit_agent.main reject-company <company>")
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
     print("python -m job_fit_agent.main location-audit")
     print("python -m job_fit_agent.main prep-application <job_id>")
