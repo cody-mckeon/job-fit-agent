@@ -598,7 +598,7 @@ def test_foster_city_hybrid_viability_is_stretch_or_skip() -> None:
     job.workplace_type = "Hybrid"
     fit = score_job(job, TARGET_PROFILE)
     assert fit.viability_level in {"stretch", "skip"}
-    assert "Hybrid role outside target geography" in fit.viability_reasons
+    assert "Hybrid role outside Las Vegas/Nevada" in fit.viability_reasons
 
 
 def test_mexico_argentina_peru_remote_viability_is_skip() -> None:
@@ -747,7 +747,7 @@ def test_foster_city_hybrid_is_ineligible() -> None:
     assert job.normalized_state == "CA"
     assert job.normalized_location_type == "hybrid"
     assert job.geographic_eligibility == "ineligible"
-    assert "Hybrid role outside Nevada" in fit.viability_reasons
+    assert "Hybrid role outside Las Vegas/Nevada" in fit.viability_reasons
 
 
 def test_las_vegas_hybrid_is_eligible() -> None:
@@ -828,3 +828,24 @@ def test_north_america_remote_is_review() -> None:
     fit = score_job(job, TARGET_PROFILE)
     assert job.geographic_eligibility == "review"
     assert "Remote North America requires manual review" in fit.viability_reasons
+
+
+def test_geographic_eligibility_tightened_cases() -> None:
+    cases = [
+        ("San Francisco, CA", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
+        ("San Francisco, CA", "Hybrid", "ineligible", "Hybrid role outside Las Vegas/Nevada"),
+        ("Dublin, Ireland", "Remote", "ineligible", "Remote role limited to non-US geography"),
+        ("UAE", "Remote", "ineligible", "Remote role limited to non-US geography"),
+        ("Poland", "Remote", "ineligible", "Remote role limited to non-US geography"),
+        ("Bangalore, India", "Remote", "ineligible", "Remote role limited to non-US geography"),
+        ("Barcelona, Spain", "Remote", "ineligible", "Remote role limited to non-US geography"),
+        ("Remote North America", "Remote", "review", "Remote North America requires manual review"),
+        ("Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
+        ("Las Vegas, NV", "Hybrid", "eligible", "Location aligns with target geography"),
+    ]
+    for location, workplace, expected_eligibility, expected_reason in cases:
+        job = _job("Product Manager", location=location, description="Own product roadmap.")
+        job.workplace_type = workplace
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == expected_eligibility
+        assert expected_reason in fit.viability_reasons
