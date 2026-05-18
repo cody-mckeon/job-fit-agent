@@ -62,3 +62,10 @@ def test_missing_or_empty_watchlist_fails_gracefully(tmp_path: Path, monkeypatch
     monkeypatch.setattr(main, "load_company_watchlist", lambda: CompanyWatchlist(greenhouse=[]))
     with pytest.raises(ValueError, match="No companies configured for source 'greenhouse'"):
         resolve_companies(source="greenhouse")
+
+
+def test_resolve_companies_supports_lever() -> None:
+    companies = resolve_companies(source="lever")
+
+    assert "ramp" in companies
+    assert "scaleai" in companies

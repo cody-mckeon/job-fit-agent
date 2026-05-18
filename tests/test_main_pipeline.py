@@ -1255,3 +1255,38 @@ def test_digest_excludes_applied_rejected_archived_from_default(monkeypatch, cap
     assert "Applied Role" not in output
     assert "Rejected Role" not in output
     assert "Archived Role" not in output
+
+
+def test_digest_can_show_lever_jobs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "score": 91,
+                "id": 9,
+                "status": "new",
+                "classification": "high_fit",
+                "viability_level": "apply_now",
+                "title": "Senior Product Manager",
+                "company": "ramp",
+                "source": "lever",
+                "url": "https://jobs.lever.co/ramp/abc123",
+                "location_raw": "Remote (US)",
+                "normalized_location_type": "remote",
+                "geographic_eligibility": "eligible",
+                "viability_reasons": "[]",
+                "red_flags": "[]",
+            }
+        ]
+        if classification == "high_fit"
+        else [],
+    )
+
+    main(["digest"])
+    output = capsys.readouterr().out
+
+    assert "Actionable high-fit jobs" in output
+    assert "source: lever" in output
+    assert "company: ramp" in output
+    assert "url: https://jobs.lever.co/ramp/abc123" in output

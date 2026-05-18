@@ -170,3 +170,20 @@ def test_approve_company_works_after_seed_discovery(monkeypatch) -> None:
 
     assert state["watchlist"].ashby == ["hebbia"]
     assert state["discovered"].companies[0].status == "approved"
+
+
+def test_approved_lever_company_moves_to_lever_watchlist(monkeypatch) -> None:
+    state = _patch_discovery_io(
+        monkeypatch,
+        DiscoveredCompanies(
+            companies=[
+                DiscoveredCompany(company="ramp", source_guess="lever", careers_url="https://jobs.lever.co/ramp")
+            ]
+        ),
+        DiscoveryTerms(),
+    )
+
+    approve_company("ramp")
+
+    assert state["watchlist"].lever == ["ramp"]
+    assert state["discovered"].companies[0].status == "approved"
