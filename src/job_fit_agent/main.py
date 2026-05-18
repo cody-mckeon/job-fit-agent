@@ -57,6 +57,36 @@ from job_fit_agent.scoring import score_job
 
 LOGGER = logging.getLogger(__name__)
 
+STRONG_FIT_ROLE_TERMS = (
+    "product manager",
+    "technical product manager",
+    "product operations",
+    "product engineer",
+    "ai product",
+    "workflow automation",
+    "internal tools",
+    "product analytics",
+)
+ADJACENT_ROLE_TERMS = (
+    "technical program manager",
+    "program manager, internal systems",
+    "growth product",
+    "developer tools",
+    "solutions",
+)
+WEAK_ROLE_TERMS = (
+    "technical account manager",
+    "product marketing",
+    "marketing operations",
+    "demand generation",
+    "lifecycle marketing",
+    "risk",
+    "grc",
+    "finance",
+    "customer success",
+)
+STRONG_OVERLAP_TERMS = ("ai workflow", "agentic", "product systems", "workflow automation", "internal tools", "product analytics")
+
 
 class JobCollector(Protocol):
     def fetch_jobs(self, company: str) -> list[JobPosting]: ...
@@ -343,6 +373,29 @@ def _is_actionable_digest_row(row: dict) -> bool:
     if geographic_eligibility in {"ineligible"}:
         return False
     if geographic_eligibility not in {"eligible", "review"}:
+        return False
+    title = str(safe_row_value(row, "title", "")).lower()
+    score = int(safe_row_value(row, "score", 0) or 0)
+    role_text = " ".join(
+        str(safe_row_value(row, key, "") or "").lower()
+        for key in ("title", "notes", "viability_reasons", "reasons", "red_flags", "role_family")
+    )
+    has_strong_overlap = any(term in role_text for term in STRONG_OVERLAP_TERMS)
+    is_weak_role = any(term in title for term in WEAK_ROLE_TERMS)
+    is_strong_role = any(term in title for term in STRONG_FIT_ROLE_TERMS)
+    is_adjacent_role = any(term in title for term in ADJACENT_ROLE_TERMS)
+
+    if "product marketing" in title and not any(
+        term in role_text for term in ("ai agents", "product analytics", "developer tools", "experimentation", "product systems")
+    ):
+        return False
+    if "technical account manager" in title and not any(
+        term in role_text for term in ("technical product", "implementation", "workflow automation", "product systems")
+    ):
+        return False
+    if is_weak_role and score < 45 and not has_strong_overlap:
+        return False
+    if not (is_strong_role or is_adjacent_role or has_strong_overlap) and is_weak_role:
         return False
     return True
 

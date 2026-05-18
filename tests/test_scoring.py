@@ -87,6 +87,7 @@ def test_remote_product_marketing_manager_is_near_fit() -> None:
 
     fit = score_job(job, TARGET_PROFILE)
     assert fit.classification == "near_fit"
+    assert "Product marketing role lacks product systems overlap" in fit.red_flags
 
 
 def test_remote_technical_product_manager_is_high_fit() -> None:
@@ -98,6 +99,16 @@ def test_remote_technical_product_manager_is_high_fit() -> None:
 
     fit = score_job(job, TARGET_PROFILE)
     assert fit.classification == "high_fit"
+
+
+def test_remote_product_manager_is_actionable_high_fit() -> None:
+    fit = score_job(_job("Product Manager", "Remote US", "Own product systems and experimentation roadmap."), TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+
+
+def test_remote_product_engineer_is_actionable() -> None:
+    fit = score_job(_job("Product Engineer", "Remote US", "Build internal tools and AI workflows."), TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "high_fit"}
 
 
 def test_remote_engineering_manager_is_low_fit() -> None:

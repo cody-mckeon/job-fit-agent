@@ -540,6 +540,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if is_product_marketing_manager and not pmm_has_required_context:
         has_strong_match = False
         red_flags.append("Product Marketing Manager role lacks product analytics/experimentation/AI/platform/customer-facing web context")
+        red_flags.append("Product marketing role lacks product systems overlap")
 
     classification = "low_fit"
     role_family = classify_role_family(job.title)
@@ -578,6 +579,13 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if has_forced_low_fit_title:
         classification = "low_fit"
 
+    title_lower = job.title.lower()
+    weak_fit_title_terms = ("technical account manager", "product marketing", "marketing operations", "demand generation", "lifecycle marketing", "risk", "grc", "finance", "customer success")
+    if any(term in title_lower for term in weak_fit_title_terms):
+        red_flags.append("Role is geographically viable but weak functional fit")
+    if "technical account manager" in title_lower:
+        red_flags.append("Account management role is outside target product path")
+
     viability_score = 0
     viability_reasons: list[str] = []
     viability_level = "apply_now"
@@ -602,7 +610,6 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             viability_score -= 10
             viability_reasons.append(f"Role asks for {years_required}+ years; review seniority fit")
 
-    title_lower = job.title.lower()
     is_exec_level = any(term in title_lower for term in ("staff", "head of", "director", "vp ", "vice president"))
     if is_exec_level:
         viability_score -= 35
