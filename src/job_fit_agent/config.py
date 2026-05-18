@@ -55,6 +55,7 @@ class AppConfig(BaseModel):
     notifications_path: Path = Field(default_factory=lambda: Path("config/notifications.yaml"))
     discovery_terms_path: Path = Field(default_factory=lambda: Path("config/discovery_terms.yaml"))
     discovered_companies_path: Path = Field(default_factory=lambda: Path("data/discovered_companies.yaml"))
+    discovery_seed_companies_path: Path = Field(default_factory=lambda: Path("config/discovery_seed_companies.yaml"))
 
 
 class DiscoveryTerms(BaseModel):
@@ -71,6 +72,17 @@ class DiscoveredCompany(BaseModel):
 
 class DiscoveredCompanies(BaseModel):
     companies: list[DiscoveredCompany] = Field(default_factory=list)
+
+
+class SeedCompany(BaseModel):
+    company: str = ""
+    source_guess: str = "unknown"
+    careers_url: str = ""
+    reason_discovered: str = ""
+
+
+class SeedCompanies(BaseModel):
+    companies: list[SeedCompany] = Field(default_factory=list)
 
 
 def _parse_simple_yaml(yaml_text: str) -> dict[str, list[str]]:
@@ -179,6 +191,16 @@ def load_discovery_terms(path: str | Path | None = None) -> DiscoveryTerms:
     terms = loaded.get("terms", []) if isinstance(loaded, dict) else []
     return DiscoveryTerms(terms=[str(term) for term in terms])
 
+
+
+def load_seed_companies(path: str | Path | None = None) -> SeedCompanies:
+    config = AppConfig()
+    seed_path = Path(path) if path else config.discovery_seed_companies_path
+    if not seed_path.exists():
+        return SeedCompanies()
+    loaded = yaml.safe_load(seed_path.read_text(encoding="utf-8")) or {}
+    companies = loaded.get("companies", []) if isinstance(loaded, dict) else []
+    return SeedCompanies(companies=[SeedCompany(**company) for company in companies])
 
 def load_discovered_companies(path: str | Path | None = None) -> DiscoveredCompanies:
     config = AppConfig()

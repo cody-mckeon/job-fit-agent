@@ -78,8 +78,11 @@ The system boosts jobs with strong agentic/workflow/orchestration/tooling capabi
 
 ## Company discovery workflow
 
-Discovery terms are seeded in `config/discovery_terms.yaml`.
-New discoveries are stored in `data/discovered_companies.yaml` with review status and are **not** automatically added to the main watchlist.
+- `config/discovery_terms.yaml` = search intent for discovery providers.
+- `config/discovery_seed_companies.yaml` = real companies to evaluate (manual/static provider input).
+- `data/discovered_companies.yaml` = discovery review queue with status.
+
+New discoveries are **not** automatically added to the main watchlist.
 
 ```bash
 python -m job_fit_agent.main discover-companies
