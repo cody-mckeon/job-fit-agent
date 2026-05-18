@@ -23,6 +23,7 @@ from job_fit_agent.collectors.ashby import (
 )
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
+from job_fit_agent.discovery.providers import StaticCompanyProvider
 from job_fit_agent.config import (
     AppConfig,
     DiscoveredCompanies,
@@ -32,6 +33,7 @@ from job_fit_agent.config import (
     load_discovered_companies,
     load_discovery_terms,
     load_discovery_queue,
+    load_seed_companies,
     load_notification_config,
     load_target_profile,
     save_company_watchlist,
@@ -465,9 +467,27 @@ def _company_from_url(careers_url: str) -> str:
 
 def discover_companies() -> None:
     terms = load_discovery_terms().terms
-    print(
-        f"No discovery provider configured. Loaded {len(terms)} discovery terms, but no companies were discovered."
-    )
+    seeds = load_seed_companies()
+    provider = StaticCompanyProvider(seeds)
+
+    discovered = load_discovered_companies()
+    existing_names = {entry.company.lower() for entry in discovered.companies}
+
+    discovered_count = 0
+    duplicate_count = 0
+    for candidate in provider.discover(terms):
+        normalized_name = candidate.company.lower()
+        if normalized_name in existing_names:
+            duplicate_count += 1
+            continue
+        discovered.companies.append(candidate)
+        existing_names.add(normalized_name)
+        discovered_count += 1
+
+    save_discovered_companies(discovered)
+    print(f"Loaded {len(terms)} terms")
+    print(f"Discovered {discovered_count} companies")
+    print(f"Skipped {duplicate_count} duplicates")
 
 
 def add_discovered_company(company: str, source: str, careers_url: str, reason: str) -> None:

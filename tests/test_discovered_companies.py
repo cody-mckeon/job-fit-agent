@@ -3,14 +3,26 @@ from job_fit_agent.config import (
     DiscoveredCompanies,
     DiscoveredCompany,
     DiscoveryTerms,
+    SeedCompanies,
+    SeedCompany,
 )
 from job_fit_agent.main import approve_company, discover_companies, reject_company
 
 
-def _patch_discovery_io(monkeypatch, discovered: DiscoveredCompanies, terms: DiscoveryTerms) -> dict:
-    state = {"discovered": discovered, "watchlist": CompanyWatchlist()}
+def _patch_discovery_io(
+    monkeypatch,
+    discovered: DiscoveredCompanies,
+    terms: DiscoveryTerms,
+    seeds: SeedCompanies | None = None,
+) -> dict:
+    state = {
+        "discovered": discovered,
+        "watchlist": CompanyWatchlist(),
+        "seeds": seeds or SeedCompanies(),
+    }
 
     monkeypatch.setattr("job_fit_agent.main.load_discovery_terms", lambda: terms)
+    monkeypatch.setattr("job_fit_agent.main.load_seed_companies", lambda: state["seeds"])
     monkeypatch.setattr("job_fit_agent.main.load_discovered_companies", lambda: state["discovered"])
     monkeypatch.setattr("job_fit_agent.main.save_discovered_companies", lambda value: state.__setitem__("discovered", value))
     monkeypatch.setattr("job_fit_agent.main.load_company_watchlist", lambda: state["watchlist"])
@@ -18,67 +30,77 @@ def _patch_discovery_io(monkeypatch, discovered: DiscoveredCompanies, terms: Dis
     return state
 
 
-def test_discovery_terms_are_not_saved_as_companies(monkeypatch, capsys) -> None:
+def test_seed_companies_are_saved_as_discovered_companies(monkeypatch, capsys) -> None:
+    state = _patch_discovery_io(
+        monkeypatch,
+        DiscoveredCompanies(),
+        DiscoveryTerms(terms=["AI agents"]),
+        SeedCompanies(
+            companies=[
+                SeedCompany(
+                    company="hebbia",
+                    source_guess="ashby",
+                    careers_url="https://jobs.ashbyhq.com/hebbia",
+                    reason_discovered="AI workflow automation company",
+                )
+            ]
+        ),
+    )
+
+    discover_companies()
+    output = capsys.readouterr().out
+
+    assert len(state["discovered"].companies) == 1
+    assert state["discovered"].companies[0].company == "hebbia"
+    assert "Loaded 1 terms" in output
+    assert "Discovered 1 companies" in output
+
+
+def test_discovery_terms_are_not_saved_as_companies(monkeypatch) -> None:
     state = _patch_discovery_io(monkeypatch, DiscoveredCompanies(), DiscoveryTerms(terms=["AI agents"]))
+
+    discover_companies()
+
+    assert len(state["discovered"].companies) == 0
+
+
+def test_duplicate_discovered_companies_are_skipped(monkeypatch, capsys) -> None:
+    state = _patch_discovery_io(
+        monkeypatch,
+        DiscoveredCompanies(companies=[DiscoveredCompany(company="hebbia", source_guess="ashby")]),
+        DiscoveryTerms(terms=["AI agents"]),
+        SeedCompanies(
+            companies=[
+                SeedCompany(
+                    company="hebbia",
+                    source_guess="ashby",
+                    careers_url="https://jobs.ashbyhq.com/hebbia",
+                    reason_discovered="AI workflow automation company",
+                )
+            ]
+        ),
+    )
+
+    discover_companies()
+    output = capsys.readouterr().out
+
+    assert len(state["discovered"].companies) == 1
+    assert "Skipped 1 duplicates" in output
+
+
+def test_invalid_seed_company_is_ignored(monkeypatch, capsys) -> None:
+    state = _patch_discovery_io(
+        monkeypatch,
+        DiscoveredCompanies(),
+        DiscoveryTerms(terms=[]),
+        SeedCompanies(companies=[SeedCompany(company="badco", source_guess="workday", careers_url="", reason_discovered="x")]),
+    )
 
     discover_companies()
     output = capsys.readouterr().out
 
     assert len(state["discovered"].companies) == 0
-    assert "No discovery provider configured. Loaded 1 discovery terms, but no companies were discovered." in output
-
-
-def test_discover_companies_with_no_provider_does_not_create_fake_records(monkeypatch) -> None:
-    state = _patch_discovery_io(
-        monkeypatch,
-        DiscoveredCompanies(companies=[DiscoveredCompany(company="acme", source_guess="ashby")]),
-        DiscoveryTerms(terms=["AI agents", "Agentic workflows"]),
-    )
-
-    discover_companies()
-
-    assert len(state["discovered"].companies) == 1
-    assert state["discovered"].companies[0].company == "acme"
-
-
-def test_add_discovered_company_creates_valid_record(monkeypatch) -> None:
-    from job_fit_agent.main import add_discovered_company
-
-    state = _patch_discovery_io(monkeypatch, DiscoveredCompanies(), DiscoveryTerms())
-
-    add_discovered_company(
-        "hebbia",
-        "ashby",
-        "https://jobs.ashbyhq.com/hebbia",
-        "AI workflow automation company",
-    )
-
-    assert len(state["discovered"].companies) == 1
-    record = state["discovered"].companies[0]
-    assert record.company == "hebbia"
-    assert record.source_guess == "ashby"
-    assert record.careers_url == "https://jobs.ashbyhq.com/hebbia"
-    assert record.reason_discovered == "AI workflow automation company"
-    assert record.status == "new"
-
-
-def test_duplicate_discovered_companies_are_not_duplicated(monkeypatch) -> None:
-    from job_fit_agent.main import add_discovered_company
-
-    state = _patch_discovery_io(
-        monkeypatch,
-        DiscoveredCompanies(companies=[DiscoveredCompany(company="hebbia", source_guess="ashby")]),
-        DiscoveryTerms(),
-    )
-
-    add_discovered_company(
-        "hebbia",
-        "ashby",
-        "https://jobs.ashbyhq.com/hebbia",
-        "AI workflow automation company",
-    )
-
-    assert len(state["discovered"].companies) == 1
+    assert "Skipping invalid seed company 'badco': careers_url must not be empty" in output
 
 
 def test_approved_company_moves_to_watchlist(monkeypatch) -> None:
@@ -126,12 +148,14 @@ def test_unknown_source_stays_in_review(monkeypatch) -> None:
     assert state["watchlist"].lever == []
 
 
-def test_approve_company_works_for_manually_added_company(monkeypatch) -> None:
+def test_approve_company_works_after_seed_discovery(monkeypatch) -> None:
     state = _patch_discovery_io(
         monkeypatch,
-        DiscoveredCompanies(
+        DiscoveredCompanies(),
+        DiscoveryTerms(),
+        SeedCompanies(
             companies=[
-                DiscoveredCompany(
+                SeedCompany(
                     company="hebbia",
                     source_guess="ashby",
                     careers_url="https://jobs.ashbyhq.com/hebbia",
@@ -139,9 +163,9 @@ def test_approve_company_works_for_manually_added_company(monkeypatch) -> None:
                 )
             ]
         ),
-        DiscoveryTerms(),
     )
 
+    discover_companies()
     approve_company("hebbia")
 
     assert state["watchlist"].ashby == ["hebbia"]
