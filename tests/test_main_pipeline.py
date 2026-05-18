@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 from job_fit_agent.repository import UpsertResult
-from job_fit_agent.config import load_target_profile
+from job_fit_agent.config import AppConfig, load_target_profile
 from job_fit_agent.main import _normalize_submit_resume, collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
 from job_fit_agent.repository import initialize
 from job_fit_agent.models import JobPosting
@@ -44,6 +44,24 @@ def _job(title: str, location: str = "Remote", description: str = "AI analytics"
         description=description,
     )
 
+
+
+def test_app_config_enable_lever_defaults_false(monkeypatch) -> None:
+    monkeypatch.delenv("JOB_FIT_ENABLE_LEVER", raising=False)
+
+    assert AppConfig().enable_lever is False
+
+
+def test_app_config_enable_lever_accepts_true(monkeypatch) -> None:
+    monkeypatch.setenv("JOB_FIT_ENABLE_LEVER", "true")
+
+    assert AppConfig().enable_lever is True
+
+
+def test_app_config_enable_lever_accepts_one(monkeypatch) -> None:
+    monkeypatch.setenv("JOB_FIT_ENABLE_LEVER", "1")
+
+    assert AppConfig().enable_lever is True
 
 def test_collect_ranked_jobs_sorts_high_to_low() -> None:
     high = _job("Product Manager AI")
@@ -119,15 +137,17 @@ def test_main_combined_greenhouse_ashby_pipeline_without_lever(monkeypatch, caps
     assert "title: Technical Program Manager" in output
 
 
-def test_main_includes_lever_when_enabled(monkeypatch, capsys) -> None:
+def test_run_skips_lever_when_disabled(monkeypatch, capsys) -> None:
     gh_job = _job("Product Manager AI", location="Remote US")
     ashby_job = JobPosting(source="ashby", company="anthropic", title="Technical Program Manager", location="Remote US", url="https://example.com/a", description="program delivery")
-    lever_job = JobPosting(source="lever", company="ramp", title="Senior Product Manager", location="Remote US", url="https://example.com/l", description="payments roadmap")
 
+    monkeypatch.delenv("JOB_FIT_ENABLE_LEVER", raising=False)
     monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [gh_job]}))
     monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({"anthropic": [ashby_job]}))
-    monkeypatch.setattr("job_fit_agent.main.LeverCollector", lambda: StubCollector({"ramp": [lever_job]}))
-    monkeypatch.setattr("job_fit_agent.main.AppConfig", lambda: type("Cfg", (), {"enable_lever": True})())
+    monkeypatch.setattr(
+        "job_fit_agent.main.LeverCollector",
+        lambda: (_ for _ in ()).throw(AssertionError("Lever collector should not be constructed when disabled")),
+    )
     monkeypatch.setattr(
         "job_fit_agent.main.resolve_companies",
         lambda source="greenhouse": ["openai"] if source == "greenhouse" else (["anthropic"] if source == "ashby" else ["ramp"]),
@@ -136,8 +156,32 @@ def test_main_includes_lever_when_enabled(monkeypatch, capsys) -> None:
     main(["run"])
     output = capsys.readouterr().out
 
+    assert "lever enabled: False" in output
+    assert "title: Product Manager AI" in output
+    assert "title: Technical Program Manager" in output
+
+
+def test_run_includes_lever_when_enabled(monkeypatch, capsys) -> None:
+    gh_job = _job("Product Manager AI", location="Remote US")
+    ashby_job = JobPosting(source="ashby", company="anthropic", title="Technical Program Manager", location="Remote US", url="https://example.com/a", description="program delivery")
+    lever_job = JobPosting(source="lever", company="ramp", title="Senior Product Manager", location="Remote US", url="https://example.com/l", description="payments roadmap")
+
+    monkeypatch.setenv("JOB_FIT_ENABLE_LEVER", "true")
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [gh_job]}))
+    monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({"anthropic": [ashby_job]}))
+    monkeypatch.setattr("job_fit_agent.main.LeverCollector", lambda: StubCollector({"ramp": [lever_job]}))
+    monkeypatch.setattr(
+        "job_fit_agent.main.resolve_companies",
+        lambda source="greenhouse": ["openai"] if source == "greenhouse" else (["anthropic"] if source == "ashby" else ["ramp"]),
+    )
+
+    main(["run"])
+    output = capsys.readouterr().out
+
+    assert "lever enabled: True" in output
     assert "High-fit jobs to review" in output
     assert "title: Product Manager AI" in output
+    assert "title: Senior Product Manager" in output
     assert "No new matching jobs found." not in output
 
 

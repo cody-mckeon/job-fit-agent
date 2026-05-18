@@ -35,6 +35,10 @@ class CompanyWatchlist(BaseModel):
 
 
 
+def _env_flag_enabled(name: str) -> bool:
+    """Return True when an environment flag is set to a recognized true value."""
+    return os.getenv(name, "").strip().lower() in {"true", "1", "yes", "on"}
+
 
 class TelegramConfig(BaseModel):
     enabled: bool = False
@@ -51,7 +55,7 @@ class AppConfig(BaseModel):
     target_profile_path: Path = Field(default_factory=lambda: Path("config/target_profile.yaml"))
     company_watchlist_path: Path = Field(default_factory=lambda: Path("config/company_watchlist.yaml"))
     discovery_queue_path: Path = Field(default_factory=lambda: Path("config/discovery_queue.yaml"))
-    enable_lever: bool = True
+    enable_lever: bool = Field(default_factory=lambda: _env_flag_enabled("JOB_FIT_ENABLE_LEVER"))
     notifications_path: Path = Field(default_factory=lambda: Path("config/notifications.yaml"))
     discovery_terms_path: Path = Field(default_factory=lambda: Path("config/discovery_terms.yaml"))
     discovered_companies_path: Path = Field(default_factory=lambda: Path("data/discovered_companies.yaml"))

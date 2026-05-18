@@ -64,10 +64,11 @@ Suggested workflow:
 
 The CLI runs enabled collectors, prints source-specific successful/failed companies, and aggregates jobs into a shared scoring pipeline.
 
-Current runtime flag in `AppConfig`:
+Lever is disabled by default. To enable Lever at runtime, set the feature flag before running the CLI:
 
-```python
-enable_lever = True
+```bash
+export JOB_FIT_ENABLE_LEVER=true
+python -m job_fit_agent.main
 ```
 
 ## Scoring profile boosts
