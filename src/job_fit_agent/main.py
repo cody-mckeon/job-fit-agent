@@ -465,28 +465,29 @@ def _company_from_url(careers_url: str) -> str:
 
 def discover_companies() -> None:
     terms = load_discovery_terms().terms
+    print(
+        f"No discovery provider configured. Loaded {len(terms)} discovery terms, but no companies were discovered."
+    )
+
+
+def add_discovered_company(company: str, source: str, careers_url: str, reason: str) -> None:
     discovered = load_discovered_companies()
     existing_names = {entry.company.lower() for entry in discovered.companies}
-    added_count = 0
+    if company.lower() in existing_names:
+        print(f"Discovered company already exists: {company}")
+        return
 
-    for term in terms:
-        company = _slugify(term).replace("_", "-")
-        if company.lower() in existing_names:
-            continue
-        discovered.companies.append(
-            DiscoveredCompany(
-                company=company,
-                source_guess="unknown",
-                careers_url="",
-                reason_discovered=f"Seed term match: {term}",
-                status="new",
-            )
+    discovered.companies.append(
+        DiscoveredCompany(
+            company=company,
+            source_guess=source,
+            careers_url=careers_url,
+            reason_discovered=reason,
+            status="new",
         )
-        existing_names.add(company.lower())
-        added_count += 1
-
+    )
     save_discovered_companies(discovered)
-    print(f"Discovery complete. Added {added_count} new companies for review.")
+    print(f"Added discovered company: {company}")
 
 
 def approve_company(company: str) -> None:
@@ -1171,6 +1172,25 @@ def main(argv: list[str] | None = None) -> None:
         discover_companies()
         return
 
+    if command == "add-discovered-company":
+        if len(args) < 2:
+            print(
+                "Usage: python -m job_fit_agent.main add-discovered-company <company> --source <source> --url <careers_url> --reason <reason>"
+            )
+            return
+        company = args[1]
+        try:
+            source = args[args.index("--source") + 1]
+            careers_url = args[args.index("--url") + 1]
+            reason = args[args.index("--reason") + 1]
+        except (ValueError, IndexError):
+            print(
+                "Usage: python -m job_fit_agent.main add-discovered-company <company> --source <source> --url <careers_url> --reason <reason>"
+            )
+            return
+        add_discovered_company(company, source, careers_url, reason)
+        return
+
     if command == "approve-company":
         if len(args) != 2:
             print("Usage: python -m job_fit_agent.main approve-company <company>")
@@ -1226,6 +1246,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main learn-url <job_url>")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
     print("python -m job_fit_agent.main discover-companies")
+    print("python -m job_fit_agent.main add-discovered-company <company> --source <source> --url <careers_url> --reason <reason>")
     print("python -m job_fit_agent.main approve-company <company>")
     print("python -m job_fit_agent.main reject-company <company>")
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
