@@ -124,7 +124,8 @@ US_STATE_CODES = {
     "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
     "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 }
-REMOTE_US_ALIASES = ("us remote", "remote us", "remote usa", "remote united states", "united states", "anywhere in us", "usa")
+REMOTE_US_ALIASES = ("remote us", "us remote", "remote-us", "us-remote", "remote usa", "usa remote", "united states remote", "remote united states", "united states", "anywhere in us", "usa")
+LOCATION_SPECIFIC_TERMS = ("san francisco", " sf", "sf,", "new york", "nyc", "seattle", " sea", "sea,", "atlanta", "chicago", "foster city", "bay area", "california")
 NON_US_REGIONS = (
     "uae",
     "united arab emirates",
@@ -205,12 +206,22 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
             if normalized_location_type in {"hybrid", "onsite"}:
                 geographic_eligibility = "eligible" if state == "NV" else "ineligible"
 
+    has_remote_us_signal = any(alias in combined for alias in REMOTE_US_ALIASES)
+    has_location_specific_non_local = any(term in combined for term in LOCATION_SPECIFIC_TERMS)
+    has_in_office = "in-office" in combined or "in office" in combined
+    has_nevada_signal = any(token in combined for token in ("las vegas", "henderson", "nevada", " nv", ",nv"))
+
     if normalized_location_type in {"hybrid", "onsite"}:
-        nevada_targets = ("las vegas", "henderson", "nevada", " nv", ",nv")
-        if any(token in combined for token in nevada_targets):
+        if has_nevada_signal:
             geographic_eligibility = "eligible"
         else:
             geographic_eligibility = "ineligible"
+
+    if has_in_office:
+        geographic_eligibility = "eligible" if has_nevada_signal else "ineligible"
+
+    if has_location_specific_non_local and not has_remote_us_signal:
+        geographic_eligibility = "ineligible"
 
     return {
         "location_raw": location_raw or "",
@@ -235,10 +246,14 @@ def evaluate_location_viability(location: str, workplace_type: str) -> tuple[str
             return "apply_now", ["Remote US role matches target geography"]
         return "apply_now", ["Location aligns with target geography"]
     if eligibility == "ineligible":
+        if "in-office" in location_text or "in office" in location_text:
+            return "skip", ["In-office role outside Las Vegas/Nevada"]
         if location_type == "onsite":
             return "skip", ["Onsite role outside Las Vegas/Nevada"]
         if location_type == "hybrid":
             return "skip", ["Hybrid role outside Las Vegas/Nevada"]
+        if any(term in location_text for term in LOCATION_SPECIFIC_TERMS) and not any(alias in location_text for alias in REMOTE_US_ALIASES):
+            return "skip", ["Location-specific role outside Las Vegas/Nevada"]
         if "europe" in location_text or "western europe" in location_text:
             return "skip", ["Remote role restricted to Europe"]
         if any(term in location_text for term in ("united kingdom", " uk", "england", "london")):
@@ -502,6 +517,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     score += location_score
     reasons.extend(location_reasons)
     red_flags.extend(location_flags)
+    if job.normalized_location_type == "unknown" and "Onsite or location-specific US role outside Las Vegas/Nevada" in red_flags:
+        job.geographic_eligibility = "ineligible"
+
 
     for keyword, points in NEGATIVE_KEYWORDS.items():
         if keyword in text:

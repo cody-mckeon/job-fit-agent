@@ -832,6 +832,12 @@ def test_north_america_remote_is_review() -> None:
 
 def test_geographic_eligibility_tightened_cases() -> None:
     cases = [
+        ("San Francisco", "", "ineligible", "Location-specific role outside Las Vegas/Nevada"),
+        ("San Francisco", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
+        ("In-Office", "", "ineligible", "In-office role outside Las Vegas/Nevada"),
+        ("SF, NY, SEA, Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
+        ("San Francisco, US Remote", "Remote", "eligible", "Remote US role matches target geography"),
+        ("Las Vegas In-Office", "", "eligible", "Location aligns with target geography"),
         ("San Francisco, CA", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
         ("San Francisco, CA", "Hybrid", "ineligible", "Hybrid role outside Las Vegas/Nevada"),
         ("Dublin, Ireland", "Remote", "ineligible", "Remote role limited to non-US geography"),
@@ -849,3 +855,12 @@ def test_geographic_eligibility_tightened_cases() -> None:
         fit = score_job(job, TARGET_PROFILE)
         assert job.geographic_eligibility == expected_eligibility
         assert expected_reason in fit.viability_reasons
+
+
+def test_unknown_location_type_with_outside_nevada_red_flag_is_ineligible() -> None:
+    job = _job("Product Manager", location="San Francisco")
+    job.workplace_type = ""
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.normalized_location_type == "unknown"
+    assert "Onsite or location-specific US role outside Las Vegas/Nevada" in fit.red_flags
+    assert job.geographic_eligibility == "ineligible"
