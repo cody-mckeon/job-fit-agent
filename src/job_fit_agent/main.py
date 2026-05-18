@@ -252,13 +252,10 @@ def _build_enabled_collectors(app_config: AppConfig) -> dict[str, JobCollector]:
     collectors: dict[str, JobCollector] = {
         "greenhouse": GreenhouseCollector(),
         "ashby": AshbyCollector(),
-        "lever": LeverCollector(),
     }
-    return {
-        source: collector
-        for source, collector in collectors.items()
-        if source != "lever" or app_config.enable_lever
-    }
+    if app_config.enable_lever:
+        collectors["lever"] = LeverCollector()
+    return collectors
 
 
 def _collect_all_scored_jobs(
@@ -289,6 +286,7 @@ def run_pipeline() -> None:
     has_bot_token = bool(notification_config.bot_token)
     has_chat_id = bool(notification_config.chat_id)
     print(f"notifications enabled: {notification_config.enabled}")
+    print(f"lever enabled: {app_config.enable_lever}")
     print(f"telegram bot token present: {has_bot_token}")
     print(f"telegram chat id present: {has_chat_id}")
 
