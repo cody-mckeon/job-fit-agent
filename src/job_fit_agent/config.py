@@ -51,7 +51,7 @@ class AppConfig(BaseModel):
     target_profile_path: Path = Field(default_factory=lambda: Path("config/target_profile.yaml"))
     company_watchlist_path: Path = Field(default_factory=lambda: Path("config/company_watchlist.yaml"))
     discovery_queue_path: Path = Field(default_factory=lambda: Path("config/discovery_queue.yaml"))
-    enable_lever: bool = False
+    enable_lever: bool = True
     notifications_path: Path = Field(default_factory=lambda: Path("config/notifications.yaml"))
     discovery_terms_path: Path = Field(default_factory=lambda: Path("config/discovery_terms.yaml"))
     discovered_companies_path: Path = Field(default_factory=lambda: Path("data/discovered_companies.yaml"))

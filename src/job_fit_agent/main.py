@@ -269,7 +269,11 @@ def _collect_all_scored_jobs(
     all_below: list[tuple[JobPosting, FitScore]] = []
 
     for source, collector in enabled_collectors.items():
-        companies = resolve_companies(source=source)
+        try:
+            companies = resolve_companies(source=source)
+        except ValueError as exc:
+            LOGGER.warning("Skipping source with no configured companies: %s", exc)
+            continue
         ranked, below = collect_scored_jobs(collector, target_profile, companies, min_score=45)
         all_ranked.extend(ranked)
         all_below.extend(below)

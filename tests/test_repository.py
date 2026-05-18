@@ -171,3 +171,47 @@ def test_get_jobs_by_status_returns_only_matching_status(tmp_path) -> None:
     applying = get_jobs_by_status("applying", db_path=db)
     assert len(applying) == 1
     assert applying[0]["status"] == "applying"
+
+
+def test_lever_duplicate_jobs_are_skipped_or_updated_by_normalized_url(tmp_path) -> None:
+    db = tmp_path / "jobs.sqlite"
+    initialize(db)
+    first = JobPosting(
+        source="lever",
+        company="ramp",
+        title="Product Manager",
+        location="Remote (US)",
+        location_raw="Remote (US)",
+        url="https://jobs.lever.co/ramp/abc123",
+        description="AI roadmap",
+    )
+    unchanged = JobPosting(
+        source="lever",
+        company="ramp",
+        title="Product Manager",
+        location="Remote (US)",
+        location_raw="Remote (US)",
+        url="https://jobs.lever.co/ramp/abc123",
+        description="AI roadmap",
+    )
+    changed = JobPosting(
+        source="lever",
+        company="ramp",
+        title="Senior Product Manager",
+        location="Remote (US)",
+        location_raw="Remote (US)",
+        url="https://jobs.lever.co/ramp/abc123",
+        description="AI roadmap",
+    )
+
+    inserted = upsert_job(first, _fit(88, "high_fit"), db)
+    skipped = upsert_job(unchanged, _fit(88, "high_fit"), db)
+    updated = upsert_job(changed, _fit(92, "high_fit"), db)
+    rows = get_top_jobs(limit=10, db_path=db)
+
+    assert inserted.is_new is True
+    assert skipped.skipped_duplicate is True
+    assert updated.updated is True
+    assert len(rows) == 1
+    assert rows[0]["source"] == "lever"
+    assert rows[0]["title"] == "Senior Product Manager"

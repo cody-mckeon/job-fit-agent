@@ -4,13 +4,17 @@
 
 ## Supported sources
 
+The shared collection pipeline supports these hosted job-board sources:
+
 - Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{company}/jobs`
 - Ashby: `https://api.ashbyhq.com/posting-api/job-board/{company}`
-- Lever: integration exists in the codebase, but it is currently disabled due to invalid board tokens and low signal quality.
+- Lever: `https://jobs.lever.co/{company}`
+
+All supported sources are stored in the same SQLite repository and flow through the same scoring, viability, geographic eligibility, notification, and digest logic.
 
 ## Company watchlist
 
-Configured in `config/company_watchlist.yaml`:
+Configured in `config/company_watchlist.yaml` by source. Use each provider's board token as the company value.
 
 ```yaml
 greenhouse:
@@ -18,6 +22,16 @@ greenhouse:
 
 ashby:
   - anthropic
+
+lever:
+  - example-company
+```
+
+For a Lever board such as `https://jobs.lever.co/ramp`, add `ramp` under `lever`:
+
+```yaml
+lever:
+  - ramp
 ```
 
 ## Run
@@ -30,6 +44,7 @@ Learn a company from a manually found job URL:
 
 ```bash
 python -m job_fit_agent.main learn-url "https://jobs.ashbyhq.com/scrunch/abc123"
+python -m job_fit_agent.main learn-url "https://jobs.lever.co/ramp/abc123"
 ```
 
 This command parses the source/company from the URL, fetches that company board, scores all jobs, persists them to SQLite, and adds the company to `config/discovery_queue.yaml`.
@@ -39,6 +54,7 @@ Promote a discovered company to the daily monitored watchlist:
 
 ```bash
 python -m job_fit_agent.main promote-discovery ashby scrunch
+python -m job_fit_agent.main promote-discovery lever ramp
 ```
 
 Suggested workflow:
@@ -46,12 +62,12 @@ Suggested workflow:
 2. `digest` to review scored jobs.
 3. `promote-discovery` to move the company from discovery queue into permanent watchlist monitoring.
 
-The CLI runs only enabled collectors, prints source-specific successful/failed companies, and aggregates jobs into a shared scoring pipeline.
+The CLI runs enabled collectors, prints source-specific successful/failed companies, and aggregates jobs into a shared scoring pipeline.
 
 Current runtime flag in `AppConfig`:
 
 ```python
-enable_lever = False
+enable_lever = True
 ```
 
 ## Scoring profile boosts
@@ -95,6 +111,8 @@ Workflow:
 2. Review `data/discovered_companies.yaml`
 3. `approve-company <company>` to promote known-source companies into `config/company_watchlist.yaml`
 4. `python -m job_fit_agent.main run`
+
+Discovery `source_guess` values may be `ashby`, `greenhouse`, `lever`, or `unknown`. Approved companies with a known Lever source are added to the `lever` section of `config/company_watchlist.yaml`.
 
 Unknown-source discoveries stay in review (approved status only) until their source is known.
 
