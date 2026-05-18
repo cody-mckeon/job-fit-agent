@@ -1153,6 +1153,62 @@ def test_digest_excludes_near_fit_ineligible_from_default(monkeypatch, capsys) -
     assert "UK Remote PM" not in output
 
 
+def test_digest_tam_us_remote_is_not_actionable_by_default(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [{
+            "id": 31, "score": 62, "status": "new", "classification": "near_fit", "viability_level": "apply_now",
+            "geographic_eligibility": "eligible", "title": "Technical Account Manager", "company": "acme", "source": "x",
+            "url": "https://example.com/31", "viability_reasons": "[]", "red_flags": "[]",
+        }] if classification == "near_fit" else [],
+    )
+    main(["digest"])
+    assert "Technical Account Manager" not in capsys.readouterr().out
+
+
+def test_digest_product_marketing_needs_ai_or_product_systems_overlap(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [{
+            "id": 32, "score": 70, "status": "new", "classification": "near_fit", "viability_level": "review",
+            "geographic_eligibility": "eligible", "title": "Product Marketing Manager", "company": "acme", "source": "x",
+            "url": "https://example.com/32", "viability_reasons": "[]", "red_flags": "[]",
+        }] if classification == "near_fit" else [],
+    )
+    main(["digest"])
+    assert "Product Marketing Manager" not in capsys.readouterr().out
+
+
+def test_digest_tpm_internal_systems_is_actionable_near_fit(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [{
+            "id": 33, "score": 65, "status": "new", "classification": "near_fit", "viability_level": "apply_now",
+            "geographic_eligibility": "eligible", "title": "Technical Program Manager, Internal Systems", "company": "acme", "source": "x",
+            "url": "https://example.com/33", "viability_reasons": "[]", "red_flags": "[]",
+        }] if classification == "near_fit" else [],
+    )
+    main(["digest"])
+    assert "Technical Program Manager, Internal Systems" in capsys.readouterr().out
+
+
+def test_digest_marketing_ops_program_manager_without_overlap_not_actionable(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [{
+            "id": 34, "score": 60, "status": "new", "classification": "near_fit", "viability_level": "review",
+            "geographic_eligibility": "eligible", "title": "Marketing Operations Program Manager", "company": "acme", "source": "x",
+            "url": "https://example.com/34", "viability_reasons": "[]", "red_flags": "[]",
+        }] if classification == "near_fit" else [],
+    )
+    main(["digest"])
+    assert "Marketing Operations Program Manager" not in capsys.readouterr().out
+
+
 def test_digest_includes_actionable_review_and_eligible(monkeypatch, capsys) -> None:
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     def _rows(classification, limit=10):
