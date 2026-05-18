@@ -267,10 +267,10 @@ def test_digest_does_not_call_collectors(monkeypatch, capsys) -> None:
     main(["digest"])
     output = capsys.readouterr().out
 
-    assert "Saved high-fit jobs" in output
-    assert "No saved high-fit jobs." in output
-    assert "Saved near-fit jobs" in output
-    assert "No saved near-fit jobs." in output
+    assert "Actionable high-fit jobs" in output
+    assert "No actionable high-fit jobs." in output
+    assert "Actionable near-fit jobs" in output
+    assert "No actionable near-fit jobs." in output
 
 
 def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
@@ -296,7 +296,7 @@ def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
     main(["digest"])
     output = capsys.readouterr().out
 
-    assert "Saved high-fit jobs" in output
+    assert "Actionable high-fit jobs" in output
     assert "id: 1" in output
     assert "score: 97" in output
     assert "status: new" in output
@@ -326,7 +326,7 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
     main(["digest"])
     output = capsys.readouterr().out
 
-    assert "Saved near-fit jobs" in output
+    assert "Actionable near-fit jobs" in output
     assert "id: 2" in output
     assert "score: 74" in output
     assert "status: interested" in output
@@ -358,10 +358,10 @@ def test_digest_prints_both_sections_with_empty_messages(monkeypatch, capsys) ->
     main(["digest"])
     output = capsys.readouterr().out
 
-    assert "Saved high-fit jobs" in output
-    assert "No saved high-fit jobs." in output
-    assert "Saved near-fit jobs" in output
-    assert "No saved near-fit jobs." in output
+    assert "Actionable high-fit jobs" in output
+    assert "No actionable high-fit jobs." in output
+    assert "Actionable near-fit jobs" in output
+    assert "No actionable near-fit jobs." in output
 
 
 def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
@@ -393,12 +393,12 @@ def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
 
     assert "Saved Existing High" in output
-    assert "No saved high-fit jobs." not in output
+    assert "No actionable high-fit jobs." not in output
 
 
 def test_digest_command_does_not_call_run_pipeline(monkeypatch) -> None:
     called = {"run": False}
-    monkeypatch.setattr("job_fit_agent.main.print_digest", lambda group_by_status=False: None)
+    monkeypatch.setattr("job_fit_agent.main.print_digest", lambda group_by_status=False, include_skipped=False: None)
 
     def _fail_run() -> None:
         called["run"] = True
@@ -1100,3 +1100,102 @@ def test_prep_application_sqlite_row_missing_optional_fields_uses_defaults(monke
 
     strategy_text = (tmp_path / "applications" / "perplexity_product_manager_builder_15" / "resume_strategy.md").read_text(encoding="utf-8")
     assert "the role family implied by the JD" in strategy_text
+
+def test_digest_excludes_high_fit_skip_from_default(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "id": 10,
+                "score": 95,
+                "status": "new",
+                "classification": "high_fit",
+                "viability_level": "skip",
+                "geographic_eligibility": "eligible",
+                "title": "EU role",
+                "company": "acme",
+                "source": "ashby",
+                "url": "https://example.com/10",
+                "viability_reasons": '["hard_geo"]',
+                "red_flags": "[]",
+            }
+        ] if classification == "high_fit" else [],
+    )
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "EU role" not in output
+
+
+def test_digest_excludes_near_fit_ineligible_from_default(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {
+                "id": 11,
+                "score": 78,
+                "status": "new",
+                "classification": "near_fit",
+                "viability_level": "review",
+                "geographic_eligibility": "ineligible",
+                "title": "UK Remote PM",
+                "company": "acme",
+                "source": "ashby",
+                "url": "https://example.com/11",
+                "viability_reasons": '["uk_only"]',
+                "red_flags": "[]",
+            }
+        ] if classification == "near_fit" else [],
+    )
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "UK Remote PM" not in output
+
+
+def test_digest_includes_actionable_review_and_eligible(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    def _rows(classification, limit=10):
+        if classification == "high_fit":
+            return [
+                {"id": 12, "score": 90, "status": "new", "classification": "high_fit", "viability_level": "review", "geographic_eligibility": "review", "title": "Geo Review", "company": "a", "source": "ashby", "url": "https://example.com/12", "viability_reasons": "[]", "red_flags": "[]"},
+                {"id": 13, "score": 91, "status": "new", "classification": "high_fit", "viability_level": "apply_now", "geographic_eligibility": "eligible", "title": "Eligible Role", "company": "b", "source": "ashby", "url": "https://example.com/13", "viability_reasons": "[]", "red_flags": "[]"},
+            ]
+        return []
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", _rows)
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "Geo Review" in output
+    assert "Eligible Role" in output
+
+
+def test_digest_include_skipped_prints_separate_section(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=10: [
+            {"id": 14, "score": 97, "status": "new", "classification": classification, "viability_level": "skip", "geographic_eligibility": "ineligible", "title": "Foster City Hybrid", "company": "x", "source": "gh", "location_raw": "Foster City, CA (Hybrid)", "url": "https://example.com/14", "viability_reasons": '["onsite_required"]', "red_flags": "[]"},
+        ] if classification == "high_fit" else [],
+    )
+    main(["digest", "--include-skipped"])
+    output = capsys.readouterr().out
+    assert "Skipped jobs due to hard constraints" in output
+    assert "Foster City Hybrid" in output
+
+
+def test_digest_excludes_applied_rejected_archived_from_default(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    def _rows(classification, limit=10):
+        if classification != "high_fit":
+            return []
+        return [
+            {"id": 21, "score": 90, "status": "applied", "classification": "high_fit", "viability_level": "apply_now", "geographic_eligibility": "eligible", "title": "Applied Role", "company": "a", "source": "x", "url": "https://example.com/21", "viability_reasons": "[]", "red_flags": "[]"},
+            {"id": 22, "score": 90, "status": "rejected", "classification": "high_fit", "viability_level": "apply_now", "geographic_eligibility": "eligible", "title": "Rejected Role", "company": "a", "source": "x", "url": "https://example.com/22", "viability_reasons": "[]", "red_flags": "[]"},
+            {"id": 23, "score": 90, "status": "archived", "classification": "high_fit", "viability_level": "apply_now", "geographic_eligibility": "eligible", "title": "Archived Role", "company": "a", "source": "x", "url": "https://example.com/23", "viability_reasons": "[]", "red_flags": "[]"},
+        ]
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", _rows)
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "Applied Role" not in output
+    assert "Rejected Role" not in output
+    assert "Archived Role" not in output

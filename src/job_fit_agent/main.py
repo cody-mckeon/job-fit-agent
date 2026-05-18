@@ -329,20 +329,68 @@ def run_rescore() -> None:
     print("Rescore complete")
     print(f"updated jobs count: {updated_count}")
 
-def print_digest(group_by_status: bool = False) -> None:
+def _is_actionable_digest_row(row: dict) -> bool:
+    status = str(safe_row_value(row, "status", "")).lower()
+    viability_level = str(safe_row_value(row, "viability_level", "review")).lower()
+    geographic_eligibility = str(safe_row_value(row, "geographic_eligibility", "review")).lower()
+
+    if status in {"archived", "rejected", "applied"}:
+        return False
+    if viability_level not in {"apply_now", "review", "stretch"}:
+        return False
+    if viability_level == "skip":
+        return False
+    if geographic_eligibility in {"ineligible"}:
+        return False
+    if geographic_eligibility not in {"eligible", "review"}:
+        return False
+    return True
+
+
+def _is_hard_constraint_skipped_row(row: dict) -> bool:
+    viability_level = str(safe_row_value(row, "viability_level", "review")).lower()
+    geographic_eligibility = str(safe_row_value(row, "geographic_eligibility", "review")).lower()
+    return viability_level == "skip" or geographic_eligibility == "ineligible"
+
+
+def _print_skipped_rows(section_title: str, rows: list[dict], empty_message: str) -> None:
+    print(section_title)
+    if not rows:
+        print(empty_message)
+        return
+    for row in rows:
+        viability_reasons_raw = safe_row_value(row, "viability_reasons", "[]")
+        viability_reasons = json.loads(viability_reasons_raw) if viability_reasons_raw else []
+        print(f"title: {row['title']}")
+        print(f"company: {row['company']}")
+        print(f"location_raw: {safe_row_value(row, 'location_raw', safe_row_value(row, 'location', ''))}")
+        print(f"geographic_eligibility: {safe_row_value(row, 'geographic_eligibility', 'review')}")
+        print(f"viability_reasons: {', '.join(viability_reasons) if viability_reasons else 'none'}")
+        print(f"url: {row['url']}")
+        print("-")
+
+
+def print_digest(group_by_status: bool = False, include_skipped: bool = False) -> None:
     initialize()
-    high_fit_rows = get_top_jobs_by_classification("high_fit", limit=10)
-    near_fit_rows = get_top_jobs_by_classification("near_fit", limit=10)
+    high_fit_rows = get_top_jobs_by_classification("high_fit", limit=50)
+    near_fit_rows = get_top_jobs_by_classification("near_fit", limit=50)
+
+    actionable_high_fit_rows = [row for row in high_fit_rows if _is_actionable_digest_row(row)]
+    actionable_near_fit_rows = [row for row in near_fit_rows if _is_actionable_digest_row(row)]
+    skipped_rows = [row for row in high_fit_rows + near_fit_rows if _is_hard_constraint_skipped_row(row)]
 
     if not group_by_status:
-        _print_digest_rows("Saved high-fit jobs", high_fit_rows, "No saved high-fit jobs.")
+        _print_digest_rows("Actionable high-fit jobs", actionable_high_fit_rows, "No actionable high-fit jobs.")
         print()
-        _print_digest_rows("Saved near-fit jobs", near_fit_rows, "No saved near-fit jobs.")
+        _print_digest_rows("Actionable near-fit jobs", actionable_near_fit_rows, "No actionable near-fit jobs.")
+        if include_skipped:
+            print()
+            _print_skipped_rows("Skipped jobs due to hard constraints", skipped_rows, "No skipped jobs due to hard constraints.")
         return
 
     print("Saved jobs grouped by status")
     for status in sorted(VALID_STATUSES):
-        rows = [row for row in high_fit_rows + near_fit_rows if row["status"] == status]
+        rows = [row for row in actionable_high_fit_rows + actionable_near_fit_rows if row["status"] == status]
         _print_digest_rows(f"Status: {status}", rows, f"No jobs in status '{status}'.")
         print()
 
@@ -1110,7 +1158,10 @@ def main(argv: list[str] | None = None) -> None:
     command = args[0] if args else "run"
 
     if command == "digest":
-        print_digest(group_by_status="--group-by-status" in args[1:])
+        print_digest(
+            group_by_status="--group-by-status" in args[1:],
+            include_skipped="--include-skipped" in args[1:],
+        )
         return
 
     if command == "run":
