@@ -199,8 +199,20 @@ This creates `applications/<company>_<role_slug>_<job_id>/` with:
 - `resume_draft.md`
 - `cover_letter.md`
 - `recruiter_note.md`
-- `application_questions.md`
+- `answer_bank.md`
 - `risk_flags.md`
+
+Extract application questions from the job URL:
+
+```bash
+python -m job_fit_agent.main extract-application-questions <job_id>
+```
+
+Generate answers only for saved application questions:
+
+```bash
+python -m job_fit_agent.main generate-application-answers <job_id>
+```
 
 Export an upload-ready resume PDF for a prepared application package:
 
@@ -218,8 +230,10 @@ Recommended application prep workflow:
 1. `digest`
 2. `set-status <job_id> interested`
 3. `prep-application <job_id>`
-4. Review/edit package artifacts
-5. Apply manually
+4. `extract-application-questions <job_id>`
+5. `generate-application-answers <job_id>`
+6. Review/edit package artifacts
+7. Apply manually
 
 ## Location extraction debugging and audit
 

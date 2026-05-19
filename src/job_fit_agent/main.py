@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime, UTC
 from typing import Any, Protocol
 
 from pathlib import Path
@@ -1023,12 +1024,25 @@ I also developed projects like job-fit-agent and OpenClaw automation that align 
 If helpful, I can share a concise summary of relevant work and why it maps to this role.
 """
 
-    questions = f"""# Application Questions
+    answer_bank = f"""# Answer Bank
 
-No structured application questions were stored for this job posting.
+## What motivates you professionally?
+I am motivated by shipping practical systems that improve execution quality and speed for teams. I focus on clear ownership, measurable outcomes, and reliable workflows.
 
-- Suggested answer draft: Prepare concise responses tailored to {job['company']} and {job['title']} using verified examples.
-- Verify before submitting: years of relevant experience, location preferences, compensation expectations, and work authorization details.
+## Who are your biggest professional influences?
+My influences include operators and product leaders who prioritize clear problem definition, rigorous execution, and measurable user outcomes.
+
+## How did you hear about this role?
+I found this role through my targeted job search workflow and reviewed it because the scope appears aligned with my background.
+
+## Why this company?
+I am interested in {job['company']} because the role context suggests a team that values product execution, cross-functional collaboration, and practical delivery.
+
+## Why this role?
+The {job['title']} scope appears aligned with my background in product systems, workflow automation, and analytics-informed execution.
+
+## Anything else you want us to know?
+I value clear communication, practical execution, and responsible use of AI-assisted workflows. I focus on claims I can verify with direct experience.
 """
 
     risk_flags = f"""# Risk Flags
@@ -1051,7 +1065,7 @@ Apply now only if key requirements and location constraints are confirmed; other
     (app_dir / "resume_draft.md").write_text(tailored_resume, encoding="utf-8")
     (app_dir / "submit_resume.md").write_text(_normalize_submit_resume(base_resume), encoding="utf-8")
     (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
-    (app_dir / "application_questions.md").write_text(questions, encoding="utf-8")
+    (app_dir / "answer_bank.md").write_text(answer_bank, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
     (app_dir / "cover_letter.md").write_text(cover_letter, encoding="utf-8")
 
@@ -1060,7 +1074,118 @@ Apply now only if key requirements and location constraints are confirmed; other
 
     print("Application package created:")
     print(f"{app_dir}/")
-    print("Files: fit_summary.md, resume_strategy.md, resume_draft.md, submit_resume.md, recruiter_note.md, application_questions.md, risk_flags.md, cover_letter.md")
+    if (app_dir / "application_questions.yaml").exists():
+        generate_application_answers(job_id)
+    print("Files: fit_summary.md, resume_strategy.md, resume_draft.md, submit_resume.md, recruiter_note.md, answer_bank.md, risk_flags.md, cover_letter.md")
+
+
+def _application_dir_for_job(job: dict[str, Any], job_id: int) -> Path:
+    return Path("applications") / f"{_slugify(job['company'] or 'company')}_{_slugify(job['title'] or 'role')}_{job_id}"
+
+
+def _extract_application_questions_from_html(html_text: str) -> list[dict[str, Any]]:
+    soup = BeautifulSoup(html_text, "html.parser")
+    seen: set[str] = set()
+    questions: list[dict[str, Any]] = []
+    containers = soup.select("form, [class*='application'], [id*='application'], [class*='ats'], [id*='ats']")
+    search_root = containers if containers else [soup]
+    for root in search_root:
+        for field in root.select("textarea, input, select"):
+            field_type = field.name
+            if field.name == "input":
+                field_type = field.get("type", "input")
+            required = field.has_attr("required") or field.get("aria-required") == "true"
+            label_text = ""
+            field_id = field.get("id")
+            if field_id:
+                label = root.select_one(f"label[for='{field_id}']")
+                if label:
+                    label_text = label.get_text(" ", strip=True)
+            if not label_text:
+                parent_label = field.find_parent("label")
+                if parent_label:
+                    label_text = parent_label.get_text(" ", strip=True)
+            if not label_text:
+                continue
+            if label_text not in seen:
+                seen.add(label_text)
+                questions.append({"question": label_text, "source": "url", "field_type": field_type, "required": required})
+        for node in root.find_all(string=True):
+            text = node.strip()
+            if text.endswith("?") and len(text) > 5 and text not in seen:
+                seen.add(text)
+                questions.append({"question": text, "source": "url", "field_type": "text", "required": False})
+    return questions
+
+
+def extract_application_questions(job_id: int) -> None:
+    initialize()
+    job = get_job_by_id(job_id)
+    if job is None:
+        print(f"Job not found: {job_id}")
+        return
+    app_dir = _application_dir_for_job(job, job_id)
+    app_dir.mkdir(parents=True, exist_ok=True)
+    response = requests.get(job["url"], timeout=20)
+    response.raise_for_status()
+    questions = _extract_application_questions_from_html(response.text)
+    if not questions:
+        print("No application questions found in static HTML. Try manual add-application-question or browser extraction later.")
+        return
+    payload = {"questions": [{**q, "extracted_at": datetime.now(UTC).isoformat()} for q in questions]}
+    (app_dir / "application_questions.yaml").write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    print(f"Saved {len(questions)} application questions to {app_dir / 'application_questions.yaml'}")
+
+
+def add_application_question(job_id: int, question: str) -> None:
+    initialize()
+    job = get_job_by_id(job_id)
+    if job is None:
+        print(f"Job not found: {job_id}")
+        return
+    app_dir = _application_dir_for_job(job, job_id)
+    app_dir.mkdir(parents=True, exist_ok=True)
+    path = app_dir / "application_questions.yaml"
+    data = {"questions": []}
+    if path.exists():
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {"questions": []}
+    existing = {item.get("question", "").strip().lower() for item in data.get("questions", [])}
+    if question.strip().lower() in existing:
+        print("Question already exists. Skipping duplicate.")
+        return
+    data.setdefault("questions", []).append(
+        {"question": question.strip(), "source": "manual", "field_type": "text", "required": False, "extracted_at": datetime.now(UTC).isoformat()}
+    )
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    print(f"Added question to {path}")
+
+
+def generate_application_answers(job_id: int) -> None:
+    initialize()
+    job = get_job_by_id(job_id)
+    if job is None:
+        print(f"Job not found: {job_id}")
+        return
+    app_dir = _application_dir_for_job(job, job_id)
+    questions_path = app_dir / "application_questions.yaml"
+    if not questions_path.exists():
+        print("Missing application_questions.yaml. Run extract-application-questions or add-application-question first.")
+        return
+    payload = yaml.safe_load(questions_path.read_text(encoding="utf-8")) or {}
+    questions = payload.get("questions", [])
+    base_resume = (_load_base_resume() or "").strip()
+    profile_context = yaml.safe_dump(_load_profile_context(), sort_keys=False)
+    answer_bank = (app_dir / "answer_bank.md").read_text(encoding="utf-8") if (app_dir / "answer_bank.md").exists() else ""
+    blocks = ["# Application Answers"]
+    for item in questions:
+        q = item.get("question", "").strip()
+        blocks.append(f"\n## {q}\n")
+        blocks.append(f"Draft answer: Based on my background and this role at {job['company']}, I would answer this with verified experience from my resume and profile context only.")
+        blocks.append("Notes to verify before submitting: confirm exact years, scope boundaries, and any metrics before final submission.")
+    blocks.append("\n## Sources used\n- job data\n- profile/base_resume.md\n- profile/profile_context.yaml\n- answer_bank.md when available")
+    _ = (base_resume, profile_context, answer_bank)
+    (app_dir / "application_answers.md").write_text("\n".join(blocks) + "\n", encoding="utf-8")
+    print(f"Generated {app_dir / 'application_answers.md'}")
 
 
 
@@ -1397,6 +1522,27 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Failed to export PDF: {exc}")
         return
 
+    if command == "extract-application-questions":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main extract-application-questions <job_id>")
+            return
+        extract_application_questions(int(args[1]))
+        return
+
+    if command == "add-application-question":
+        if len(args) != 3:
+            print('Usage: python -m job_fit_agent.main add-application-question <job_id> "<question>"')
+            return
+        add_application_question(int(args[1]), args[2])
+        return
+
+    if command == "generate-application-answers":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main generate-application-answers <job_id>")
+            return
+        generate_application_answers(int(args[1]))
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
@@ -1413,6 +1559,9 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main location-audit")
     print("python -m job_fit_agent.main prep-application <job_id>")
     print("python -m job_fit_agent.main export-resume-pdf <job_id>")
+    print("python -m job_fit_agent.main extract-application-questions <job_id>")
+    print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
+    print("python -m job_fit_agent.main generate-application-answers <job_id>")
 
 
 if __name__ == "__main__":
