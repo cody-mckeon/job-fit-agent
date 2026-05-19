@@ -197,6 +197,7 @@ This creates `applications/<company>_<role_slug>_<job_id>/` with:
 - `fit_summary.md`
 - `resume_strategy.md`
 - `resume_draft.md`
+- `cover_letter.md`
 - `recruiter_note.md`
 - `application_questions.md`
 - `risk_flags.md`

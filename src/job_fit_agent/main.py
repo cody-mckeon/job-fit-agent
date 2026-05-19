@@ -7,7 +7,7 @@ import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from pathlib import Path
 
@@ -859,6 +859,34 @@ def _project_bullet(project_name: str) -> str:
     }
     return bullets.get(project_name, f"{project_name}: relevant project experience.")
 
+
+def _build_cover_letter(job: dict[str, Any], description: str) -> str:
+    company = (safe_row_value(job, "company", "Company") or "Company").strip()
+    title = (safe_row_value(job, "title", "Role") or "Role").strip()
+    job_url = (safe_row_value(job, "url", "") or "").strip()
+    jd_line = f"The role details in the posting at {job_url} match this focus." if job_url else "The role details in the posting match this focus."
+    jd_context = "Based on the available job description and posting details," if description else "Based on the available posting details,"
+    return f"""Cody McKeon
+Las Vegas / Henderson Metro
+760-669-9343
+mckeonc0827@gmail.com
+https://github.com/cody-mckeon
+
+Dear {company} Hiring Team,
+
+I am applying for the {title} role at {company}. I am interested in the opportunity because it aligns with the way I like to work: building practical systems that improve execution quality and speed. {jd_context} the responsibilities appear to value clear ownership, strong delivery habits, and measurable product outcomes. {jd_line}
+
+I fit this role through hands-on work across product systems, workflow automation, analytics instrumentation, AI workflows, digital experience, and cross-functional execution. I work closely with partners across product, engineering, operations, and analytics to define scope, ship improvements, and keep execution grounded in clear signals from users and internal teams.
+
+Relevant project work includes Job Fit Agent for AI, product, and workflow-focused roles, RWLV Priority Governor Agent for agentic operations and workflow automation use cases, and the Web Product Measurement Framework for analytics and product measurement programs. These projects show how I approach repeatable execution, instrumentation quality, and practical AI-assisted workflows without over-claiming scope.
+
+Thank you for your consideration. I would welcome the chance to discuss how my background can support your team in this role.
+
+Sincerely,
+Cody McKeon
+"""
+
+
 def prep_application(job_id: int) -> None:
     initialize()
     job = get_job_by_id(job_id)
@@ -1013,6 +1041,7 @@ No structured application questions were stored for this job posting.
 ## Recommendation
 Apply now only if key requirements and location constraints are confirmed; otherwise review first and refine positioning before submitting.
 """
+    cover_letter = _build_cover_letter(job, description)
 
     (app_dir / "fit_summary.md").write_text(fit_summary, encoding="utf-8")
     (app_dir / "resume_strategy.md").write_text(resume_strategy, encoding="utf-8")
@@ -1021,12 +1050,14 @@ Apply now only if key requirements and location constraints are confirmed; other
     (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
     (app_dir / "application_questions.md").write_text(questions, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
+    (app_dir / "cover_letter.md").write_text(cover_letter, encoding="utf-8")
 
     if job["status"] == "new":
         update_status(job_id, "interested")
 
     print("Application package created:")
     print(f"{app_dir}/")
+    print("Files: fit_summary.md, resume_strategy.md, resume_draft.md, submit_resume.md, recruiter_note.md, application_questions.md, risk_flags.md, cover_letter.md")
 
 
 

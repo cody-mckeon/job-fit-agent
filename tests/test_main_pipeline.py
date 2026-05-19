@@ -678,6 +678,7 @@ def test_prep_application_creates_package_and_files(monkeypatch, tmp_path):
         "recruiter_note.md",
         "application_questions.md",
         "risk_flags.md",
+        "cover_letter.md",
     }
     assert expected_files.issubset({p.name for p in app_dir.iterdir()})
     fit_text = (app_dir / "fit_summary.md").read_text(encoding="utf-8")
@@ -843,8 +844,50 @@ def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
 
     main(["prep-application", "30"])
     app_dir = tmp_path / "applications" / "beta_product_manager_30"
-    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "application_questions.md", "risk_flags.md"]:
+    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "application_questions.md", "risk_flags.md", "cover_letter.md"]:
         assert (app_dir / name).exists()
+
+
+def test_cover_letter_content_and_style(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "profile_context.yaml").write_text("strengths:\n  - workflow automation\n", encoding="utf-8")
+    (profile_dir / "resume_rules.yaml").write_text("rules:\n  - Keep claims verifiable\n", encoding="utf-8")
+    (profile_dir / "base_resume.md").write_text("- Acme — PM — 2020-2024\n", encoding="utf-8")
+    job = {
+        "id": 35,
+        "title": "Senior Product Manager, AI Workflows",
+        "company": "Nova Labs",
+        "source": "lever",
+        "url": "https://example.com/job/35",
+        "score": 85,
+        "classification": "near_fit",
+        "viability_level": "review",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": "[]",
+        "red_flags": "[]",
+        "viability_reasons": "[]",
+        "status": "new",
+        "notes": "Lead product systems and AI-assisted workflow automation.",
+    }
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "35"])
+    text = (tmp_path / "applications" / "nova_labs_senior_product_manager_ai_workflows_35" / "cover_letter.md").read_text(encoding="utf-8")
+
+    assert "Cody McKeon" in text
+    assert "Nova Labs" in text
+    assert "Senior Product Manager, AI Workflows" in text
+    assert "Resume Rules Applied" not in text
+    assert "Tailored Resume Draft" not in text
+    assert "Positioning" not in text
+    assert "[insert metric if available]" not in text
+    assert "—" not in text
 
 
 def test_prep_application_does_not_overwrite_applied_status(monkeypatch, tmp_path):
