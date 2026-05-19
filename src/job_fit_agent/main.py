@@ -1447,13 +1447,61 @@ def generate_application_answers(job_id: int) -> None:
             continue
         if not q:
             continue
+        draft_answer, notes = _build_application_answer(q, str(job.get("company", "")))
         blocks.append(f"\n## {q}\n")
-        blocks.append(f"Draft answer: Based on my background and this role at {job['company']}, I would answer this with verified experience from my resume and profile context only.")
-        blocks.append("Notes to verify before submitting: confirm exact years, scope boundaries, and any metrics before final submission.")
+        blocks.append(f"Draft answer: {draft_answer}")
+        blocks.append(f"Notes to verify before submitting: {notes}")
     blocks.append("\n## Sources used\n- job data\n- profile/base_resume.md\n- profile/profile_context.yaml\n- answer_bank.md when available")
     _ = (base_resume, profile_context, answer_bank)
     (app_dir / "application_answers.md").write_text("\n".join(blocks) + "\n", encoding="utf-8")
     print(f"Generated {app_dir / 'application_answers.md'}")
+
+
+def _display_company_name(company: str) -> str:
+    company_display_names = {
+        "linear": "Linear",
+        "stripe": "Stripe",
+        "gohighlevel": "GoHighLevel",
+        "turgon-ai": "Turgon AI",
+    }
+    raw = (company or "").strip()
+    return company_display_names.get(raw.lower(), raw.title() if raw else "the company")
+
+
+def _build_application_answer(question: str, company: str) -> tuple[str, str]:
+    q = question.lower()
+    company_name = _display_company_name(company)
+    ai_feature_patterns = [
+        "ai-powered product feature",
+        "shipped ai",
+        "techniques and technologies",
+        "outcome quality",
+        "product evaluation",
+    ]
+    if any(pattern in q for pattern in ai_feature_patterns):
+        answer = (
+            f"A recent AI product feature I shipped (highly relevant to roles at {company_name}) is the Job Fit Agent, a workflow tool I built for my own job-search process to automatically discover openings, "
+            "score role fit, and generate tailored application artifacts. The feature combines rule-based evaluation with LLM-assisted drafting: first it normalizes job data "
+            "from multiple sources, then applies transparent scoring criteria (title fit, scope, compensation, work model, and AI relevance), and finally generates application materials "
+            "such as targeted resumes, cover letters, and draft application responses. I implemented this in Python, using YAML-based profile/config inputs, SQLite for durable job and company state, "
+            "and GitHub Actions plus Telegram notifications for scheduled runs and review alerts. For quality, I evaluated outcomes through structured human-in-the-loop review: I spot-checked extracted questions, "
+            "verified score rationales against the source posting, and edited generated answers before submitting anything. I also used project-level checks (pytest) to catch regressions in parsing and scoring behavior. "
+            "I describe this as shipped as an internal workflow tool rather than a broadly adopted production product."
+        )
+        notes = (
+            "Verify whether you want to describe this as shipped, prototype, or internal workflow tool depending on the application context; confirm which technologies to emphasize (SQLite, GitHub Actions, Telegram) "
+            "based on the role; keep claims qualitative unless you can provide real measured outcomes."
+        )
+        return answer, notes
+    answer = (
+        f"For this question at {_display_company_name(company)}, I would use concrete examples from three projects: Job Fit Agent (AI-assisted role discovery and application drafting), "
+        "RWLV Priority Governor Agent (agentic prioritization workflow), and a Web Product Measurement Framework (instrumentation and product health evaluation). I would tailor the example to the prompt, "
+        "explain the user/problem context, the implementation approach, and how outcomes were reviewed with a human-in-the-loop before any external use."
+    )
+    notes = (
+        "Choose the strongest matching project for this specific prompt; confirm scope boundaries and timeline language; avoid numeric impact claims unless you can verify them."
+    )
+    return answer, notes
 
 
 
