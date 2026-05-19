@@ -1191,6 +1191,27 @@ def _extract_application_questions_from_soup(soup: BeautifulSoup, source_url: st
     return questions
 
 
+
+
+def wait_for_application_form(page) -> str:
+    try:
+        page.wait_for_selector("textarea, input, select, form, label", state="visible", timeout=15000)
+        return "css_form_fields"
+    except Exception:
+        pass
+
+    try:
+        page.get_by_text(re.compile(r"\?", re.I)).first.wait_for(timeout=5000)
+        return "question_text"
+    except Exception:
+        pass
+
+    try:
+        page.get_by_text(re.compile(r"required", re.I)).first.wait_for(timeout=5000)
+        return "required_text"
+    except Exception:
+        raise RuntimeError("Application form did not become visible after clicking Apply")
+
 def extract_application_questions_browser(job_id: int, debug: bool = False) -> None:
     initialize()
     job = get_job_by_id(job_id)
@@ -1263,7 +1284,19 @@ def extract_application_questions_browser(job_id: int, debug: bool = False) -> N
 
             stage = "form_loaded"
             _log_stage(stage)
-            page.wait_for_selector(r"textarea, input, select, form, label, text=/\?/, text=/required/i", timeout=wait_timeout_ms)
+            try:
+                strategy = wait_for_application_form(page)
+            except RuntimeError:
+                try:
+                    (app_dir / "browser_debug_snapshot.html").write_text(page.content(), encoding="utf-8")
+                except Exception:
+                    pass
+                try:
+                    page.screenshot(path=str(app_dir / "browser_debug_screenshot.png"), full_page=True)
+                except Exception:
+                    pass
+                raise
+            print(f"[browser-extract] form_wait_strategy={strategy}")
 
             stage = "questions_extracted"
             _log_stage(stage)
