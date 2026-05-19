@@ -1899,3 +1899,79 @@ def test_generate_application_answers_ai_feature_is_concrete_job_fit_agent(monke
     assert "confirm exact years" not in output
     assert "Linear" in output
     assert "%" not in output
+
+
+def _make_sqlite_job_row(**overrides):
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("create table jobs (id integer, title text, company text, url text)")
+    base = {"id": 101, "title": "PM", "company": "Delta", "url": "https://example.com"}
+    base.update(overrides)
+    conn.execute("insert into jobs (id, title, company, url) values (?, ?, ?, ?)", (base["id"], base["title"], base["company"], base["url"]))
+    return conn.execute("select * from jobs").fetchone(), conn
+
+
+def test_generate_application_answers_supports_sqlite_row_job_record(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    (tmp_path / "profile" / "profile_context.yaml").write_text("strengths:\n - execution\n", encoding="utf-8")
+    job_row, conn = _make_sqlite_job_row(id=201, title="PM", company="Delta")
+    app_dir = tmp_path / "applications" / "delta_pm_201"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "application_questions.yaml").write_text(
+        'questions:\n  - question: "Why this role?"\n    source: browser\n    answerable: true\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job_row)
+    from job_fit_agent.main import main
+
+    main(["generate-application-answers", "201"])
+    output = (app_dir / "application_answers.md").read_text(encoding="utf-8")
+    assert "## Why this role?" in output
+    conn.close()
+
+
+def test_generate_application_answers_missing_company_on_sqlite_row_does_not_crash(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    (tmp_path / "profile" / "profile_context.yaml").write_text("strengths:\n - execution\n", encoding="utf-8")
+    job_row, conn = _make_sqlite_job_row(id=202, title="PM", company=None)
+    app_dir = tmp_path / "applications" / "company_pm_202"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "application_questions.yaml").write_text(
+        'questions:\n  - question: "Why this role?"\n    source: browser\n    answerable: true\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job_row)
+    from job_fit_agent.main import main
+
+    main(["generate-application-answers", "202"])
+    assert (app_dir / "application_answers.md").exists()
+    conn.close()
+
+
+def test_generate_application_answers_creates_markdown_file_for_sqlite_row(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    (tmp_path / "profile" / "profile_context.yaml").write_text("strengths:\n - execution\n", encoding="utf-8")
+    job_row, conn = _make_sqlite_job_row(id=203, title="PM", company="Delta")
+    app_dir = tmp_path / "applications" / "delta_pm_203"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "application_questions.yaml").write_text(
+        'questions:\n  - question: "Tell us about a project"\n    source: browser\n    answerable: true\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job_row)
+    from job_fit_agent.main import main
+
+    main(["generate-application-answers", "203"])
+    assert (app_dir / "application_answers.md").exists() is True
+    conn.close()
