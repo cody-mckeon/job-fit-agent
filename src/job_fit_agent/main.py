@@ -861,20 +861,23 @@ def _project_bullet(project_name: str) -> str:
 
 
 def _build_cover_letter(job: dict[str, Any], description: str) -> str:
-    company = (safe_row_value(job, "company", "Company") or "Company").strip()
+    raw_company = (safe_row_value(job, "company", "Company") or "Company").strip()
+    company_display_names = {
+        "turgon-ai": "Turgon AI",
+        "gohighlevel": "GoHighLevel",
+    }
+    company = company_display_names.get(raw_company.lower(), raw_company.title())
     title = (safe_row_value(job, "title", "Role") or "Role").strip()
-    job_url = (safe_row_value(job, "url", "") or "").strip()
-    jd_line = f"The role details in the posting at {job_url} match this focus." if job_url else "The role details in the posting match this focus."
-    jd_context = "Based on the available job description and posting details," if description else "Based on the available posting details,"
+    jd_line = "Based on the role description, the responsibilities appear to value clear ownership, strong delivery habits, and measurable product outcomes."
+    jd_context = "Based on the role description," if description else "Based on the available role details,"
     return f"""Cody McKeon
 Las Vegas / Henderson Metro
 760-669-9343
 mckeonc0827@gmail.com
-https://github.com/cody-mckeon
 
 Dear {company} Hiring Team,
 
-I am applying for the {title} role at {company}. I am interested in the opportunity because it aligns with the way I like to work: building practical systems that improve execution quality and speed. {jd_context} the responsibilities appear to value clear ownership, strong delivery habits, and measurable product outcomes. {jd_line}
+I am applying for the {title} role at {company}. I am interested in the opportunity because it aligns with the way I like to work: building practical systems that improve execution quality and speed. {jd_context} this role appears to value clear ownership, strong delivery habits, and measurable product outcomes. {jd_line}
 
 I fit this role through hands-on work across product systems, workflow automation, analytics instrumentation, AI workflows, digital experience, and cross-functional execution. I work closely with partners across product, engineering, operations, and analytics to define scope, ship improvements, and keep execution grounded in clear signals from users and internal teams.
 
