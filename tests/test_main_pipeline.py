@@ -858,7 +858,7 @@ def test_cover_letter_content_and_style(monkeypatch, tmp_path):
     job = {
         "id": 35,
         "title": "Senior Product Manager, AI Workflows",
-        "company": "Nova Labs",
+        "company": "linear",
         "source": "lever",
         "url": "https://example.com/job/35",
         "score": 85,
@@ -878,11 +878,15 @@ def test_cover_letter_content_and_style(monkeypatch, tmp_path):
     monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
 
     main(["prep-application", "35"])
-    text = (tmp_path / "applications" / "nova_labs_senior_product_manager_ai_workflows_35" / "cover_letter.md").read_text(encoding="utf-8")
+    text = (tmp_path / "applications" / "linear_senior_product_manager_ai_workflows_35" / "cover_letter.md").read_text(encoding="utf-8")
 
     assert "Cody McKeon" in text
-    assert "Nova Labs" in text
+    assert "Linear" in text
+    assert "Dear Linear Hiring Team," in text
     assert "Senior Product Manager, AI Workflows" in text
+    assert "Based on the role description," in text
+    assert "http://" not in text
+    assert "https://" not in text
     assert "Resume Rules Applied" not in text
     assert "Tailored Resume Draft" not in text
     assert "Positioning" not in text
