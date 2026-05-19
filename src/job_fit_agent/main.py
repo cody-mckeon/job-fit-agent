@@ -1204,42 +1204,90 @@ def extract_application_questions_browser(job_id: int, debug: bool = False) -> N
     except ImportError:
         print("Playwright is not installed. Install with: pip install playwright && playwright install chromium")
         return
+
+    stage = "launching_browser"
+    page = None
+    browser = None
+    wait_timeout_ms = 15000
+
+    def _log_stage(stage_name: str) -> None:
+        print(f"[browser-extract] stage={stage_name}")
+
     try:
         with sync_playwright() as p:
+            _log_stage(stage)
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(job["url"], wait_until="domcontentloaded", timeout=45000)
-            apply_labels = ["Apply for this Job", "Apply", "Apply Now"]
+
+            stage = "navigating_to_job_url"
+            _log_stage(stage)
+            page.goto(job["url"], wait_until="domcontentloaded", timeout=wait_timeout_ms)
+
+            stage = "page_loaded"
+            _log_stage(stage)
+            page.wait_for_load_state("domcontentloaded", timeout=wait_timeout_ms)
+
+            stage = "apply_button_found"
+            _log_stage(stage)
+            apply_selectors = [
+                'text="Apply for this Job"',
+                'text="Apply"',
+                'text="Apply Now"',
+                'button:has-text("Apply")',
+                'a:has-text("Apply")',
+                '[href*="application"]',
+            ]
             clicked = False
-            for label in apply_labels:
-                locator = page.get_by_role("button", name=label)
+            for selector in apply_selectors:
+                locator = page.locator(selector)
                 if locator.count() > 0:
                     locator.first.click()
                     clicked = True
                     break
-                link_locator = page.get_by_role("link", name=label)
-                if link_locator.count() > 0:
-                    link_locator.first.click()
-                    clicked = True
-                    break
             if not clicked:
-                print("Browser extraction failed. You may need to inspect the application manually.")
-                browser.close()
-                return
-            page.wait_for_timeout(2500)
+                raise RuntimeError("No apply button selector matched")
+
+            stage = "apply_button_clicked"
+            _log_stage(stage)
+
+            stage = "form_loaded"
+            _log_stage(stage)
+            page.wait_for_selector("textarea, input, select, form, label", timeout=wait_timeout_ms)
+
+            stage = "questions_extracted"
+            _log_stage(stage)
             html = page.content()
-            if debug:
-                (app_dir / "application_form_snapshot.html").write_text(html, encoding="utf-8")
-                page.screenshot(path=str(app_dir / "application_form_screenshot.png"), full_page=True)
             soup = BeautifulSoup(html, "html.parser")
             questions = _extract_application_questions_from_soup(soup, page.url)
-            browser.close()
-    except Exception:
-        print("Browser extraction failed. You may need to inspect the application manually.")
+
+            stage = "saving_results"
+            _log_stage(stage)
+            payload = {"questions": questions}
+            (app_dir / "application_questions.yaml").write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+            print(f"Saved {len(questions)} application questions to {app_dir / 'application_questions.yaml'}")
+    except Exception as exc:
+        print(
+            "Browser extraction failed. "
+            f"stage={stage}; exception_type={type(exc).__name__}; exception_message={exc}; "
+            f"current_url={getattr(page, 'url', 'unavailable')}"
+        )
+        print("You may need to inspect the application manually.")
         return
-    payload = {"questions": questions}
-    (app_dir / "application_questions.yaml").write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
-    print(f"Saved {len(questions)} application questions to {app_dir / 'application_questions.yaml'}")
+    finally:
+        if debug and page is not None:
+            try:
+                (app_dir / "browser_debug_snapshot.html").write_text(page.content(), encoding="utf-8")
+            except Exception:
+                pass
+            try:
+                page.screenshot(path=str(app_dir / "browser_debug_screenshot.png"), full_page=True)
+            except Exception:
+                pass
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 def extract_application_questions(job_id: int) -> None:
