@@ -39,7 +39,7 @@ def test_company_watchlist_loads_correctly() -> None:
     assert "openai" not in watchlist.greenhouse
     assert "supabase" not in watchlist.greenhouse
     assert "anthropic" not in watchlist.ashby
-    assert watchlist.lever[:2] == ["ramp", "scaleai"]
+    assert watchlist.lever[:2] == ["gohighlevel", "turgon-ai"]
 
 
 def test_pipeline_accepts_company_list_from_config() -> None:
@@ -67,5 +67,5 @@ def test_missing_or_empty_watchlist_fails_gracefully(tmp_path: Path, monkeypatch
 def test_resolve_companies_supports_lever() -> None:
     companies = resolve_companies(source="lever")
 
-    assert "ramp" in companies
-    assert "scaleai" in companies
+    assert "gohighlevel" in companies
+    assert "turgon-ai" in companies
