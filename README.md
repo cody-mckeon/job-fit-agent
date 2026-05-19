@@ -208,6 +208,16 @@ Extract application questions from the job URL:
 python -m job_fit_agent.main extract-application-questions <job_id>
 ```
 
+Extract application questions in-browser (recommended for Ashby apply flows that only render questions after clicking Apply):
+
+```bash
+pip install playwright
+playwright install chromium
+python -m job_fit_agent.main extract-application-questions-browser <job_id>
+# optional debug artifacts
+python -m job_fit_agent.main extract-application-questions-browser <job_id> --debug
+```
+
 Generate answers only for saved application questions:
 
 ```bash
@@ -230,7 +240,7 @@ Recommended application prep workflow:
 1. `digest`
 2. `set-status <job_id> interested`
 3. `prep-application <job_id>`
-4. `extract-application-questions <job_id>`
+4. `extract-application-questions-browser <job_id>`
 5. `generate-application-answers <job_id>`
 6. Review/edit package artifacts
 7. Apply manually
