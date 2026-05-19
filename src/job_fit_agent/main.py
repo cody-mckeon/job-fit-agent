@@ -88,15 +88,25 @@ WEAK_ROLE_TERMS = (
 )
 STRONG_OVERLAP_TERMS = ("ai workflow", "agentic", "product systems", "workflow automation", "internal tools", "product analytics")
 STANDARD_APPLICATION_FIELDS = {
+    "name",
     "first name",
     "last name",
     "email",
     "phone",
     "resume",
+    "cover letter",
     "linkedin profile",
+    "linkedin",
+    "github",
+    "github profile",
+    "twitter handle",
+    "x handle",
+    "portfolio",
     "website",
+    "personal website",
     "current company",
     "location",
+    "what country are you based in?",
 }
 
 
@@ -1134,6 +1144,40 @@ def _is_standard_field(question: str) -> bool:
     return normalized in STANDARD_APPLICATION_FIELDS
 
 
+def _is_answerable_question(question: str, field_type: str) -> bool:
+    text = question.strip()
+    if not text:
+        return False
+    normalized = text.lower()
+    if _is_standard_field(text):
+        return False
+    if normalized in {"yes", "no"}:
+        return False
+    if field_type == "file":
+        return False
+    if field_type in {"radio", "checkbox", "select"}:
+        return False
+    if field_type == "textarea":
+        return True
+    keywords = ("describe", "explain", "why", "how", "tell us", "what motivates", "anything else")
+    if any(k in normalized for k in keywords):
+        return True
+    if text.endswith("?") and len(text) > 10:
+        return True
+    return False
+
+
+def _extract_group_prompt(field) -> str:
+    parent = field.find_parent(["fieldset", "div"])
+    if not parent:
+        return ""
+    legend = parent.find("legend")
+    if legend:
+        return legend.get_text(" ", strip=True)
+    prompt = parent.find(attrs={"class": re.compile(r"question|prompt|label|title", re.I)})
+    return prompt.get_text(" ", strip=True) if prompt else ""
+
+
 def _extract_application_questions_from_soup(soup: BeautifulSoup, source_url: str, source: str = "browser") -> list[dict[str, Any]]:
     seen: set[str] = set()
     questions: list[dict[str, Any]] = []
@@ -1152,11 +1196,9 @@ def _extract_application_questions_from_soup(soup: BeautifulSoup, source_url: st
             if parent_label:
                 label_text = parent_label.get_text(" ", strip=True)
         if not label_text:
-            parent = field.find_parent(["div", "fieldset"])
-            if parent:
-                legend = parent.find("legend")
-                if legend:
-                    label_text = legend.get_text(" ", strip=True)
+            label_text = _extract_group_prompt(field)
+        if field.get("type", "").lower() in {"radio", "checkbox"} and label_text.lower() in {"yes", "no"}:
+            label_text = _extract_group_prompt(field)
         if not label_text or label_text in seen:
             continue
         seen.add(label_text)
@@ -1186,6 +1228,7 @@ def _extract_application_questions_from_soup(soup: BeautifulSoup, source_url: st
                 "extracted_at": extracted_at,
                 "source_url": source_url,
                 "is_standard_field": _is_standard_field(label_text),
+                "answerable": _is_answerable_question(label_text, field_type),
             }
         )
     return questions
@@ -1370,7 +1413,7 @@ def add_application_question(job_id: int, question: str) -> None:
         print("Question already exists. Skipping duplicate.")
         return
     data.setdefault("questions", []).append(
-        {"question": question.strip(), "source": "manual", "field_type": "text", "required": False, "extracted_at": datetime.now(UTC).isoformat()}
+        {"question": question.strip(), "source": "manual", "field_type": "text", "required": False, "extracted_at": datetime.now(UTC).isoformat(), "is_standard_field": _is_standard_field(question), "answerable": _is_answerable_question(question, "text")}
     )
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     print(f"Added question to {path}")
@@ -1394,9 +1437,14 @@ def generate_application_answers(job_id: int) -> None:
     answer_bank = (app_dir / "answer_bank.md").read_text(encoding="utf-8") if (app_dir / "answer_bank.md").exists() else ""
     blocks = ["# Application Answers"]
     for item in questions:
-        if bool(item.get("is_standard_field")) or _is_standard_field(item.get("question", "")):
-            continue
         q = item.get("question", "").strip()
+        field_type = item.get("field_type", "text")
+        if bool(item.get("is_standard_field")) or _is_standard_field(q):
+            continue
+        if item.get("answerable") is False:
+            continue
+        if item.get("answerable") is None and not _is_answerable_question(q, field_type):
+            continue
         if not q:
             continue
         blocks.append(f"\n## {q}\n")
