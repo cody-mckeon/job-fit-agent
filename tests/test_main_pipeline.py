@@ -1,6 +1,7 @@
 import sqlite3
 import re
 from pathlib import Path
+import yaml
 
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import AppConfig, load_target_profile
@@ -676,7 +677,7 @@ def test_prep_application_creates_package_and_files(monkeypatch, tmp_path):
         "resume_strategy.md",
         "resume_draft.md",
         "recruiter_note.md",
-        "application_questions.md",
+        "answer_bank.md",
         "risk_flags.md",
         "cover_letter.md",
     }
@@ -844,7 +845,7 @@ def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
 
     main(["prep-application", "30"])
     app_dir = tmp_path / "applications" / "beta_product_manager_30"
-    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "application_questions.md", "risk_flags.md", "cover_letter.md"]:
+    for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "answer_bank.md", "risk_flags.md", "cover_letter.md"]:
         assert (app_dir / name).exists()
 
 
@@ -1381,3 +1382,87 @@ def test_digest_can_show_lever_jobs(monkeypatch, capsys) -> None:
     assert "source: lever" in output
     assert "company: ramp" in output
     assert "url: https://jobs.lever.co/ramp/abc123" in output
+
+
+def test_extract_application_questions_from_html(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("x", encoding="utf-8")
+    job = {"id": 1, "title": "PM", "company": "Acme", "url": "https://example.com/apply"}
+    html = """
+    <form>
+      <label for='motivation'>What motivates you professionally?</label>
+      <textarea id='motivation' required></textarea>
+      <label for='linkedin'>LinkedIn URL</label>
+      <input id='linkedin' />
+      <label for='influence'>Who are your biggest professional influences?</label>
+      <select id='influence' required><option>A</option></select>
+    </form>
+    """
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+    class Resp:
+        text = html
+        def raise_for_status(self): return None
+    monkeypatch.setattr("job_fit_agent.main.requests.get", lambda *args, **kwargs: Resp())
+    main(["extract-application-questions", "1"])
+    path = tmp_path / "applications" / "acme_pm_1" / "application_questions.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    questions = data["questions"]
+    assert any(q["question"] == "What motivates you professionally?" and q["field_type"] == "textarea" and q["required"] is True for q in questions)
+    assert any(q["question"] == "LinkedIn URL" and q["field_type"] == "input" for q in questions)
+    assert any(q["question"] == "Who are your biggest professional influences?" and q["field_type"] == "select" and q["required"] is True for q in questions)
+
+
+def test_extract_application_questions_no_results_message(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: {"id": 1, "title": "PM", "company": "Acme", "url": "https://example.com"})
+    class Resp:
+        text = "<html><body>hello</body></html>"
+        def raise_for_status(self): return None
+    monkeypatch.setattr("job_fit_agent.main.requests.get", lambda *args, **kwargs: Resp())
+    main(["extract-application-questions", "1"])
+    assert "No application questions found in static HTML." in capsys.readouterr().out
+
+
+def test_add_application_question_creates_file_and_avoids_duplicates(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    job = {"id": 2, "title": "PM", "company": "Beta", "url": "https://example.com"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+    main(["add-application-question", "2", "Why this role?"])
+    main(["add-application-question", "2", "Why this role?"])
+    path = tmp_path / "applications" / "beta_pm_2" / "application_questions.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert len(data["questions"]) == 1
+    assert data["questions"][0]["source"] == "manual"
+
+
+def test_generate_application_answers_from_saved_questions(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    (tmp_path / "profile" / "profile_context.yaml").write_text("strengths:\n - execution\n", encoding="utf-8")
+    job = {"id": 3, "title": "PM", "company": "Gamma", "url": "https://example.com"}
+    app_dir = tmp_path / "applications" / "gamma_pm_3"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "application_questions.yaml").write_text("questions:\n  - question: \"Why this company?\"\n    source: manual\n", encoding="utf-8")
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+    main(["generate-application-answers", "3"])
+    output = (app_dir / "application_answers.md").read_text(encoding="utf-8")
+    assert "## Why this company?" in output
+
+
+def test_prep_application_creates_answer_bank_and_no_answers_without_questions(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    job = {"id": 4, "title": "PM", "company": "Delta", "source": "ashby", "url": "https://example.com", "score": 70, "classification": "near_fit", "viability_level": "review", "location_raw": "Remote", "location": "Remote", "geographic_eligibility": "eligible", "reasons": "[]", "red_flags": "[]", "viability_reasons": "[]", "status": "new", "notes": ""}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda *_: None)
+    main(["prep-application", "4"])
+    app_dir = tmp_path / "applications" / "delta_pm_4"
+    assert (app_dir / "answer_bank.md").exists()
+    assert (app_dir / "application_answers.md").exists() is False
