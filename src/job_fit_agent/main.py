@@ -87,6 +87,17 @@ WEAK_ROLE_TERMS = (
     "customer success",
 )
 STRONG_OVERLAP_TERMS = ("ai workflow", "agentic", "product systems", "workflow automation", "internal tools", "product analytics")
+STANDARD_APPLICATION_FIELDS = {
+    "first name",
+    "last name",
+    "email",
+    "phone",
+    "resume",
+    "linkedin profile",
+    "website",
+    "current company",
+    "location",
+}
 
 
 class JobCollector(Protocol):
@@ -1118,6 +1129,119 @@ def _extract_application_questions_from_html(html_text: str) -> list[dict[str, A
     return questions
 
 
+def _is_standard_field(question: str) -> bool:
+    normalized = re.sub(r"\s+", " ", question.strip().lower())
+    return normalized in STANDARD_APPLICATION_FIELDS
+
+
+def _extract_application_questions_from_soup(soup: BeautifulSoup, source_url: str, source: str = "browser") -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    questions: list[dict[str, Any]] = []
+    extracted_at = datetime.now(UTC).isoformat()
+    for field in soup.select("textarea, input, select"):
+        if field.get("type", "").lower() == "hidden":
+            continue
+        label_text = ""
+        field_id = field.get("id")
+        if field_id:
+            label = soup.select_one(f"label[for='{field_id}']")
+            if label:
+                label_text = label.get_text(" ", strip=True)
+        if not label_text:
+            parent_label = field.find_parent("label")
+            if parent_label:
+                label_text = parent_label.get_text(" ", strip=True)
+        if not label_text:
+            parent = field.find_parent(["div", "fieldset"])
+            if parent:
+                legend = parent.find("legend")
+                if legend:
+                    label_text = legend.get_text(" ", strip=True)
+        if not label_text or label_text in seen:
+            continue
+        seen.add(label_text)
+        input_type = field.get("type", "").lower()
+        if field.name == "textarea":
+            field_type = "textarea"
+        elif field.name == "select":
+            field_type = "select"
+        elif input_type == "radio":
+            field_type = "radio"
+        elif input_type == "checkbox":
+            field_type = "checkbox"
+        elif input_type == "file":
+            field_type = "file"
+        elif field.name == "input":
+            field_type = "input"
+        else:
+            field_type = "unknown"
+        required_attr = field.has_attr("required") or field.get("aria-required") == "true"
+        required = True if required_attr else None
+        questions.append(
+            {
+                "question": label_text,
+                "source": source,
+                "field_type": field_type,
+                "required": required,
+                "extracted_at": extracted_at,
+                "source_url": source_url,
+                "is_standard_field": _is_standard_field(label_text),
+            }
+        )
+    return questions
+
+
+def extract_application_questions_browser(job_id: int, debug: bool = False) -> None:
+    initialize()
+    job = get_job_by_id(job_id)
+    if job is None:
+        print(f"Job not found: {job_id}")
+        return
+    app_dir = _application_dir_for_job(job, job_id)
+    app_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("Playwright is not installed. Install with: pip install playwright && playwright install chromium")
+        return
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(job["url"], wait_until="domcontentloaded", timeout=45000)
+            apply_labels = ["Apply for this Job", "Apply", "Apply Now"]
+            clicked = False
+            for label in apply_labels:
+                locator = page.get_by_role("button", name=label)
+                if locator.count() > 0:
+                    locator.first.click()
+                    clicked = True
+                    break
+                link_locator = page.get_by_role("link", name=label)
+                if link_locator.count() > 0:
+                    link_locator.first.click()
+                    clicked = True
+                    break
+            if not clicked:
+                print("Browser extraction failed. You may need to inspect the application manually.")
+                browser.close()
+                return
+            page.wait_for_timeout(2500)
+            html = page.content()
+            if debug:
+                (app_dir / "application_form_snapshot.html").write_text(html, encoding="utf-8")
+                page.screenshot(path=str(app_dir / "application_form_screenshot.png"), full_page=True)
+            soup = BeautifulSoup(html, "html.parser")
+            questions = _extract_application_questions_from_soup(soup, page.url)
+            browser.close()
+    except Exception:
+        print("Browser extraction failed. You may need to inspect the application manually.")
+        return
+    payload = {"questions": questions}
+    (app_dir / "application_questions.yaml").write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    print(f"Saved {len(questions)} application questions to {app_dir / 'application_questions.yaml'}")
+
+
 def extract_application_questions(job_id: int) -> None:
     initialize()
     job = get_job_by_id(job_id)
@@ -1178,7 +1302,11 @@ def generate_application_answers(job_id: int) -> None:
     answer_bank = (app_dir / "answer_bank.md").read_text(encoding="utf-8") if (app_dir / "answer_bank.md").exists() else ""
     blocks = ["# Application Answers"]
     for item in questions:
+        if bool(item.get("is_standard_field")) or _is_standard_field(item.get("question", "")):
+            continue
         q = item.get("question", "").strip()
+        if not q:
+            continue
         blocks.append(f"\n## {q}\n")
         blocks.append(f"Draft answer: Based on my background and this role at {job['company']}, I would answer this with verified experience from my resume and profile context only.")
         blocks.append("Notes to verify before submitting: confirm exact years, scope boundaries, and any metrics before final submission.")
@@ -1528,6 +1656,13 @@ def main(argv: list[str] | None = None) -> None:
             return
         extract_application_questions(int(args[1]))
         return
+    if command == "extract-application-questions-browser":
+        if len(args) < 2:
+            print("Usage: python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
+            return
+        debug = "--debug" in args[2:]
+        extract_application_questions_browser(int(args[1]), debug=debug)
+        return
 
     if command == "add-application-question":
         if len(args) != 3:
@@ -1560,6 +1695,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main prep-application <job_id>")
     print("python -m job_fit_agent.main export-resume-pdf <job_id>")
     print("python -m job_fit_agent.main extract-application-questions <job_id>")
+    print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
     print("python -m job_fit_agent.main generate-application-answers <job_id>")
 
