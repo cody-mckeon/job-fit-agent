@@ -1868,3 +1868,34 @@ def test_generate_application_answers_only_answerable_true(monkeypatch, tmp_path
     assert "## Why this role?" in output
     assert "## GitHub" not in output
     assert "## Yes" not in output
+
+
+def test_generate_application_answers_ai_feature_is_concrete_job_fit_agent(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    (tmp_path / "profile" / "profile_context.yaml").write_text("strengths:\n - execution\n", encoding="utf-8")
+    job = {"id": 88, "title": "PM", "company": "linear", "url": "https://example.com"}
+    app_dir = tmp_path / "applications" / "linear_pm_88"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    prompt = "Describe an AI-powered product feature you’ve recently shipped. Which techniques and technologies were used to build the feature? How did you evaluate the outcome quality?"
+    (app_dir / "application_questions.yaml").write_text(
+        f'questions:\n  - question: "{prompt}"\n    source: browser\n    answerable: true\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+    from job_fit_agent.main import main
+
+    main(["generate-application-answers", "88"])
+    output = (app_dir / "application_answers.md").read_text(encoding="utf-8")
+    assert "Job Fit Agent" in output
+    assert "Python" in output
+    assert any(token in output for token in ["SQLite", "GitHub Actions", "Telegram"])
+    assert "quality" in output.lower()
+    assert "human-in-the-loop" in output.lower()
+    assert "Based on my background" not in output
+    assert "I would answer this" not in output
+    assert "confirm exact years" not in output
+    assert "Linear" in output
+    assert "%" not in output
