@@ -1500,9 +1500,11 @@ def test_extract_application_questions_browser_with_debug(monkeypatch, tmp_path)
         url = "https://example.com/apply/form"
         def goto(self, *args, **kwargs):
             return None
-        def get_by_role(self, *args, **kwargs):
+        def wait_for_load_state(self, *args, **kwargs):
+            return None
+        def locator(self, *args, **kwargs):
             return FakeLocator()
-        def wait_for_timeout(self, *_):
+        def wait_for_selector(self, *args, **kwargs):
             return None
         def content(self):
             return "<form><label for='q1'>Why this role?</label><textarea id='q1' required></textarea></form>"
@@ -1529,10 +1531,127 @@ def test_extract_application_questions_browser_with_debug(monkeypatch, tmp_path)
     main(["extract-application-questions-browser", "50", "--debug"])
     app_dir = tmp_path / "applications" / "acme_pm_50"
     assert (app_dir / "application_questions.yaml").exists()
-    assert (app_dir / "application_form_snapshot.html").exists()
-    assert (app_dir / "application_form_screenshot.png").exists()
+    assert (app_dir / "browser_debug_snapshot.html").exists()
+    assert (app_dir / "browser_debug_screenshot.png").exists()
     data = yaml.safe_load((app_dir / "application_questions.yaml").read_text(encoding="utf-8"))
     assert any(q["question"] == "Why this role?" and q["source"] == "browser" for q in data["questions"])
+
+
+def test_extract_application_questions_browser_failure_includes_stage_and_exception(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    job = {"id": 51, "title": "PM", "company": "Acme", "url": "https://example.com/apply"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+
+    class EmptyLocator:
+        def count(self):
+            return 0
+        @property
+        def first(self):
+            return self
+        def click(self):
+            return None
+
+    class FakePage:
+        url = "https://example.com/apply"
+        def goto(self, *args, **kwargs):
+            return None
+        def wait_for_load_state(self, *args, **kwargs):
+            return None
+        def locator(self, *args, **kwargs):
+            return EmptyLocator()
+        def content(self):
+            return "<html></html>"
+        def screenshot(self, path, full_page=True):
+            Path(path).write_bytes(b"png")
+
+    class FakeBrowser:
+        def new_page(self):
+            return FakePage()
+        def close(self):
+            return None
+
+    class FakePlaywright:
+        def __enter__(self):
+            class C:
+                chromium = type("Chromium", (), {"launch": lambda self, headless=True: FakeBrowser()})()
+            return C()
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    sync_api_module = types.SimpleNamespace(sync_playwright=lambda: FakePlaywright())
+    monkeypatch.setitem(sys.modules, "playwright", types.SimpleNamespace(sync_api=sync_api_module))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api_module)
+
+    main(["extract-application-questions-browser", "51", "--debug"])
+    out = capsys.readouterr().out
+    assert "stage=apply_button_found" in out
+    assert "exception_type=RuntimeError" in out
+    assert "exception_message=No apply button selector matched" in out
+
+
+def test_extract_application_questions_browser_attempts_apply_selectors(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    job = {"id": 52, "title": "PM", "company": "Acme", "url": "https://example.com/apply"}
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+
+    attempted = []
+
+    class FakeLocator:
+        def __init__(self, selector):
+            self.selector = selector
+        def count(self):
+            return 1 if self.selector == '[href*="application"]' else 0
+        @property
+        def first(self):
+            return self
+        def click(self):
+            return None
+
+    class FakePage:
+        url = "https://example.com/apply/form"
+        def goto(self, *args, **kwargs):
+            return None
+        def wait_for_load_state(self, *args, **kwargs):
+            return None
+        def locator(self, selector):
+            attempted.append(selector)
+            return FakeLocator(selector)
+        def wait_for_selector(self, *args, **kwargs):
+            return None
+        def content(self):
+            return "<form><label for='q1'>Why this role?</label><textarea id='q1' required></textarea></form>"
+        def screenshot(self, path, full_page=True):
+            Path(path).write_bytes(b"png")
+
+    class FakeBrowser:
+        def new_page(self):
+            return FakePage()
+        def close(self):
+            return None
+
+    class FakePlaywright:
+        def __enter__(self):
+            class C:
+                chromium = type("Chromium", (), {"launch": lambda self, headless=True: FakeBrowser()})()
+            return C()
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    sync_api_module = types.SimpleNamespace(sync_playwright=lambda: FakePlaywright())
+    monkeypatch.setitem(sys.modules, "playwright", types.SimpleNamespace(sync_api=sync_api_module))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api_module)
+
+    main(["extract-application-questions-browser", "52"])
+    assert attempted == [
+        'text="Apply for this Job"',
+        'text="Apply"',
+        'text="Apply Now"',
+        'button:has-text("Apply")',
+        'a:has-text("Apply")',
+        '[href*="application"]',
+    ]
 
 
 def test_prep_application_creates_answer_bank_and_no_answers_without_questions(monkeypatch, tmp_path):
