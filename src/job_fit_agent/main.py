@@ -1229,18 +1229,29 @@ def extract_application_questions_browser(job_id: int, debug: bool = False) -> N
 
             stage = "apply_button_found"
             _log_stage(stage)
-            apply_selectors = [
-                'text="Apply for this Job"',
-                'text="Apply"',
-                'text="Apply Now"',
-                'button:has-text("Apply")',
-                'a:has-text("Apply")',
-                '[href*="application"]',
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(500)
+            try:
+                page.wait_for_selector("text=/apply for this job/i", timeout=5000)
+            except Exception:
+                try:
+                    page.wait_for_selector("text=/apply/i", timeout=5000)
+                except Exception:
+                    pass
+
+            apply_candidates = [
+                ("role:button exact apply for this job", page.get_by_role("button", name=re.compile(r"apply for this job", re.I))),
+                ("role:button apply", page.get_by_role("button", name=re.compile(r"apply", re.I))),
+                ("button filter has_text=apply", page.locator("button").filter(has_text=re.compile(r"apply", re.I))),
+                ("link contains /application", page.locator('[href*="application"]')),
             ]
             clicked = False
-            for selector in apply_selectors:
-                locator = page.locator(selector)
-                if locator.count() > 0:
+            for selector_name, locator in apply_candidates:
+                count = locator.count()
+                print(f"[browser-extract] apply_candidate selector={selector_name}; count={count}")
+                if count > 0:
+                    print(f"[browser-extract] apply_selector_matched={selector_name}")
+                    locator.first.scroll_into_view_if_needed()
                     locator.first.click()
                     clicked = True
                     break
@@ -1252,7 +1263,7 @@ def extract_application_questions_browser(job_id: int, debug: bool = False) -> N
 
             stage = "form_loaded"
             _log_stage(stage)
-            page.wait_for_selector("textarea, input, select, form, label", timeout=wait_timeout_ms)
+            page.wait_for_selector(r"textarea, input, select, form, label, text=/\?/, text=/required/i", timeout=wait_timeout_ms)
 
             stage = "questions_extracted"
             _log_stage(stage)

@@ -1490,9 +1490,13 @@ def test_extract_application_questions_browser_with_debug(monkeypatch, tmp_path)
     class FakeLocator:
         def count(self):
             return 1
+        def filter(self, **kwargs):
+            return self
         @property
         def first(self):
             return self
+        def scroll_into_view_if_needed(self):
+            return None
         def click(self):
             return None
 
@@ -1502,10 +1506,16 @@ def test_extract_application_questions_browser_with_debug(monkeypatch, tmp_path)
             return None
         def wait_for_load_state(self, *args, **kwargs):
             return None
-        def locator(self, *args, **kwargs):
-            return FakeLocator()
+        def evaluate(self, *args, **kwargs):
+            return None
+        def wait_for_timeout(self, *args, **kwargs):
+            return None
         def wait_for_selector(self, *args, **kwargs):
             return None
+        def get_by_role(self, *args, **kwargs):
+            return FakeLocator()
+        def locator(self, *args, **kwargs):
+            return FakeLocator()
         def content(self):
             return "<form><label for='q1'>Why this role?</label><textarea id='q1' required></textarea></form>"
         def screenshot(self, path, full_page=True):
@@ -1546,9 +1556,13 @@ def test_extract_application_questions_browser_failure_includes_stage_and_except
     class EmptyLocator:
         def count(self):
             return 0
+        def filter(self, **kwargs):
+            return self
         @property
         def first(self):
             return self
+        def scroll_into_view_if_needed(self):
+            return None
         def click(self):
             return None
 
@@ -1558,6 +1572,14 @@ def test_extract_application_questions_browser_failure_includes_stage_and_except
             return None
         def wait_for_load_state(self, *args, **kwargs):
             return None
+        def evaluate(self, *args, **kwargs):
+            return None
+        def wait_for_timeout(self, *args, **kwargs):
+            return None
+        def wait_for_selector(self, *args, **kwargs):
+            return None
+        def get_by_role(self, *args, **kwargs):
+            return EmptyLocator()
         def locator(self, *args, **kwargs):
             return EmptyLocator()
         def content(self):
@@ -1590,23 +1612,32 @@ def test_extract_application_questions_browser_failure_includes_stage_and_except
     assert "exception_message=No apply button selector matched" in out
 
 
-def test_extract_application_questions_browser_attempts_apply_selectors(monkeypatch, tmp_path):
+def test_extract_application_questions_browser_clicks_ashby_apply_button(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     job = {"id": 52, "title": "PM", "company": "Acme", "url": "https://example.com/apply"}
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
 
     attempted = []
+    fixture_html = (Path(__file__).parent / "fixtures" / "ashby" / "apply_button.html").read_text(encoding="utf-8")
 
     class FakeLocator:
-        def __init__(self, selector):
+        def __init__(self, selector, count_value=0):
             self.selector = selector
+            self._count = count_value
         def count(self):
-            return 1 if self.selector == '[href*="application"]' else 0
+            return self._count
+        def filter(self, **kwargs):
+            attempted.append(("filter", self.selector, kwargs))
+            return self
         @property
         def first(self):
             return self
+        def scroll_into_view_if_needed(self):
+            attempted.append(("scroll", self.selector))
+            return None
         def click(self):
+            attempted.append(("click", self.selector))
             return None
 
     class FakePage:
@@ -1615,13 +1646,22 @@ def test_extract_application_questions_browser_attempts_apply_selectors(monkeypa
             return None
         def wait_for_load_state(self, *args, **kwargs):
             return None
-        def locator(self, selector):
-            attempted.append(selector)
-            return FakeLocator(selector)
+        def evaluate(self, *args, **kwargs):
+            return None
+        def wait_for_timeout(self, *args, **kwargs):
+            return None
         def wait_for_selector(self, *args, **kwargs):
             return None
+        def get_by_role(self, role, name=None):
+            attempted.append(("role", role, str(name.pattern if hasattr(name, "pattern") else name)))
+            if role == "button" and hasattr(name, "pattern") and "apply for this job" in name.pattern.lower():
+                return FakeLocator("role:button exact apply for this job", 1)
+            return FakeLocator("role:button apply", 0)
+        def locator(self, selector):
+            attempted.append(selector)
+            return FakeLocator(selector, 0)
         def content(self):
-            return "<form><label for='q1'>Why this role?</label><textarea id='q1' required></textarea></form>"
+            return fixture_html + "<form><label for='q1'>Why this role?</label><textarea id='q1' required></textarea></form>"
         def screenshot(self, path, full_page=True):
             Path(path).write_bytes(b"png")
 
@@ -1644,14 +1684,7 @@ def test_extract_application_questions_browser_attempts_apply_selectors(monkeypa
     monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api_module)
 
     main(["extract-application-questions-browser", "52"])
-    assert attempted == [
-        'text="Apply for this Job"',
-        'text="Apply"',
-        'text="Apply Now"',
-        'button:has-text("Apply")',
-        'a:has-text("Apply")',
-        '[href*="application"]',
-    ]
+    assert ("click", "role:button exact apply for this job") in attempted
 
 
 def test_prep_application_creates_answer_bank_and_no_answers_without_questions(monkeypatch, tmp_path):
