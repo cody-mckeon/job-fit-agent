@@ -1687,6 +1687,100 @@ def test_extract_application_questions_browser_clicks_ashby_apply_button(monkeyp
     assert ("click", "role:button exact apply for this job") in attempted
 
 
+
+def test_wait_for_application_form_waits_on_textarea(monkeypatch):
+    from job_fit_agent.main import wait_for_application_form
+
+    calls = []
+
+    class P:
+        def wait_for_selector(self, selector, **kwargs):
+            calls.append(selector)
+            return None
+
+    strategy = wait_for_application_form(P())
+    assert strategy == "css_form_fields"
+    assert calls == ["textarea, input, select, form, label"]
+
+
+def test_wait_for_application_form_waits_on_input(monkeypatch):
+    from job_fit_agent.main import wait_for_application_form
+
+    class P:
+        def wait_for_selector(self, selector, **kwargs):
+            assert selector == "textarea, input, select, form, label"
+            return None
+
+    assert wait_for_application_form(P()) == "css_form_fields"
+
+
+def test_wait_for_application_form_falls_back_to_question_text():
+    from job_fit_agent.main import wait_for_application_form
+
+    class Locator:
+        @property
+        def first(self):
+            return self
+        def wait_for(self, timeout=0):
+            return None
+
+    class P:
+        def wait_for_selector(self, selector, **kwargs):
+            raise TimeoutError("css timed out")
+        def get_by_text(self, pattern):
+            assert pattern.pattern == r"\?"
+            return Locator()
+
+    assert wait_for_application_form(P()) == "question_text"
+
+
+def test_wait_for_application_form_does_not_use_invalid_mixed_selector():
+    from job_fit_agent.main import wait_for_application_form
+
+    selectors = []
+
+    class Locator:
+        @property
+        def first(self):
+            return self
+        def wait_for(self, timeout=0):
+            raise TimeoutError("no text")
+
+    class P:
+        def wait_for_selector(self, selector, **kwargs):
+            selectors.append(selector)
+            raise TimeoutError("css timed out")
+        def get_by_text(self, pattern):
+            return Locator()
+
+    try:
+        wait_for_application_form(P())
+    except RuntimeError:
+        pass
+    assert selectors == ["textarea, input, select, form, label"]
+    assert "text=/" not in selectors[0]
+
+
+def test_wait_for_application_form_failure_raises_clear_runtime_error():
+    from job_fit_agent.main import wait_for_application_form
+
+    class Locator:
+        @property
+        def first(self):
+            return self
+        def wait_for(self, timeout=0):
+            raise TimeoutError("missing")
+
+    class P:
+        def wait_for_selector(self, selector, **kwargs):
+            raise TimeoutError("css timed out")
+        def get_by_text(self, pattern):
+            return Locator()
+
+    with pytest.raises(RuntimeError, match="Application form did not become visible after clicking Apply"):
+        wait_for_application_form(P())
+
+
 def test_prep_application_creates_answer_bank_and_no_answers_without_questions(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
