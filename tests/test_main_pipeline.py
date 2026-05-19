@@ -1793,3 +1793,78 @@ def test_prep_application_creates_answer_bank_and_no_answers_without_questions(m
     app_dir = tmp_path / "applications" / "delta_pm_4"
     assert (app_dir / "answer_bank.md").exists()
     assert (app_dir / "application_answers.md").exists() is False
+
+
+def test_standard_field_detection_expanded():
+    from job_fit_agent.main import _is_standard_field
+    assert _is_standard_field("Name") is True
+    assert _is_standard_field("GitHub") is True
+    assert _is_standard_field("Twitter Handle") is True
+    assert _is_standard_field("Portfolio") is True
+    assert _is_standard_field("What country are you based in?") is True
+
+
+def test_yes_no_radio_options_not_answerable_and_group_prompt_extracted():
+    from bs4 import BeautifulSoup
+    from job_fit_agent.main import _extract_application_questions_from_soup
+
+    html = """
+    <form>
+      <fieldset>
+        <legend>Are you legally authorized to work?</legend>
+        <label><input type='radio' name='auth' value='yes'/>Yes</label>
+        <label><input type='radio' name='auth' value='no'/>No</label>
+      </fieldset>
+    </form>
+    """
+    qs = _extract_application_questions_from_soup(BeautifulSoup(html, 'html.parser'), 'https://example.com')
+    assert len(qs) == 1
+    assert qs[0]["question"] == "Are you legally authorized to work?"
+    assert qs[0]["answerable"] is False
+
+
+def test_linear_ai_product_feature_textarea_is_answerable():
+    from bs4 import BeautifulSoup
+    from job_fit_agent.main import _extract_application_questions_from_soup
+
+    prompt = "Describe an AI-powered product feature you’ve recently shipped. Which techniques and technologies were used to build the feature? How did you evaluate the outcome quality?"
+    html = f"<form><label for='q1'>{prompt}</label><textarea id='q1'></textarea></form>"
+    qs = _extract_application_questions_from_soup(BeautifulSoup(html, 'html.parser'), 'https://example.com')
+    assert len(qs) == 1
+    assert qs[0]["question"] == prompt
+    assert qs[0]["answerable"] is True
+
+
+def test_generate_application_answers_only_answerable_true(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "profile").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "profile" / "base_resume.md").write_text("- resume", encoding="utf-8")
+    (tmp_path / "profile" / "profile_context.yaml").write_text("strengths:\n - execution\n", encoding="utf-8")
+    job = {"id": 77, "title": "PM", "company": "Delta", "url": "https://example.com"}
+    app_dir = tmp_path / "applications" / "delta_pm_77"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "application_questions.yaml").write_text(
+        """questions:
+  - question: "GitHub"
+    source: browser
+    is_standard_field: true
+    answerable: false
+  - question: "Why this role?"
+    source: browser
+    answerable: true
+  - question: "Yes"
+    source: browser
+    field_type: radio
+    answerable: false
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda _: job)
+    from job_fit_agent.main import main
+
+    main(["generate-application-answers", "77"])
+    output = (app_dir / "application_answers.md").read_text(encoding="utf-8")
+    assert "## Why this role?" in output
+    assert "## GitHub" not in output
+    assert "## Yes" not in output
