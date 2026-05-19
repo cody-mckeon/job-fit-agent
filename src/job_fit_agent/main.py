@@ -1683,6 +1683,123 @@ def export_resume_pdf(job_id: int) -> None:
     print(f"Resume PDF exported: {output_pdf}")
 
 
+def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
+    status = str(safe_row_value(job, "status", "")).lower()
+    classification = str(safe_row_value(job, "classification", "")).lower()
+    viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
+    geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
+    if status not in {"new", "interested"}:
+        return False
+    if classification not in {"high_fit", "near_fit"}:
+        return False
+    if viability_level not in {"apply_now", "review", "stretch"}:
+        return False
+    if geographic_eligibility not in {"eligible", "review"}:
+        return False
+    if status in {"applied", "rejected", "archived"}:
+        return False
+    if viability_level == "skip":
+        return False
+    if geographic_eligibility == "ineligible":
+        return False
+    return True
+
+
+def _prep_next_application_rank_key(job: dict[str, Any]) -> tuple[int, int, int, int, int]:
+    classification_rank = {"high_fit": 0, "near_fit": 1}
+    viability_rank = {"apply_now": 0, "review": 1, "stretch": 2}
+    geography_rank = {"eligible": 0, "review": 1}
+    status_rank = {"new": 0, "interested": 0}
+    return (
+        classification_rank.get(str(safe_row_value(job, "classification", "")).lower(), 99),
+        viability_rank.get(str(safe_row_value(job, "viability_level", "")).lower(), 99),
+        -int(safe_row_value(job, "score", 0) or 0),
+        geography_rank.get(str(safe_row_value(job, "geographic_eligibility", "")).lower(), 99),
+        status_rank.get(str(safe_row_value(job, "status", "")).lower(), 99),
+    )
+
+
+def _get_prep_next_application_candidates() -> list[dict[str, Any]]:
+    initialize()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM jobs").fetchall()
+    return [dict(row) for row in rows if _is_prep_next_application_eligible(dict(row))]
+
+
+def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip_browser: bool = False) -> None:
+    initialize()
+    selected_job = None
+    if job_id is not None:
+        row = get_job_by_id(job_id)
+        if row is None:
+            print(json.dumps({"error": f"Job not found: {job_id}"}))
+            return
+        selected_job = dict(row)
+    else:
+        candidates = _get_prep_next_application_candidates()
+        if not candidates:
+            print(json.dumps({"error": "No actionable jobs found"}))
+            return
+        selected_job = sorted(candidates, key=_prep_next_application_rank_key)[0]
+
+    selected_job_id = int(selected_job["id"])
+    app_dir = _application_dir_for_job(selected_job, selected_job_id)
+    resume_pdf_path = app_dir / (
+        f"Cody_McKeon_{_sanitize_resume_name_component(str(selected_job['company']))}_{_sanitize_resume_name_component(str(selected_job['title']))}_Resume.pdf"
+    )
+
+    warning = None
+    questions_created = False
+    answers_created = False
+
+    if not dry_run:
+        prep_application(selected_job_id)
+        export_resume_pdf(selected_job_id)
+        if not skip_browser:
+            before_questions = (app_dir / "application_questions.yaml").exists()
+            extract_application_questions_browser(selected_job_id)
+            after_questions = (app_dir / "application_questions.yaml").exists()
+            questions_created = after_questions
+            if not before_questions and not after_questions:
+                warning = "application question extraction failed; inspect manually"
+            if after_questions:
+                generate_application_answers(selected_job_id)
+                answers_created = (app_dir / "application_answers.md").exists()
+        if str(selected_job.get("status", "")).lower() not in {"applied", "interviewing", "rejected", "archived"}:
+            update_status(selected_job_id, "applying")
+        try:
+            refreshed_job = get_job_by_id(selected_job_id)
+        except Exception:
+            refreshed_job = None
+        if refreshed_job is not None:
+            selected_job = dict(refreshed_job)
+
+    summary: dict[str, Any] = {
+        "job_id": selected_job_id,
+        "company": selected_job.get("company"),
+        "title": selected_job.get("title"),
+        "url": selected_job.get("url"),
+        "score": selected_job.get("score"),
+        "classification": selected_job.get("classification"),
+        "viability_level": selected_job.get("viability_level"),
+        "geographic_eligibility": selected_job.get("geographic_eligibility"),
+        "application_folder": str(app_dir),
+        "resume_pdf_path": str(resume_pdf_path),
+        "cover_letter_path": str(app_dir / "cover_letter.md"),
+        "recruiter_note_path": str(app_dir / "recruiter_note.md"),
+        "risk_flags_path": str(app_dir / "risk_flags.md"),
+        "next_action": "review package and submit manually" if not dry_run else "review selected job",
+    }
+    if questions_created:
+        summary["application_questions_path"] = str(app_dir / "application_questions.yaml")
+    if answers_created:
+        summary["application_answers_path"] = str(app_dir / "application_answers.md")
+    if warning:
+        summary["warning"] = warning
+    print(json.dumps(summary, indent=2))
+
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "run"
@@ -1866,6 +1983,20 @@ def main(argv: list[str] | None = None) -> None:
         generate_application_answers(int(args[1]))
         return
 
+    if command == "prep-next-application":
+        dry_run = "--dry-run" in args[1:]
+        skip_browser = "--skip-browser" in args[1:]
+        selected_job_id: int | None = None
+        if "--job-id" in args[1:]:
+            try:
+                job_id_index = args.index("--job-id")
+                selected_job_id = int(args[job_id_index + 1])
+            except (ValueError, IndexError):
+                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser]")
+                return
+        prep_next_application(dry_run=dry_run, job_id=selected_job_id, skip_browser=skip_browser)
+        return
+
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
     print("python -m job_fit_agent.main rescore")
@@ -1886,6 +2017,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
     print("python -m job_fit_agent.main generate-application-answers <job_id>")
+    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser]")
 
 
 if __name__ == "__main__":
