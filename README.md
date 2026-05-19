@@ -237,13 +237,11 @@ Generated filename format:
 Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.md` exists, the exporter uses the legacy file and prints a regeneration reminder.
 
 Recommended application prep workflow:
-1. `digest`
-2. `set-status <job_id> interested`
-3. `prep-application <job_id>`
-4. `extract-application-questions-browser <job_id>`
-5. `generate-application-answers <job_id>`
-6. Review/edit package artifacts
-7. Apply manually
+1. `python -m job_fit_agent.main digest`
+2. `python -m job_fit_agent.main prep-next-application`
+3. Review/edit package artifacts
+4. Submit manually
+5. `python -m job_fit_agent.main set-status <job_id> applied`
 
 ## Location extraction debugging and audit
 
