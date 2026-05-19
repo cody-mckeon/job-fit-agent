@@ -1447,7 +1447,7 @@ def generate_application_answers(job_id: int) -> None:
             continue
         if not q:
             continue
-        draft_answer, notes = _build_application_answer(q, str(job.get("company", "")))
+        draft_answer, notes = _build_application_answer(q, str(safe_row_value(job, "company", "")))
         blocks.append(f"\n## {q}\n")
         blocks.append(f"Draft answer: {draft_answer}")
         blocks.append(f"Notes to verify before submitting: {notes}")
