@@ -854,7 +854,7 @@ def test_geographic_eligibility_tightened_cases() -> None:
         ("Dublin, Ireland", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("UAE", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("Poland", "Remote", "ineligible", "Remote role limited to non-US geography"),
-        ("Bangalore, India", "Remote", "ineligible", "Remote role limited to non-US geography"),
+        ("Bangalore, India", "Remote", "ineligible", "Location outside target geography"),
         ("Barcelona, Spain", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("Remote North America", "Remote", "review", "Remote North America requires manual review"),
         ("Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
@@ -875,3 +875,25 @@ def test_unknown_location_type_with_outside_nevada_red_flag_is_ineligible() -> N
     assert job.normalized_location_type == "unknown"
     assert "Onsite or location-specific US role outside Las Vegas/Nevada" in fit.red_flags
     assert job.geographic_eligibility == "ineligible"
+
+def test_india_city_country_terms_are_ineligible() -> None:
+    for raw in ("Delhi", "New Delhi", "India", "Bangalore"):
+        job = _job("Product Manager", location=raw, description="Own product roadmap.")
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "ineligible"
+        assert fit.viability_level == "skip"
+        assert "Location outside target geography" in fit.viability_reasons
+
+
+def test_united_states_location_is_not_auto_ineligible() -> None:
+    job = _job("Product Manager", location="United States", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility in {"review", "eligible"}
+    assert fit.viability_level != "skip"
+
+
+def test_us_remote_is_eligible() -> None:
+    job = _job("Product Manager", location="US Remote", description="Own product roadmap.")
+    fit = score_job(job, TARGET_PROFILE)
+    assert job.geographic_eligibility == "eligible"
+    assert fit.viability_level == "apply_now"
