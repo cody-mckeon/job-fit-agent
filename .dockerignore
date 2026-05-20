@@ -1,0 +1,11 @@
+.git
+__pycache__/
+.pytest_cache/
+data/jobs.sqlite
+applications/
+debug/
+*.pdf
+.env
+.venv/
+venv/
+env/
