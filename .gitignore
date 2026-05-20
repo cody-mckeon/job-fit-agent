@@ -9,3 +9,4 @@ venv/
 data/jobs.sqlite
 data/jobs.sqlite-*
 applications/
+.env
