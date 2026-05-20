@@ -1,0 +1,11 @@
+services:
+  job-fit-agent:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./applications:/app/applications
+      - ./config:/app/config
+      - ./profile:/app/profile
+    command: ["python", "-m", "job_fit_agent.main", "digest"]

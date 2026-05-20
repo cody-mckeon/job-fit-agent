@@ -117,6 +117,10 @@ Discovery `source_guess` values may be `ashby`, `greenhouse`, `lever`, or `unkno
 
 Unknown-source discoveries stay in review (approved status only) until their source is known.
 
+## Docker
+
+For containerized local/Codespaces/VPS-oriented workflows, see `ops/README.md` for setup, commands, and client isolation patterns.
+
 ## Test
 
 ```bash
