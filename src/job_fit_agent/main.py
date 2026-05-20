@@ -205,7 +205,8 @@ def print_jobs(section_title: str | None, jobs: list[tuple[JobPosting, FitScore]
         print(f"classification: {fit.classification}")
         print(f"role_family: {fit.role_family}")
         print(f"viability_level: {fit.viability_level}")
-        print(f"viability_reasons: {", ".join(fit.viability_reasons) if fit.viability_reasons else "none"}")
+        viability_reasons = ", ".join(fit.viability_reasons) if fit.viability_reasons else "none"
+        print(f"viability_reasons: {viability_reasons}")
         print(f"source: {job.source}")
         print(f"title: {job.title}")
         print(f"company: {job.company}")
