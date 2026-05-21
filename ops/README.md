@@ -30,6 +30,8 @@ Use the Docker validation workflow when local Docker is unstable or unavailable.
 - The workflow file is `.github/workflows/docker-validate.yml`.
 - It runs on pushes to `main` and on pull requests that touch Docker/runtime-relevant files.
 - You can manually trigger it with **workflow_dispatch** to validate builds and runtime behavior on demand.
+- In CI, if `.env` is missing, Actions copies `.env.example` to `.env` and then appends CI-safe overrides required by Docker Compose (`JOB_FIT_ENABLE_LEVER=false`, `CLIENT_ID=github-actions`, empty Telegram fields).
+- The workflow prints only masked env values for debugging (`KEY=***`) and never commits a real `.env` file.
 
 ## Docker image dependencies
 
