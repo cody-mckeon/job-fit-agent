@@ -22,6 +22,10 @@ make docker-build
 make docker-digest
 ```
 
+## Docker image dependencies
+
+The Docker image includes PDF export dependencies: `pandoc`, `texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`, `fonts-liberation`, and `ca-certificates`.
+
 ## Run specific workflows
 
 Run prep-next-application:
