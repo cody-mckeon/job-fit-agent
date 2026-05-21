@@ -1,6 +1,6 @@
 # Docker operations
 
-This project can run in a container for repeatable local development, Codespaces use, and future VPS deployments.
+This project can run in a container for repeatable local development, Codespaces use, and future VPS deployments. Local Docker is optional because Docker validation can run in GitHub Actions via `.github/workflows/docker-validate.yml`.
 
 ## Local Docker usage
 
@@ -21,6 +21,15 @@ make docker-build
 ```bash
 make docker-digest
 ```
+
+
+## GitHub Actions Docker validation
+
+Use the Docker validation workflow when local Docker is unstable or unavailable.
+
+- The workflow file is `.github/workflows/docker-validate.yml`.
+- It runs on pushes to `main` and on pull requests that touch Docker/runtime-relevant files.
+- You can manually trigger it with **workflow_dispatch** to validate builds and runtime behavior on demand.
 
 ## Docker image dependencies
 

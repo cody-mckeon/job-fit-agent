@@ -1,0 +1,48 @@
+name: Docker Validate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - pyproject.toml
+      - requirements*.txt
+      - requirements/**/*.txt
+      - src/**
+      - tests/**
+  push:
+    branches:
+      - main
+
+jobs:
+  docker-validate:
+    runs-on: ubuntu-latest
+    env:
+      JOB_FIT_ENABLE_LEVER: "false"
+      CLIENT_ID: github-actions
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker compose build
+
+      - name: Run pytest in Docker
+        run: docker compose run --rm job-fit-agent pytest
+
+      - name: Run digest in Docker
+        run: docker compose run --rm job-fit-agent python -m job_fit_agent.main digest
+
+      - name: Optional PDF export smoke test
+        run: |
+          if [ -n "$(find applications -name submit_resume.md -print -quit 2>/dev/null)" ]; then
+            echo "Found submit_resume.md fixture, running PDF export smoke test."
+            docker compose run --rm job-fit-agent python -m job_fit_agent.main export-resume-pdf 1
+          else
+            echo "No submit_resume.md fixture found; skipping PDF export smoke test."
+          fi
