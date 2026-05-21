@@ -48,14 +48,33 @@ JOB_FIT_ENABLE_LEVER=true
 
 ## Persistent data behavior
 
-Docker Compose mounts host folders into the container:
+Default `docker-compose.yml` is optimized for local/test runtime and only persists generated outputs:
 
 - `./data -> /app/data`
 - `./applications -> /app/applications`
-- `./config -> /app/config`
-- `./profile -> /app/profile`
 
-This means SQLite data, generated application outputs, and config/profile changes persist across container runs.
+The container image uses repository-copied files for `/app/config` and `/app/profile` during default build/test runs.
+
+
+## Client-specific config/profile overrides
+
+For multi-client usage, add client-specific compose overrides instead of changing the default compose file.
+
+Example override file: `ops/clients/example/docker-compose.override.yml`
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f ops/clients/example/docker-compose.override.yml \
+  run --rm job-fit-agent pytest
+```
+
+Override mounts (read-only):
+
+- `./config:/app/config:ro`
+- `./profile:/app/profile:ro`
+
+Keep `data/` and `applications/` as persistent runtime outputs for each client environment.
 
 ## Secrets and source control
 

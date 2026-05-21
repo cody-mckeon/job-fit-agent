@@ -1,0 +1,5 @@
+services:
+  job-fit-agent:
+    volumes:
+      - ../../../config:/app/config:ro
+      - ../../../profile:/app/profile:ro
