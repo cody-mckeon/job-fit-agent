@@ -121,6 +121,8 @@ Unknown-source discoveries stay in review (approved status only) until their sou
 
 For containerized local/Codespaces/VPS-oriented workflows, see `ops/README.md` for setup, commands, and client isolation patterns.
 
+Default `docker-compose.yml` keeps only runtime output mounts (`data/`, `applications/`). `config/` and `profile/` come from files copied into the image for consistent test/build behavior. Client-specific `config/` and `profile/` bind mounts should be added only through compose override files.
+
 ## Test
 
 ```bash
