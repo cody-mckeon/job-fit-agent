@@ -29,6 +29,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Prepare CI .env for Docker Compose
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
+          sed -i '/^JOB_FIT_ENABLE_LEVER=/d' .env
+          sed -i '/^CLIENT_ID=/d' .env
+          sed -i '/^TELEGRAM_BOT_TOKEN=/d' .env
+          sed -i '/^TELEGRAM_CHAT_ID=/d' .env
+
+          {
+            echo "JOB_FIT_ENABLE_LEVER=false"
+            echo "CLIENT_ID=github-actions"
+            echo "TELEGRAM_BOT_TOKEN="
+            echo "TELEGRAM_CHAT_ID="
+          } >> .env
+
+      - name: Show masked .env values
+        run: cat .env | sed 's/=.*/=***/'
+
       - name: Build Docker image
         run: docker compose build
 
