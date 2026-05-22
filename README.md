@@ -249,6 +249,11 @@ Recommended application prep workflow:
      `python -m job_fit_agent.main prep-next-application --notify-telegram`
    - Optional explicit job selection with Telegram:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
+   - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, `ineligible`, or `applied/rejected/archived`).
+     Use `--force` to override intentionally:
+     `python -m job_fit_agent.main prep-next-application --job-id <id> --force`
+   - `--dry-run` output includes an `actionable` field so you can verify if the selected job is actionable before prep.
+   - Note: job IDs are local database IDs and can differ between environments/machines.
 3. Review/edit package artifacts
 4. Submit manually
 5. `python -m job_fit_agent.main set-status <job_id> applied`

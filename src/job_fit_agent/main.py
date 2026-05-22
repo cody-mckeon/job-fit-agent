@@ -1728,7 +1728,23 @@ def _get_prep_next_application_candidates() -> list[dict[str, Any]]:
     return [dict(row) for row in rows if _is_prep_next_application_eligible(dict(row))]
 
 
-def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip_browser: bool = False) -> dict[str, Any] | None:
+def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
+    status = str(safe_row_value(job, "status", "")).lower()
+    classification = str(safe_row_value(job, "classification", "")).lower()
+    viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
+    geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
+    if classification == "low_fit":
+        return False
+    if viability_level == "skip":
+        return False
+    if geographic_eligibility == "ineligible":
+        return False
+    if status in {"applied", "rejected", "archived"}:
+        return False
+    return True
+
+
+def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip_browser: bool = False, force: bool = False) -> dict[str, Any] | None:
     initialize()
     selected_job = None
     if job_id is not None:
@@ -1737,6 +1753,11 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
             print(json.dumps({"error": f"Job not found: {job_id}"}))
             return None
         selected_job = dict(row)
+        selected_job_actionable = _is_actionable_selected_job(selected_job)
+        if not selected_job_actionable and not force:
+            print("Job is not actionable. Use --force to prepare anyway.")
+            print(json.dumps({"error": "Job is not actionable. Use --force to prepare anyway."}))
+            return None
     else:
         candidates = _get_prep_next_application_candidates()
         if not candidates:
@@ -1751,6 +1772,7 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
     )
 
     warning = None
+    selected_job_actionable = _is_actionable_selected_job(selected_job)
     questions_created = False
     answers_created = False
 
@@ -1791,6 +1813,7 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
         "recruiter_note_path": str(app_dir / "recruiter_note.md"),
         "risk_flags_path": str(app_dir / "risk_flags.md"),
         "next_action": "review package and submit manually" if not dry_run else "review selected job",
+        "actionable": selected_job_actionable,
     }
     if questions_created:
         summary["application_questions_path"] = str(app_dir / "application_questions.yaml")
@@ -1798,6 +1821,8 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
         summary["application_answers_path"] = str(app_dir / "application_answers.md")
     if warning:
         summary["warning"] = warning
+    if force and not selected_job_actionable:
+        summary["warning"] = "Prepared despite non-actionable status because --force was used."
     print(json.dumps(summary, indent=2))
     return summary
 
@@ -2014,15 +2039,16 @@ def main(argv: list[str] | None = None) -> None:
         dry_run = "--dry-run" in args[1:]
         skip_browser = "--skip-browser" in args[1:]
         selected_job_id: int | None = None
+        force = "--force" in args[1:]
         if "--job-id" in args[1:]:
             try:
                 job_id_index = args.index("--job-id")
                 selected_job_id = int(args[job_id_index + 1])
             except (ValueError, IndexError):
-                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser] [--notify-telegram]")
+                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--notify-telegram]")
                 return
         notify_telegram = "--notify-telegram" in args[1:]
-        summary = prep_next_application(dry_run=dry_run, job_id=selected_job_id, skip_browser=skip_browser)
+        summary = prep_next_application(dry_run=dry_run, job_id=selected_job_id, skip_browser=skip_browser, force=force)
         if notify_telegram:
             config = load_notification_config().telegram
             if not config.bot_token or not config.chat_id:
@@ -2056,7 +2082,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
     print("python -m job_fit_agent.main generate-application-answers <job_id>")
-    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser] [--notify-telegram]")
+    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--notify-telegram]")
 
 
 if __name__ == "__main__":
