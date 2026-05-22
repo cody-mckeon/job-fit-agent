@@ -58,12 +58,14 @@ def test_skip_and_excluded_status_jobs_are_excluded(monkeypatch, capsys):
             _job(2, status="applied"),
             _job(3, status="rejected"),
             _job(4, status="archived"),
-            _job(5),
+            _job(5, geographic_eligibility="ineligible"),
+            _job(6, classification="low_fit"),
+            _job(7),
         ],
     )
     prep_next_application(dry_run=True)
     payload = json.loads(capsys.readouterr().out)
-    assert payload["job_id"] == 5
+    assert payload["job_id"] == 7
 
 
 def test_job_id_prepares_specific_job(monkeypatch, capsys):
@@ -80,6 +82,52 @@ def test_job_id_prepares_specific_job(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["job_id"] == 42
 
+
+
+
+def test_job_id_low_fit_blocked_without_force(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(34, classification="low_fit") if job_id == 34 else None)
+
+    result = prep_next_application(job_id=34, skip_browser=True)
+    output = capsys.readouterr().out
+    assert result is None
+    assert "Job is not actionable. Use --force to prepare anyway." in output
+
+
+def test_job_id_skip_blocked_without_force(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(35, viability_level="skip") if job_id == 35 else None)
+
+    result = prep_next_application(job_id=35, skip_browser=True)
+    output = capsys.readouterr().out
+    assert result is None
+    assert "Job is not actionable. Use --force to prepare anyway." in output
+
+
+def test_job_id_ineligible_blocked_without_force(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(36, geographic_eligibility="ineligible") if job_id == 36 else None)
+
+    result = prep_next_application(job_id=36, skip_browser=True)
+    output = capsys.readouterr().out
+    assert result is None
+    assert "Job is not actionable. Use --force to prepare anyway." in output
+
+
+def test_force_allows_non_actionable_job_id(monkeypatch, capsys):
+    job = _job(37, viability_level="skip")
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 37 else None)
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    prep_next_application(job_id=37, skip_browser=True, force=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 37
+    assert payload["warning"] == "Prepared despite non-actionable status because --force was used."
+    assert payload["actionable"] is False
 
 def test_skip_browser_skips_extraction(monkeypatch, capsys):
     job = _job(7)
