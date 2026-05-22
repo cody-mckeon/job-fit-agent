@@ -245,9 +245,17 @@ Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.m
 Recommended application prep workflow:
 1. `python -m job_fit_agent.main digest`
 2. `python -m job_fit_agent.main prep-next-application`
+   - Optional Telegram handoff:
+     `python -m job_fit_agent.main prep-next-application --notify-telegram`
+   - Optional explicit job selection with Telegram:
+     `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
 3. Review/edit package artifacts
 4. Submit manually
 5. `python -m job_fit_agent.main set-status <job_id> applied`
+
+Telegram handoff requires:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
 
 ## Location extraction debugging and audit
 

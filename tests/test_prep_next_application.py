@@ -1,7 +1,7 @@
 import json
-from pathlib import Path
 
-from job_fit_agent.main import prep_next_application
+from job_fit_agent.config import NotificationConfig, TelegramConfig
+from job_fit_agent.main import main, prep_next_application
 
 
 def _job(job_id: int, **overrides):
@@ -128,3 +128,70 @@ def test_browser_extraction_failure_returns_warning_but_succeeds(monkeypatch, ca
     payload = json.loads(capsys.readouterr().out)
     assert payload["warning"] == "application question extraction failed; inspect manually"
     assert payload["job_id"] == 11
+
+
+def test_notify_telegram_sends_when_credentials_exist(monkeypatch):
+    sent: dict[str, str] = {}
+    summary = _job(12) | {
+        "application_folder": "applications/acme_product_manager_12",
+        "resume_pdf_path": "applications/acme_product_manager_12/resume.pdf",
+        "cover_letter_path": "applications/acme_product_manager_12/cover_letter.md",
+        "risk_flags_path": "applications/acme_product_manager_12/risk_flags.md",
+        "application_answers_path": "applications/acme_product_manager_12/application_answers.md",
+    }
+    monkeypatch.setattr("job_fit_agent.main.prep_next_application", lambda **kwargs: summary)
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.send_message_with_credentials",
+        lambda text, bot_token, chat_id: sent.update({"text": text, "bot_token": bot_token, "chat_id": chat_id}),
+    )
+
+    main(["prep-next-application", "--notify-telegram"])
+    assert sent["bot_token"] == "token"
+    assert sent["chat_id"] == "chat"
+    assert "Title: Product Manager" in sent["text"]
+    assert "Company: acme" in sent["text"]
+    assert "Next action: Review materials manually before submitting." in sent["text"]
+    assert "Application answers: applications/acme_product_manager_12/application_answers.md" in sent["text"]
+
+
+def test_notify_telegram_missing_credentials_skips_without_failing(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.prep_next_application", lambda **kwargs: _job(13))
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token="", chat_id="")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.send_message_with_credentials",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not send")),
+    )
+    main(["prep-next-application", "--notify-telegram"])
+    assert "Telegram notification skipped: missing credentials" in capsys.readouterr().out
+
+
+def test_notify_telegram_includes_browser_extraction_warning(monkeypatch):
+    sent: dict[str, str] = {}
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_next_application",
+        lambda **kwargs: _job(14)
+        | {
+            "application_folder": "applications/acme",
+            "resume_pdf_path": "applications/acme/resume.pdf",
+            "cover_letter_path": "applications/acme/cover_letter.md",
+            "risk_flags_path": "applications/acme/risk_flags.md",
+            "warning": "application question extraction failed; inspect manually",
+        },
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.send_message_with_credentials",
+        lambda text, bot_token, chat_id: sent.update({"text": text}),
+    )
+    main(["prep-next-application", "--notify-telegram"])
+    assert "Application question extraction failed. Inspect manually." in sent["text"]

@@ -42,7 +42,7 @@ from job_fit_agent.config import (
     save_discovery_queue,
 )
 from job_fit_agent.models import FitScore, JobPosting
-from job_fit_agent.notifications.telegram import send_message
+from job_fit_agent.notifications.telegram import send_message, send_message_with_credentials
 from job_fit_agent.repository import (
     DB_PATH,
     VALID_STATUSES,
@@ -1728,20 +1728,20 @@ def _get_prep_next_application_candidates() -> list[dict[str, Any]]:
     return [dict(row) for row in rows if _is_prep_next_application_eligible(dict(row))]
 
 
-def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip_browser: bool = False) -> None:
+def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip_browser: bool = False) -> dict[str, Any] | None:
     initialize()
     selected_job = None
     if job_id is not None:
         row = get_job_by_id(job_id)
         if row is None:
             print(json.dumps({"error": f"Job not found: {job_id}"}))
-            return
+            return None
         selected_job = dict(row)
     else:
         candidates = _get_prep_next_application_candidates()
         if not candidates:
             print(json.dumps({"error": "No actionable jobs found"}))
-            return
+            return None
         selected_job = sorted(candidates, key=_prep_next_application_rank_key)[0]
 
     selected_job_id = int(selected_job["id"])
@@ -1799,6 +1799,32 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
     if warning:
         summary["warning"] = warning
     print(json.dumps(summary, indent=2))
+    return summary
+
+
+def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> str:
+    lines = [
+        "[APPLICATION PACKAGE READY]",
+        f"Company: {summary.get('company', '')}",
+        f"Title: {summary.get('title', '')}",
+        f"Score: {summary.get('score', '')}",
+        f"Classification: {summary.get('classification', '')}",
+        f"Viability: {summary.get('viability_level', '')}",
+        f"Geo eligibility: {summary.get('geographic_eligibility', '')}",
+        f"Job URL: {summary.get('url', '')}",
+        f"Application folder: {summary.get('application_folder', '')}",
+        f"Resume PDF: {summary.get('resume_pdf_path', '')}",
+        f"Cover letter: {summary.get('cover_letter_path', '')}",
+    ]
+    if summary.get("application_questions_path"):
+        lines.append(f"Application questions: {summary.get('application_questions_path')}")
+    if summary.get("application_answers_path"):
+        lines.append(f"Application answers: {summary.get('application_answers_path')}")
+    lines.append(f"Risk flags: {summary.get('risk_flags_path', '')}")
+    if summary.get("warning") == "application question extraction failed; inspect manually":
+        lines.append("Application question extraction failed. Inspect manually.")
+    lines.append("Next action: Review materials manually before submitting.")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1993,9 +2019,21 @@ def main(argv: list[str] | None = None) -> None:
                 job_id_index = args.index("--job-id")
                 selected_job_id = int(args[job_id_index + 1])
             except (ValueError, IndexError):
-                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser]")
+                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser] [--notify-telegram]")
                 return
-        prep_next_application(dry_run=dry_run, job_id=selected_job_id, skip_browser=skip_browser)
+        notify_telegram = "--notify-telegram" in args[1:]
+        summary = prep_next_application(dry_run=dry_run, job_id=selected_job_id, skip_browser=skip_browser)
+        if notify_telegram:
+            config = load_notification_config().telegram
+            if not config.bot_token or not config.chat_id:
+                print("Telegram notification skipped: missing credentials")
+                return
+            if summary is not None:
+                send_message_with_credentials(
+                    text=_format_prep_next_application_telegram_message(summary),
+                    bot_token=config.bot_token,
+                    chat_id=config.chat_id,
+                )
         return
 
     print("python -m job_fit_agent.main run")
@@ -2018,7 +2056,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
     print("python -m job_fit_agent.main generate-application-answers <job_id>")
-    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser]")
+    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--skip-browser] [--notify-telegram]")
 
 
 if __name__ == "__main__":

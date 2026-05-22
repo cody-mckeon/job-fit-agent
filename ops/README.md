@@ -43,7 +43,13 @@ Run prep-next-application:
 
 ```bash
 make docker-prep-next
+# or with Telegram handoff:
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-application --notify-telegram
 ```
+
+Telegram handoff env vars:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
 
 Run an interactive CLI command in container:
 
