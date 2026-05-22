@@ -10,17 +10,10 @@ from job_fit_agent.config import load_notification_config
 LOGGER = logging.getLogger(__name__)
 
 
-def send_message(text: str) -> None:
-    config = load_notification_config().telegram
-    if not config.enabled:
-        return
-    if not config.bot_token or not config.chat_id:
-        LOGGER.warning("Telegram notifications enabled but bot_token/chat_id not configured.")
-        return
-
-    payload = json.dumps({"chat_id": config.chat_id, "text": text}).encode("utf-8")
+def send_message_with_credentials(text: str, bot_token: str, chat_id: str) -> None:
+    payload = json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8")
     request = Request(
-        url=f"https://api.telegram.org/bot{config.bot_token}/sendMessage",
+        url=f"https://api.telegram.org/bot{bot_token}/sendMessage",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -32,3 +25,14 @@ def send_message(text: str) -> None:
                 LOGGER.warning("Telegram notification failed with HTTP status %s", response.status)
     except (HTTPError, URLError) as exc:  # pragma: no cover
         LOGGER.warning("Telegram notification failed: %s", exc)
+
+
+def send_message(text: str) -> None:
+    config = load_notification_config().telegram
+    if not config.enabled:
+        return
+    if not config.bot_token or not config.chat_id:
+        LOGGER.warning("Telegram notifications enabled but bot_token/chat_id not configured.")
+        return
+
+    send_message_with_credentials(text=text, bot_token=config.bot_token, chat_id=config.chat_id)
