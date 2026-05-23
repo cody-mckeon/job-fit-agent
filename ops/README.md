@@ -138,10 +138,13 @@ GitHub Actions is the current background runner for daily automation; local mach
 
 Daily scheduled flow includes Telegram package summary handoff:
 - `pytest`
+- `rm -f data/jobs.sqlite data/jobs.sqlite-shm data/jobs.sqlite-wal` (clears test/runtime DB state before production steps)
 - `python -m job_fit_agent.main run`
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
 - `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
+
+Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications).
 
 Set repository secrets:
 - `TELEGRAM_BOT_TOKEN`

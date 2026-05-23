@@ -11,7 +11,7 @@ def _job(job_id: int, **overrides):
         "id": job_id,
         "company": "acme",
         "title": "Product Manager",
-        "url": f"https://example.com/{job_id}",
+        "url": f"https://jobs.ashbyhq.com/acme/{job_id}",
         "score": 80,
         "classification": "high_fit",
         "viability_level": "apply_now",
@@ -204,7 +204,7 @@ def test_notify_telegram_sends_when_credentials_exist(monkeypatch):
     assert sent["chat_id"] == "chat"
     assert "Job title: Product Manager" in sent["text"]
     assert "Company: acme" in sent["text"]
-    assert "Job URL: https://example.com/12" in sent["text"]
+    assert "Job URL: https://jobs.ashbyhq.com/acme/12" in sent["text"]
     assert "Cover letter: applications/acme_product_manager_12/cover_letter.md" in sent["text"]
     assert "Risk flags: applications/acme_product_manager_12/risk_flags.md" in sent["text"]
     assert "Next action: Review materials manually before submitting." in sent["text"]
@@ -285,3 +285,36 @@ def test_scheduled_workflow_does_not_commit_jobs_sqlite():
     workflow = Path('.github/workflows/job-agent.yml').read_text()
     assert "git add data/jobs.sqlite" not in workflow
     assert "git commit" not in workflow
+
+
+def test_job_id_placeholder_url_blocked_without_force(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(55, url="https://example.com/fake"))
+    result = prep_next_application(job_id=55, skip_browser=True)
+    assert result is None
+    assert "Job is not actionable. Use --force to prepare anyway." in capsys.readouterr().out
+
+
+def test_job_id_placeholder_url_allowed_with_force(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(56, url="https://example.com/fake"))
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    prep_next_application(job_id=56, skip_browser=True, force=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 56
+
+
+def test_notify_telegram_no_summary_prints_real_url_message(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.prep_next_application", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.send_message_with_credentials",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not send")),
+    )
+    main(["prep-next-application", "--notify-telegram"])
+    assert "No actionable real job URL found." in capsys.readouterr().out

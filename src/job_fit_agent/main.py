@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from pathlib import Path
 
@@ -398,6 +399,8 @@ def _is_actionable_digest_row(row: dict) -> bool:
     if geographic_eligibility in {"ineligible"}:
         return False
     if geographic_eligibility not in {"eligible", "review"}:
+        return False
+    if not _is_actionable_real_job_url(str(safe_row_value(row, "url", ""))):
         return False
     title = str(safe_row_value(row, "title", "")).lower()
     score = int(safe_row_value(row, "score", 0) or 0)
@@ -1703,6 +1706,28 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
         return False
     if geographic_eligibility == "ineligible":
         return False
+    if not _is_actionable_real_job_url(str(safe_row_value(job, "url", ""))):
+        return False
+    return True
+
+
+def _is_actionable_real_job_url(url: str) -> bool:
+    value = str(url or "").strip()
+    if not value:
+        return False
+    if not (value.startswith("http://") or value.startswith("https://")):
+        return False
+    parsed = urlparse(value)
+    hostname = (parsed.hostname or "").lower()
+    if not hostname:
+        return False
+    if hostname in {"example.com", "localhost", "127.0.0.1", "test.com"}:
+        return False
+    if "fake" in hostname or "placeholder" in hostname:
+        return False
+    path = (parsed.path or "").lower()
+    if "fake" in path or "placeholder" in path:
+        return False
     return True
 
 
@@ -1740,6 +1765,8 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     if geographic_eligibility == "ineligible":
         return False
     if status in {"applied", "rejected", "archived"}:
+        return False
+    if not _is_actionable_real_job_url(str(safe_row_value(job, "url", ""))):
         return False
     return True
 
@@ -2103,12 +2130,14 @@ def main(argv: list[str] | None = None) -> None:
             if not config.bot_token or not config.chat_id:
                 print("Telegram notification skipped: missing credentials")
                 return
-            if summary is not None:
-                send_message_with_credentials(
-                    text=_format_prep_next_application_telegram_message(summary),
-                    bot_token=config.bot_token,
-                    chat_id=config.chat_id,
-                )
+            if summary is None:
+                print("No actionable real job URL found.")
+                return
+            send_message_with_credentials(
+                text=_format_prep_next_application_telegram_message(summary),
+                bot_token=config.bot_token,
+                chat_id=config.chat_id,
+            )
         return
 
     print("python -m job_fit_agent.main run")
