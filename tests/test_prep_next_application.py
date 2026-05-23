@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import json
 
 from job_fit_agent.config import NotificationConfig, TelegramConfig
@@ -200,8 +202,11 @@ def test_notify_telegram_sends_when_credentials_exist(monkeypatch):
     main(["prep-next-application", "--notify-telegram"])
     assert sent["bot_token"] == "token"
     assert sent["chat_id"] == "chat"
-    assert "Title: Product Manager" in sent["text"]
+    assert "Job title: Product Manager" in sent["text"]
     assert "Company: acme" in sent["text"]
+    assert "Job URL: https://example.com/12" in sent["text"]
+    assert "Cover letter: applications/acme_product_manager_12/cover_letter.md" in sent["text"]
+    assert "Risk flags: applications/acme_product_manager_12/risk_flags.md" in sent["text"]
     assert "Next action: Review materials manually before submitting." in sent["text"]
     assert "Application answers: applications/acme_product_manager_12/application_answers.md" in sent["text"]
 
@@ -242,4 +247,41 @@ def test_notify_telegram_includes_browser_extraction_warning(monkeypatch):
         lambda text, bot_token, chat_id: sent.update({"text": text}),
     )
     main(["prep-next-application", "--notify-telegram"])
-    assert "Application question extraction failed. Inspect manually." in sent["text"]
+    assert "Browser extraction failed: inspect manually." in sent["text"]
+
+
+def test_notify_telegram_includes_skip_browser_warning(monkeypatch):
+    sent: dict[str, str] = {}
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_next_application",
+        lambda **kwargs: _job(15)
+        | {
+            "application_folder": "applications/acme",
+            "resume_pdf_path": "applications/acme/resume.pdf",
+            "cover_letter_path": "applications/acme/cover_letter.md",
+            "risk_flags_path": "applications/acme/risk_flags.md",
+            "skip_browser": True,
+            "pdf_export": "generated",
+        },
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.send_message_with_credentials",
+        lambda text, bot_token, chat_id: sent.update({"text": text}),
+    )
+    main(["prep-next-application", "--notify-telegram"])
+    assert "Browser extraction skipped (--skip-browser)." in sent["text"]
+
+
+def test_scheduled_workflow_runs_prep_next_with_skip_browser_and_notify():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    assert "python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram" in workflow
+
+
+def test_scheduled_workflow_does_not_commit_jobs_sqlite():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    assert "git add data/jobs.sqlite" not in workflow
+    assert "git commit" not in workflow
