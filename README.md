@@ -293,10 +293,13 @@ GitHub Actions is the current always-on background runner, so your local compute
 
 The scheduled workflow runs:
 - `pytest`
+- `rm -f data/jobs.sqlite data/jobs.sqlite-shm data/jobs.sqlite-wal` (clears test/runtime DB state before real run)
 - `python -m job_fit_agent.main run`
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
 - `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
+
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`).
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`

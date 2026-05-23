@@ -39,6 +39,9 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Clear runtime DB after tests
+        run: rm -f data/jobs.sqlite data/jobs.sqlite-shm data/jobs.sqlite-wal
+
       - name: Optionally reset database
         if: ${{ github.event.inputs.reset_database == 'true' }}
         run: rm -f data/jobs.sqlite

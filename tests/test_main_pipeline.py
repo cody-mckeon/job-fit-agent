@@ -7,7 +7,7 @@ import yaml
 
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import AppConfig, load_target_profile
-from job_fit_agent.main import _normalize_submit_resume, collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
+from job_fit_agent.main import _is_actionable_real_job_url, _normalize_submit_resume, collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
 from job_fit_agent.repository import initialize
 from job_fit_agent.models import JobPosting
 
@@ -65,6 +65,37 @@ def test_app_config_enable_lever_accepts_one(monkeypatch) -> None:
     monkeypatch.setenv("JOB_FIT_ENABLE_LEVER", "1")
 
     assert AppConfig().enable_lever is True
+
+
+def test_actionable_real_job_url_allows_greenhouse_ashby_and_lever() -> None:
+    assert _is_actionable_real_job_url("https://job-boards.greenhouse.io/openai/jobs/123")
+    assert _is_actionable_real_job_url("https://jobs.ashbyhq.com/replit/abc")
+    assert _is_actionable_real_job_url("https://jobs.lever.co/ramp/def")
+
+
+def test_digest_excludes_placeholder_urls_from_default_sections(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "job_fit_agent.main.get_top_jobs_by_classification",
+        lambda classification, limit=50: [
+            {
+                "id": 1,
+                "score": 95,
+                "status": "new",
+                "classification": classification,
+                "viability_level": "apply_now",
+                "geographic_eligibility": "eligible",
+                "title": "Product Manager",
+                "company": "x",
+                "source": "greenhouse",
+                "url": "https://example.com/product-manager-ai",
+                "viability_reasons": "[]",
+                "red_flags": "[]",
+            }
+        ] if classification == "high_fit" else [],
+    )
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "https://example.com/product-manager-ai" not in output
 
 def test_collect_ranked_jobs_sorts_high_to_low() -> None:
     high = _job("Product Manager AI")
@@ -332,7 +363,7 @@ def test_digest_returns_saved_high_fit_jobs(monkeypatch, capsys) -> None:
                 "title": "Staff PM",
                 "company": "openai",
                 "source": "greenhouse",
-                "url": "https://example.com/high_fit",
+                "url": "https://jobs.lever.co/acme/high_fit",
                 "red_flags": "[]",
             }
         ]
@@ -362,7 +393,7 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
                 "title": "TPM",
                 "company": "openai",
                 "source": "greenhouse",
-                "url": "https://example.com/near_fit",
+                "url": "https://jobs.lever.co/acme/near_fit",
                 "red_flags": "[]",
             }
         ]
@@ -423,7 +454,7 @@ def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
                     "title": "Saved Existing High",
                 "company": "openai",
                 "source": "greenhouse",
-                "url": "https://example.com/saved_high",
+                "url": "https://jobs.lever.co/acme/saved_high",
                 "red_flags": "[]",
                 "first_seen_at": "2026-05-01T00:00:00+00:00",
                 "last_seen_at": "2026-05-05T00:00:00+00:00",
@@ -476,7 +507,7 @@ def test_digest_prints_sqlite_row_output(monkeypatch, capsys) -> None:
         "CREATE TABLE jobs (id INTEGER, score INTEGER, status TEXT, title TEXT, company TEXT, source TEXT, url TEXT, red_flags TEXT, classification TEXT, viability_level TEXT, viability_reasons TEXT)"
     )
     conn.execute(
-        "INSERT INTO jobs VALUES (1, 97, 'new', 'Staff PM', 'openai', 'greenhouse', 'https://example.com/high_fit', '[]', 'high_fit', 'review', '[\"reason\"]')"
+        "INSERT INTO jobs VALUES (1, 97, 'new', 'Staff PM', 'openai', 'greenhouse', 'https://jobs.lever.co/acme/high_fit', '[]', 'high_fit', 'review', '[\"reason\"]')"
     )
     row = conn.execute("SELECT * FROM jobs").fetchone()
     assert row is not None
@@ -519,7 +550,7 @@ def test_digest_does_not_crash_when_viability_fields_missing(monkeypatch, capsys
                 "title": "Saved Existing High",
                 "company": "openai",
                 "source": "greenhouse",
-                "url": "https://example.com/saved_high",
+                "url": "https://jobs.lever.co/acme/saved_high",
                 "red_flags": "[]",
             }
         ]
@@ -1282,7 +1313,7 @@ def test_digest_tpm_internal_systems_is_actionable_near_fit(monkeypatch, capsys)
         lambda classification, limit=10: [{
             "id": 33, "score": 65, "status": "new", "classification": "near_fit", "viability_level": "apply_now",
             "geographic_eligibility": "eligible", "title": "Technical Program Manager, Internal Systems", "company": "acme", "source": "x",
-            "url": "https://example.com/33", "viability_reasons": "[]", "red_flags": "[]",
+            "url": "https://jobs.lever.co/acme/33", "viability_reasons": "[]", "red_flags": "[]",
         }] if classification == "near_fit" else [],
     )
     main(["digest"])
@@ -1308,8 +1339,8 @@ def test_digest_includes_actionable_review_and_eligible(monkeypatch, capsys) -> 
     def _rows(classification, limit=10):
         if classification == "high_fit":
             return [
-                {"id": 12, "score": 90, "status": "new", "classification": "high_fit", "viability_level": "review", "geographic_eligibility": "review", "title": "Geo Review", "company": "a", "source": "ashby", "url": "https://example.com/12", "viability_reasons": "[]", "red_flags": "[]"},
-                {"id": 13, "score": 91, "status": "new", "classification": "high_fit", "viability_level": "apply_now", "geographic_eligibility": "eligible", "title": "Eligible Role", "company": "b", "source": "ashby", "url": "https://example.com/13", "viability_reasons": "[]", "red_flags": "[]"},
+                {"id": 12, "score": 90, "status": "new", "classification": "high_fit", "viability_level": "review", "geographic_eligibility": "review", "title": "Geo Review", "company": "a", "source": "ashby", "url": "https://jobs.lever.co/acme/12", "viability_reasons": "[]", "red_flags": "[]"},
+                {"id": 13, "score": 91, "status": "new", "classification": "high_fit", "viability_level": "apply_now", "geographic_eligibility": "eligible", "title": "Eligible Role", "company": "b", "source": "ashby", "url": "https://jobs.lever.co/acme/13", "viability_reasons": "[]", "red_flags": "[]"},
             ]
         return []
     monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", _rows)
