@@ -44,6 +44,7 @@ Learn a company from a manually found job URL:
 
 ```bash
 python -m job_fit_agent.main learn-url "https://jobs.ashbyhq.com/scrunch/abc123"
+python -m job_fit_agent.main learn-url "https://job-boards.greenhouse.io/robotsandpencils/jobs/5227395008"
 python -m job_fit_agent.main learn-url "https://jobs.lever.co/ramp/abc123"
 ```
 

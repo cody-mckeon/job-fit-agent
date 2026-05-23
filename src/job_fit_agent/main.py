@@ -125,7 +125,7 @@ class ParsedJobUrl:
 def parse_job_url(job_url: str) -> ParsedJobUrl:
     patterns = [
         ("ashby", r"^https://jobs\.ashbyhq\.com/([^/]+)/([^/?#]+)"),
-        ("greenhouse", r"^https://boards\.greenhouse\.io/([^/]+)/jobs/([^/?#]+)"),
+        ("greenhouse", r"^https://(?:boards|job-boards)\.greenhouse\.io/([^/]+)/jobs/([^/?#]+)"),
         ("lever", r"^https://jobs\.lever\.co/([^/]+)/([^/?#]+)"),
     ]
     for source, pattern in patterns:
