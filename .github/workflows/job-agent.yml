@@ -11,11 +11,16 @@ on:
     - cron: "0 14 * * *"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   run-job-agent:
     runs-on: ubuntu-latest
+    env:
+      JOB_FIT_ENABLE_LEVER: "true"
+      CLIENT_ID: github-actions
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout repository
@@ -38,16 +43,14 @@ jobs:
         if: ${{ github.event.inputs.reset_database == 'true' }}
         run: rm -f data/jobs.sqlite
 
-      - name: Run job agent
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Run collection pipeline
         run: python -m job_fit_agent.main run
 
-      - name: Commit updated job database
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add data/jobs.sqlite || true
-          git diff --cached --quiet || git commit -m "Update job database"
-          git push
+      - name: Rescore jobs
+        run: python -m job_fit_agent.main rescore
+
+      - name: Print digest
+        run: python -m job_fit_agent.main digest
+
+      - name: Prep next application package and notify Telegram
+        run: python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram

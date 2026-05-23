@@ -1776,9 +1776,15 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
     questions_created = False
     answers_created = False
 
+    pdf_export_status = "skipped" if dry_run else "generated"
     if not dry_run:
         prep_application(selected_job_id)
-        export_resume_pdf(selected_job_id)
+        try:
+            export_resume_pdf(selected_job_id)
+        except subprocess.CalledProcessError:
+            pdf_export_status = "failed"
+        if skip_browser:
+            warning = warning or "browser extraction skipped"
         if not skip_browser:
             before_questions = (app_dir / "application_questions.yaml").exists()
             extract_application_questions_browser(selected_job_id)
@@ -1807,6 +1813,9 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
         "classification": selected_job.get("classification"),
         "viability_level": selected_job.get("viability_level"),
         "geographic_eligibility": selected_job.get("geographic_eligibility"),
+        "reasons": selected_job.get("reasons") or [],
+        "viability_reasons": selected_job.get("viability_reasons") or [],
+        "red_flags": selected_job.get("red_flags") or [],
         "application_folder": str(app_dir),
         "resume_pdf_path": str(resume_pdf_path),
         "cover_letter_path": str(app_dir / "cover_letter.md"),
@@ -1814,6 +1823,8 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
         "risk_flags_path": str(app_dir / "risk_flags.md"),
         "next_action": "review package and submit manually" if not dry_run else "review selected job",
         "actionable": selected_job_actionable,
+        "skip_browser": skip_browser,
+        "pdf_export": pdf_export_status,
     }
     if questions_created:
         summary["application_questions_path"] = str(app_dir / "application_questions.yaml")
@@ -1828,27 +1839,65 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
 
 
 def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> str:
+    def _as_list(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item).strip()]
+        return []
+
     lines = [
-        "[APPLICATION PACKAGE READY]",
+        "Job Fit Agent: Application Package Ready",
+        "",
+        "Package",
         f"Company: {summary.get('company', '')}",
-        f"Title: {summary.get('title', '')}",
+        f"Job title: {summary.get('title', '')}",
         f"Score: {summary.get('score', '')}",
         f"Classification: {summary.get('classification', '')}",
-        f"Viability: {summary.get('viability_level', '')}",
-        f"Geo eligibility: {summary.get('geographic_eligibility', '')}",
+        f"Viability level: {summary.get('viability_level', '')}",
+        f"Geographic eligibility: {summary.get('geographic_eligibility', '')}",
         f"Job URL: {summary.get('url', '')}",
+        "",
+        "Paths",
         f"Application folder: {summary.get('application_folder', '')}",
         f"Resume PDF: {summary.get('resume_pdf_path', '')}",
         f"Cover letter: {summary.get('cover_letter_path', '')}",
+        f"Recruiter note: {summary.get('recruiter_note_path', '')}",
+        f"Risk flags: {summary.get('risk_flags_path', '')}",
     ]
     if summary.get("application_questions_path"):
         lines.append(f"Application questions: {summary.get('application_questions_path')}")
     if summary.get("application_answers_path"):
         lines.append(f"Application answers: {summary.get('application_answers_path')}")
-    lines.append(f"Risk flags: {summary.get('risk_flags_path', '')}")
+
+    why_lines: list[str] = []
+    fit_reasons = _as_list(summary.get("reasons"))
+    viability_reasons = _as_list(summary.get("viability_reasons"))
+    red_flags = _as_list(summary.get("red_flags"))
+    if fit_reasons:
+        why_lines.append(f"Fit: {', '.join(fit_reasons[:2])}")
+    if viability_reasons:
+        why_lines.append(f"Viability: {', '.join(viability_reasons[:2])}")
+    if red_flags:
+        why_lines.append(f"Red flags: {', '.join(red_flags[:2])}")
+    if why_lines:
+        lines.extend(["", "Why this surfaced", *why_lines])
+
+    warnings: list[str] = []
     if summary.get("warning") == "application question extraction failed; inspect manually":
-        lines.append("Application question extraction failed. Inspect manually.")
-    lines.append("Next action: Review materials manually before submitting.")
+        warnings.append("Browser extraction failed: inspect manually.")
+    if summary.get("skip_browser"):
+        warnings.append("Browser extraction skipped (--skip-browser).")
+    if summary.get("pdf_export") in {"failed", "skipped"}:
+        warnings.append(f"PDF export {summary.get('pdf_export')}.")
+    viability = str(summary.get("viability_level", "")).lower()
+    if viability in {"stretch", "review"}:
+        warnings.append("Job is stretch/review, not apply_now.")
+    geo = str(summary.get("geographic_eligibility", "")).lower()
+    if geo == "review":
+        warnings.append("Geographic eligibility is review.")
+    if warnings:
+        lines.extend(["", "Warnings", *warnings])
+
+    lines.extend(["", "Next action: Review materials manually before submitting."])
     return "\n".join(lines)
 
 

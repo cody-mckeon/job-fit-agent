@@ -130,3 +130,21 @@ Example command pattern:
 ```bash
 docker compose --project-name jobfit_acme --env-file clients/acme/.env up -d
 ```
+
+
+## Current background runner
+
+GitHub Actions is the current background runner for daily automation; local machines do not need to remain powered on.
+
+Daily scheduled flow includes Telegram package summary handoff:
+- `pytest`
+- `python -m job_fit_agent.main run`
+- `python -m job_fit_agent.main rescore`
+- `python -m job_fit_agent.main digest`
+- `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
+
+Set repository secrets:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+Docker/VPS remains the future multi-client runtime pattern.

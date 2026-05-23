@@ -284,3 +284,21 @@ python -m job_fit_agent.main location-audit
 - Known source limitations (e.g. Ashby/Cursor blank `location_raw` where metadata is unavailable upstream).
 
 Some job boards do not consistently expose complete location metadata in HTML, JSON-LD, or hydration/app-data payloads. In known cases (currently Ashby/Cursor), blank location metadata is treated as a source limitation and is routed to manual review instead of being treated as an extraction/parser failure.
+
+
+## GitHub Actions daily runner
+
+GitHub Actions is the current always-on background runner, so your local computer does not need to stay on for daily processing.
+
+The scheduled workflow runs:
+- `pytest`
+- `python -m job_fit_agent.main run`
+- `python -m job_fit_agent.main rescore`
+- `python -m job_fit_agent.main digest`
+- `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
+
+Required GitHub secrets for Telegram package summaries:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+Docker/VPS remains the future multi-client runtime path.
