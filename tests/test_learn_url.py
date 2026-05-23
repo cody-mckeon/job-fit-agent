@@ -17,6 +17,14 @@ def test_parse_greenhouse_url_company() -> None:
     assert parsed.job_id == "12345"
 
 
+
+
+def test_parse_greenhouse_job_boards_url_company() -> None:
+    parsed = parse_job_url("https://job-boards.greenhouse.io/robotsandpencils/jobs/5227395008")
+    assert parsed.source == "greenhouse"
+    assert parsed.company == "robotsandpencils"
+    assert parsed.job_id == "5227395008"
+
 def test_parse_lever_url_company() -> None:
     parsed = parse_job_url("https://jobs.lever.co/ramp/xyz987")
     assert parsed.source == "lever"
@@ -102,3 +110,31 @@ def test_learn_url_fetches_scores_and_persists(monkeypatch) -> None:
 
     learn_url("https://jobs.ashbyhq.com/scrunch/abc123")
     assert calls == {"fetched": 1, "scored": 1, "upserted": 1}
+
+
+def test_learn_url_accepts_greenhouse_job_boards_url(monkeypatch, tmp_path: Path, capsys) -> None:
+    queue_path = tmp_path / "discovery_queue.yaml"
+    queue_path.write_text("ashby:\n  []\ngreenhouse:\n  []\nlever:\n  []\n", encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.score_job", lambda job, profile: type("Fit", (), {"classification": "high_fit"})())
+    monkeypatch.setattr("job_fit_agent.main.upsert_job", lambda job, fit: None)
+    monkeypatch.setattr("job_fit_agent.main.AppConfig", lambda: type("Cfg", (), {"enable_lever": True})())
+    monkeypatch.setattr("job_fit_agent.main.load_discovery_queue", lambda: load_discovery_queue(queue_path))
+    monkeypatch.setattr("job_fit_agent.main.save_discovery_queue", lambda queue: __import__("job_fit_agent.config").config.save_discovery_queue(queue, queue_path))
+
+    class Stub:
+        def fetch_jobs(self, company: str):
+            return [JobPosting(source="greenhouse", company=company, title="PM", location="Remote", url="https://x/1", description="ai")]
+
+    monkeypatch.setattr("job_fit_agent.main._build_enabled_collectors", lambda config: {"greenhouse": Stub()})
+
+    learn_url("https://job-boards.greenhouse.io/robotsandpencils/jobs/5227395008")
+    output = capsys.readouterr().out
+    assert "parsed source: greenhouse" in output
+    assert "parsed company: robotsandpencils" in output
+    assert "parsed job id: 5227395008" in output
+
+    queue = load_discovery_queue(queue_path)
+    assert queue.greenhouse == ["robotsandpencils"]
