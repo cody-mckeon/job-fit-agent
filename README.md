@@ -254,6 +254,7 @@ Recommended application prep workflow:
      Use `--force` to override intentionally:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --force`
    - `--dry-run` output includes an `actionable` field so you can verify if the selected job is actionable before prep.
+   - `--skip-pdf` skips `pandoc` PDF export and still generates package markdown outputs (`submit_resume.md`, `cover_letter.md`, `answer_bank.md`) for reliable headless automation.
    - Note: job IDs are local database IDs and can differ between environments/machines.
 3. Review/edit package artifacts
 4. Submit manually
@@ -297,7 +298,9 @@ The scheduled workflow runs:
 - `python -m job_fit_agent.main run`
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
-- `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
+- `python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram`
+
+In GitHub Actions, scheduled prep intentionally uses `--skip-pdf` for reliability because hosted runners may not include `pandoc`/LaTeX. `submit_resume.md` is always generated and used as the resume fallback path in Telegram summaries when PDF export is skipped or fails.
 
 Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`).
 

@@ -60,4 +60,4 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram
+        run: python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram
