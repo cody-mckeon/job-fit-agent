@@ -19,8 +19,6 @@ jobs:
     env:
       JOB_FIT_ENABLE_LEVER: "true"
       CLIENT_ID: github-actions
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout repository
@@ -37,6 +35,9 @@ jobs:
           pip install -e .
 
       - name: Run tests
+        env:
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
         run: pytest
 
       - name: Clear runtime DB after tests
@@ -56,4 +57,7 @@ jobs:
         run: python -m job_fit_agent.main digest
 
       - name: Prep next application package and notify Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram

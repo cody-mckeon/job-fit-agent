@@ -73,6 +73,12 @@ def test_actionable_real_job_url_allows_greenhouse_ashby_and_lever() -> None:
     assert _is_actionable_real_job_url("https://jobs.lever.co/ramp/def")
 
 
+
+
+def test_actionable_real_job_url_rejects_example_and_localhost() -> None:
+    assert _is_actionable_real_job_url("https://example.com/product-manager-ai") is False
+    assert _is_actionable_real_job_url("https://localhost:3000/job/1") is False
+
 def test_digest_excludes_placeholder_urls_from_default_sections(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         "job_fit_agent.main.get_top_jobs_by_classification",
