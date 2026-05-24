@@ -63,9 +63,9 @@ def test_disabled_notifications_do_nothing(monkeypatch) -> None:
 
 
 def test_only_new_high_fit_jobs_trigger_notifications(monkeypatch) -> None:
-    high = _job("Product Manager AI", "https://example.com/high")
-    near = _job("Technical Program Manager", "https://example.com/near", description="program delivery")
-    low = _job("Software Engineer", "https://example.com/low", description="backend systems")
+    high = _job("Product Manager AI", "https://jobs.lever.co/openai/high")
+    near = _job("Technical Program Manager", "https://jobs.lever.co/openai/near", description="program delivery")
+    low = _job("Software Engineer", "https://jobs.lever.co/openai/low", description="backend systems")
 
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     monkeypatch.setattr(
@@ -94,3 +94,38 @@ def test_only_new_high_fit_jobs_trigger_notifications(monkeypatch) -> None:
     assert sent[0].startswith("[HIGH FIT JOB]")
     assert "Product Manager AI" in sent[0]
     assert "Technical Program Manager" not in sent[0]
+
+
+def test_empty_telegram_token_skips_network_call(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "job_fit_agent.notifications.telegram.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(enabled=True, bot_token="", chat_id="id")),
+    )
+
+    def _should_not_call(*args, **kwargs):
+        raise AssertionError("urlopen should not be called when bot token is empty")
+
+    monkeypatch.setattr("job_fit_agent.notifications.telegram.urlopen", _should_not_call)
+    send_message("hello")
+
+
+def test_run_pipeline_skips_placeholder_job_notification(monkeypatch, capsys) -> None:
+    high = _job("Product Manager AI", "https://example.com/high")
+
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(enabled=True, bot_token="token", chat_id="id")),
+    )
+    monkeypatch.setattr("job_fit_agent.main.GreenhouseCollector", lambda: StubCollector({"openai": [high]}))
+    monkeypatch.setattr("job_fit_agent.main.AshbyCollector", lambda: StubCollector({}))
+    monkeypatch.setattr("job_fit_agent.main.resolve_companies", lambda source="greenhouse": ["openai"] if source == "greenhouse" else [])
+    monkeypatch.setattr("job_fit_agent.main.upsert_job", lambda *_: UpsertResult(is_new=True, updated=False, skipped_duplicate=False))
+
+    sent: list[str] = []
+    monkeypatch.setattr("job_fit_agent.main.send_message", sent.append)
+
+    run_pipeline()
+
+    assert sent == []
+    assert "Telegram notification skipped: invalid or placeholder job URL" in capsys.readouterr().out

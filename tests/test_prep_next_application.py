@@ -318,3 +318,28 @@ def test_notify_telegram_no_summary_prints_real_url_message(monkeypatch, capsys)
     )
     main(["prep-next-application", "--notify-telegram"])
     assert "No actionable real job URL found." in capsys.readouterr().out
+
+
+def test_scheduled_workflow_clears_runtime_db_after_pytest():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    assert "Run tests" in workflow
+    assert "rm -f data/jobs.sqlite data/jobs.sqlite-shm data/jobs.sqlite-wal" in workflow
+
+
+def test_scheduled_workflow_pytest_step_does_not_expose_telegram_secrets():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    assert 'name: Run tests' in workflow
+    assert 'TELEGRAM_BOT_TOKEN: ""' in workflow
+    assert 'TELEGRAM_CHAT_ID: ""' in workflow
+
+
+def test_scheduled_workflow_prep_step_has_telegram_secrets_only():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    prep_idx = workflow.index('name: Prep next application package and notify Telegram')
+    run_tests_idx = workflow.index('name: Run tests')
+    pytest_block = workflow[run_tests_idx:prep_idx]
+    assert '${{ secrets.TELEGRAM_BOT_TOKEN }}' not in pytest_block
+    assert '${{ secrets.TELEGRAM_CHAT_ID }}' not in pytest_block
+    prep_block = workflow[prep_idx:]
+    assert '${{ secrets.TELEGRAM_BOT_TOKEN }}' in prep_block
+    assert '${{ secrets.TELEGRAM_CHAT_ID }}' in prep_block

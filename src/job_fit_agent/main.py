@@ -349,6 +349,9 @@ def run_pipeline() -> None:
 
     if should_send_notifications:
         for job, fit in new_high_fit:
+            if not _is_actionable_real_job_url(job.url):
+                print("Telegram notification skipped: invalid or placeholder job URL")
+                continue
             send_message(format_high_fit_notification(job, fit))
     else:
         print(f"Telegram send skipped: {skip_reason}")
