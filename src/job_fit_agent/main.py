@@ -2208,11 +2208,3 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-    submit_resume_path = str(Path(summary.get("application_folder", "")) / "submit_resume.md")
-    lines[lines.index(f"Submit resume markdown: {summary.get('submit_resume_path', '')}")] = f"Submit resume markdown: {submit_resume_path}"
-    if summary.get("pdf_skipped"):
-        lines[lines.index(f"Resume PDF: {summary.get('resume_pdf_path', '')}")] = "Resume PDF: skipped in GitHub Actions"
-    elif summary.get("resume_pdf_path"):
-        lines[lines.index(f"Resume PDF: {summary.get('resume_pdf_path', '')}")] = f"Resume PDF: {summary.get('resume_pdf_path')}"
-    else:
-        lines[lines.index(f"Resume PDF: {summary.get('resume_pdf_path', '')}")] = "Resume PDF: unavailable"
