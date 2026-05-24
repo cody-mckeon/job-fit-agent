@@ -145,6 +145,40 @@ def test_skip_browser_skips_extraction(monkeypatch, capsys):
     assert "application_questions_path" not in payload
 
 
+def test_skip_pdf_does_not_call_export_resume_pdf(monkeypatch, capsys):
+    job = _job(8)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.export_resume_pdf",
+        lambda job_id: (_ for _ in ()).throw(AssertionError("should skip pdf export")),
+    )
+
+    prep_next_application(skip_browser=True, skip_pdf=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["pdf_skipped"] is True
+    assert payload["resume_pdf_path"] is None
+
+
+def test_missing_pandoc_does_not_crash(monkeypatch, capsys):
+    job = _job(18)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.export_resume_pdf",
+        lambda job_id: (_ for _ in ()).throw(FileNotFoundError(2, "No such file or directory", "pandoc")),
+    )
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["pdf_export"] == "failed"
+    assert "PDF export failed: pandoc not found" in payload["warnings"]
+
+
 def test_json_summary_includes_required_paths(monkeypatch, capsys):
     job = _job(9)
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
@@ -159,6 +193,7 @@ def test_json_summary_includes_required_paths(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["application_folder"]
     assert payload["resume_pdf_path"].endswith(".pdf")
+    assert payload["pdf_skipped"] is False
     assert payload["cover_letter_path"].endswith("cover_letter.md")
     assert payload["recruiter_note_path"].endswith("recruiter_note.md")
     assert payload["risk_flags_path"].endswith("risk_flags.md")
@@ -276,9 +311,39 @@ def test_notify_telegram_includes_skip_browser_warning(monkeypatch):
     assert "Browser extraction skipped (--skip-browser)." in sent["text"]
 
 
+def test_notify_telegram_includes_pdf_skipped_warning(monkeypatch):
+    sent: dict[str, str] = {}
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_next_application",
+        lambda **kwargs: _job(16)
+        | {
+            "application_folder": "applications/acme",
+            "submit_resume_path": "applications/acme/submit_resume.md",
+            "resume_pdf_path": None,
+            "cover_letter_path": "applications/acme/cover_letter.md",
+            "risk_flags_path": "applications/acme/risk_flags.md",
+            "skip_browser": True,
+            "pdf_skipped": True,
+            "pdf_export": "skipped",
+        },
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.load_notification_config",
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.send_message_with_credentials",
+        lambda text, bot_token, chat_id: sent.update({"text": text}),
+    )
+    main(["prep-next-application", "--notify-telegram"])
+    assert "Resume PDF: skipped in GitHub Actions" in sent["text"]
+    assert "Submit resume markdown: applications/acme/submit_resume.md" in sent["text"]
+    assert "PDF export failed or skipped. Review submit_resume.md instead." in sent["text"]
+
+
 def test_scheduled_workflow_runs_prep_next_with_skip_browser_and_notify():
     workflow = Path('.github/workflows/job-agent.yml').read_text()
-    assert "python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram" in workflow
+    assert "python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram" in workflow
 
 
 def test_scheduled_workflow_does_not_commit_jobs_sqlite():

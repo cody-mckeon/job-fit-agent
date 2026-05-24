@@ -1774,7 +1774,13 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     return True
 
 
-def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip_browser: bool = False, force: bool = False) -> dict[str, Any] | None:
+def prep_next_application(
+    dry_run: bool = False,
+    job_id: int | None = None,
+    skip_browser: bool = False,
+    force: bool = False,
+    skip_pdf: bool = False,
+) -> dict[str, Any] | None:
     initialize()
     selected_job = None
     if job_id is not None:
@@ -1802,17 +1808,30 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
     )
 
     warning = None
+    warnings: list[str] = []
     selected_job_actionable = _is_actionable_selected_job(selected_job)
     questions_created = False
     answers_created = False
 
     pdf_export_status = "skipped" if dry_run else "generated"
+    pdf_skipped = bool(dry_run or skip_pdf)
+    resume_pdf_path_value: str | None = None if pdf_skipped else str(resume_pdf_path)
     if not dry_run:
         prep_application(selected_job_id)
-        try:
-            export_resume_pdf(selected_job_id)
-        except subprocess.CalledProcessError:
-            pdf_export_status = "failed"
+        if skip_pdf:
+            pdf_export_status = "skipped"
+        else:
+            try:
+                export_resume_pdf(selected_job_id)
+            except FileNotFoundError as exc:
+                if exc.filename == "pandoc":
+                    pdf_export_status = "failed"
+                    warnings.append("PDF export failed: pandoc not found")
+                else:
+                    raise
+            except subprocess.CalledProcessError:
+                pdf_export_status = "failed"
+                warnings.append("PDF export failed")
         if skip_browser:
             warning = warning or "browser extraction skipped"
         if not skip_browser:
@@ -1847,7 +1866,9 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
         "viability_reasons": selected_job.get("viability_reasons") or [],
         "red_flags": selected_job.get("red_flags") or [],
         "application_folder": str(app_dir),
-        "resume_pdf_path": str(resume_pdf_path),
+        "submit_resume_path": str(app_dir / "submit_resume.md"),
+        "resume_pdf_path": resume_pdf_path_value,
+        "pdf_skipped": pdf_skipped,
         "cover_letter_path": str(app_dir / "cover_letter.md"),
         "recruiter_note_path": str(app_dir / "recruiter_note.md"),
         "risk_flags_path": str(app_dir / "risk_flags.md"),
@@ -1862,6 +1883,8 @@ def prep_next_application(dry_run: bool = False, job_id: int | None = None, skip
         summary["application_answers_path"] = str(app_dir / "application_answers.md")
     if warning:
         summary["warning"] = warning
+    if warnings:
+        summary["warnings"] = warnings
     if force and not selected_job_actionable:
         summary["warning"] = "Prepared despite non-actionable status because --force was used."
     print(json.dumps(summary, indent=2))
@@ -1874,6 +1897,13 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
             return [str(item) for item in value if str(item).strip()]
         return []
 
+    resume_pdf_line = f"Resume PDF: {summary.get('resume_pdf_path', '')}"
+    if summary.get("pdf_skipped"):
+        resume_pdf_line = "Resume PDF: skipped in GitHub Actions"
+    elif not summary.get("resume_pdf_path"):
+        resume_pdf_line = "Resume PDF: unavailable"
+
+    submit_resume_path = str(Path(summary.get("application_folder", "")) / "submit_resume.md")
     lines = [
         "Job Fit Agent: Application Package Ready",
         "",
@@ -1888,7 +1918,8 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
         "",
         "Paths",
         f"Application folder: {summary.get('application_folder', '')}",
-        f"Resume PDF: {summary.get('resume_pdf_path', '')}",
+        resume_pdf_line,
+        f"Submit resume markdown: {summary.get('submit_resume_path', submit_resume_path)}",
         f"Cover letter: {summary.get('cover_letter_path', '')}",
         f"Recruiter note: {summary.get('recruiter_note_path', '')}",
         f"Risk flags: {summary.get('risk_flags_path', '')}",
@@ -1918,6 +1949,8 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
         warnings.append("Browser extraction skipped (--skip-browser).")
     if summary.get("pdf_export") in {"failed", "skipped"}:
         warnings.append(f"PDF export {summary.get('pdf_export')}.")
+    if summary.get("pdf_skipped") or summary.get("pdf_export") == "failed":
+        warnings.append("PDF export failed or skipped. Review submit_resume.md instead.")
     viability = str(summary.get("viability_level", "")).lower()
     if viability in {"stretch", "review"}:
         warnings.append("Job is stretch/review, not apply_now.")
@@ -2117,6 +2150,7 @@ def main(argv: list[str] | None = None) -> None:
     if command == "prep-next-application":
         dry_run = "--dry-run" in args[1:]
         skip_browser = "--skip-browser" in args[1:]
+        skip_pdf = "--skip-pdf" in args[1:]
         selected_job_id: int | None = None
         force = "--force" in args[1:]
         if "--job-id" in args[1:]:
@@ -2124,10 +2158,16 @@ def main(argv: list[str] | None = None) -> None:
                 job_id_index = args.index("--job-id")
                 selected_job_id = int(args[job_id_index + 1])
             except (ValueError, IndexError):
-                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--notify-telegram]")
+                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]")
                 return
         notify_telegram = "--notify-telegram" in args[1:]
-        summary = prep_next_application(dry_run=dry_run, job_id=selected_job_id, skip_browser=skip_browser, force=force)
+        summary = prep_next_application(
+            dry_run=dry_run,
+            job_id=selected_job_id,
+            skip_browser=skip_browser,
+            force=force,
+            skip_pdf=skip_pdf,
+        )
         if notify_telegram:
             config = load_notification_config().telegram
             if not config.bot_token or not config.chat_id:
@@ -2163,8 +2203,16 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
     print("python -m job_fit_agent.main generate-application-answers <job_id>")
-    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--notify-telegram]")
+    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]")
 
 
 if __name__ == "__main__":
     main()
+    submit_resume_path = str(Path(summary.get("application_folder", "")) / "submit_resume.md")
+    lines[lines.index(f"Submit resume markdown: {summary.get('submit_resume_path', '')}")] = f"Submit resume markdown: {submit_resume_path}"
+    if summary.get("pdf_skipped"):
+        lines[lines.index(f"Resume PDF: {summary.get('resume_pdf_path', '')}")] = "Resume PDF: skipped in GitHub Actions"
+    elif summary.get("resume_pdf_path"):
+        lines[lines.index(f"Resume PDF: {summary.get('resume_pdf_path', '')}")] = f"Resume PDF: {summary.get('resume_pdf_path')}"
+    else:
+        lines[lines.index(f"Resume PDF: {summary.get('resume_pdf_path', '')}")] = "Resume PDF: unavailable"
