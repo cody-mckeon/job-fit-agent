@@ -7,6 +7,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Any, Protocol
@@ -44,7 +45,7 @@ from job_fit_agent.config import (
     save_discovery_queue,
 )
 from job_fit_agent.models import FitScore, JobPosting
-from job_fit_agent.notifications.telegram import send_message, send_message_with_credentials
+from job_fit_agent.notifications.telegram import send_document_with_credentials, send_message, send_message_with_credentials
 from job_fit_agent.repository import (
     DB_PATH,
     VALID_STATUSES,
@@ -1775,6 +1776,18 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     return True
 
 
+
+
+def _create_application_package_zip(app_dir: Path) -> tuple[Path, bool]:
+    zip_path = app_dir.with_suffix(".zip")
+    if zip_path.exists():
+        zip_path.unlink()
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(app_dir.rglob("*")):
+            if path.is_file():
+                archive.write(path, arcname=path.relative_to(Path(".")))
+    return zip_path, zip_path.exists()
+
 def _build_github_actions_run_url() -> str | None:
     server_url = str(os.getenv("GITHUB_SERVER_URL", "")).strip().rstrip("/")
     repository = str(os.getenv("GITHUB_REPOSITORY", "")).strip().strip("/")
@@ -1826,6 +1839,8 @@ def prep_next_application(
     pdf_export_status = "skipped" if dry_run else "generated"
     pdf_skipped = bool(dry_run or skip_pdf)
     resume_pdf_path_value: str | None = None if pdf_skipped else str(resume_pdf_path)
+    package_zip_path: str | None = None
+    package_zip_created = False
     if not dry_run:
         prep_application(selected_job_id)
         if skip_pdf:
@@ -1854,6 +1869,13 @@ def prep_next_application(
             if after_questions:
                 generate_application_answers(selected_job_id)
                 answers_created = (app_dir / "application_answers.md").exists()
+        try:
+            zip_path, zip_created = _create_application_package_zip(app_dir)
+            package_zip_path = str(zip_path)
+            package_zip_created = zip_created
+        except Exception:
+            warnings.append("Package zip creation failed")
+
         if str(selected_job.get("status", "")).lower() not in {"applied", "interviewing", "rejected", "archived"}:
             update_status(selected_job_id, "applying")
         try:
@@ -1883,6 +1905,8 @@ def prep_next_application(
         "recruiter_note_path": str(app_dir / "recruiter_note.md"),
         "risk_flags_path": str(app_dir / "risk_flags.md"),
         "next_action": "review package and submit manually" if not dry_run else "review selected job",
+        "package_zip_path": package_zip_path,
+        "package_zip_created": package_zip_created,
         "actionable": selected_job_actionable,
         "skip_browser": skip_browser,
         "pdf_export": pdf_export_status,
@@ -1973,13 +1997,13 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
     if warnings:
         lines.extend(["", "Warnings", *warnings])
 
-    lines.extend(["", "Download package"])
+    lines.extend(["", "Download package", "Package zip attached below."])
     github_actions_run_url = str(summary.get("github_actions_run_url", "")).strip()
     if github_actions_run_url:
         lines.extend(
             [
                 f"GitHub Actions run: {github_actions_run_url}",
-                "Open the run, then download the application package artifact.",
+                "Backup: GitHub Actions artifact available in workflow run.",
             ]
         )
     lines.extend(
@@ -2210,6 +2234,20 @@ def main(argv: list[str] | None = None) -> None:
                 bot_token=config.bot_token,
                 chat_id=config.chat_id,
             )
+            package_zip_path = str(summary.get("package_zip_path", "")).strip()
+            if package_zip_path and bool(summary.get("package_zip_created")):
+                try:
+                    send_document_with_credentials(
+                        file_path=package_zip_path,
+                        caption=(
+                            f"Application package for {summary.get('title', '')}. "
+                            "Review manually before submitting."
+                        ),
+                        bot_token=config.bot_token,
+                        chat_id=config.chat_id,
+                    )
+                except Exception:
+                    print("Telegram package upload failed")
         return
 
     print("python -m job_fit_agent.main run")

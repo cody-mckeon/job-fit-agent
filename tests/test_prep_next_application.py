@@ -373,6 +373,90 @@ def test_notify_telegram_includes_pdf_skipped_warning(monkeypatch):
     assert "PDF export failed or skipped. Review submit_resume.md instead." in sent["text"]
 
 
+
+
+def test_prep_next_application_creates_package_zip(monkeypatch, capsys, tmp_path):
+    job = _job(71)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+
+    def _prep(job_id):
+        app_dir = Path("applications/acme_product_manager_71")
+        app_dir.mkdir(parents=True, exist_ok=True)
+        for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "answer_bank.md", "risk_flags.md", "cover_letter.md"]:
+            (app_dir / name).write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.prep_application", _prep)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["package_zip_created"] is True
+    assert Path(payload["package_zip_path"]).exists()
+
+
+def test_package_zip_contains_expected_files(monkeypatch, capsys, tmp_path):
+    import zipfile
+
+    job = _job(72)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+
+    def _prep(job_id):
+        app_dir = Path("applications/acme_product_manager_72")
+        app_dir.mkdir(parents=True, exist_ok=True)
+        for name in ["fit_summary.md", "resume_strategy.md", "resume_draft.md", "submit_resume.md", "recruiter_note.md", "answer_bank.md", "risk_flags.md", "cover_letter.md"]:
+            (app_dir / name).write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.prep_application", _prep)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    with zipfile.ZipFile(payload["package_zip_path"]) as zf:
+        names = set(zf.namelist())
+    assert "applications/acme_product_manager_72/fit_summary.md" in names
+    assert "applications/acme_product_manager_72/cover_letter.md" in names
+
+
+def test_notify_telegram_uploads_document_when_zip_exists(monkeypatch):
+    sent = {"messages": 0, "docs": 0}
+    monkeypatch.setattr("job_fit_agent.main.prep_next_application", lambda **kwargs: _job(73) | {"package_zip_created": True, "package_zip_path": "applications/acme.zip"})
+    monkeypatch.setattr("job_fit_agent.main.load_notification_config", lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")))
+    monkeypatch.setattr("job_fit_agent.main.send_message_with_credentials", lambda **kwargs: sent.__setitem__("messages", sent["messages"] + 1))
+    monkeypatch.setattr("job_fit_agent.main.send_document_with_credentials", lambda **kwargs: sent.__setitem__("docs", sent["docs"] + 1))
+    main(["prep-next-application", "--notify-telegram"])
+    assert sent["messages"] == 1
+    assert sent["docs"] == 1
+
+
+def test_notify_telegram_text_still_sends_when_document_upload_fails(monkeypatch, capsys):
+    sent = {"messages": 0}
+    monkeypatch.setattr("job_fit_agent.main.prep_next_application", lambda **kwargs: _job(74) | {"package_zip_created": True, "package_zip_path": "applications/acme.zip"})
+    monkeypatch.setattr("job_fit_agent.main.load_notification_config", lambda: NotificationConfig(telegram=TelegramConfig(bot_token="token", chat_id="chat")))
+    monkeypatch.setattr("job_fit_agent.main.send_message_with_credentials", lambda **kwargs: sent.__setitem__("messages", sent["messages"] + 1))
+    monkeypatch.setattr("job_fit_agent.main.send_document_with_credentials", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    main(["prep-next-application", "--notify-telegram"])
+    assert sent["messages"] == 1
+    assert "Telegram package upload failed" in capsys.readouterr().out
+
+
+def test_prep_next_application_does_not_crash_when_zip_creation_fails(monkeypatch, capsys):
+    job = _job(75)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main._create_application_package_zip", lambda app_dir: (_ for _ in ()).throw(RuntimeError("zip fail")))
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert "Package zip creation failed" in payload["warnings"]
 def test_scheduled_workflow_runs_prep_next_with_skip_browser_and_notify():
     workflow = Path('.github/workflows/job-agent.yml').read_text()
     assert "python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram" in workflow
@@ -456,7 +540,7 @@ def test_telegram_message_includes_github_actions_run_url_when_present(monkeypat
     )
     main(['prep-next-application', '--notify-telegram'])
     assert 'GitHub Actions run: https://github.com/cody-mckeon/job-fit-agent/actions/runs/123456789' in sent['text']
-    assert 'Open the run, then download the application package artifact.' in sent['text']
+    assert 'Backup: GitHub Actions artifact available in workflow run.' in sent['text']
 
 
 def test_scheduled_workflow_does_not_commit_jobs_sqlite():
