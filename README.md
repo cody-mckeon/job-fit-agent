@@ -298,10 +298,10 @@ The scheduled workflow runs:
 - `python -m job_fit_agent.main run`
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
-- `python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram`
+- `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
 - Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
 
-In GitHub Actions, scheduled prep intentionally uses `--skip-pdf` for reliability because hosted runners may not include `pandoc`/LaTeX. `submit_resume.md` is always generated and used as the resume fallback path in Telegram summaries when PDF export is skipped or fails.
+In GitHub Actions, scheduled prep installs `pandoc` plus LaTeX dependencies (`texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`) and attempts resume PDF export. `setspace.sty` is provided by `texlive-latex-recommended`. If PDF export fails, the workflow continues, `submit_resume.md` remains the manual fallback, Telegram still sends, and markdown files are still uploaded in artifacts.
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
 Telegram package summaries now include a direct **GitHub Actions run link** when running in Actions, so you can tap from Telegram, open **Artifacts**, and download the package quickly.
