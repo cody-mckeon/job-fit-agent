@@ -368,7 +368,7 @@ def test_notify_telegram_includes_pdf_skipped_warning(monkeypatch):
         lambda text, bot_token, chat_id: sent.update({"text": text}),
     )
     main(["prep-next-application", "--notify-telegram"])
-    assert "Resume PDF: skipped in GitHub Actions" in sent["text"]
+    assert "Resume PDF: failed or skipped, use submit_resume.md" in sent["text"]
     assert "Submit resume markdown: applications/acme/submit_resume.md" in sent["text"]
     assert "PDF export failed or skipped. Review submit_resume.md instead." in sent["text"]
 
@@ -459,7 +459,15 @@ def test_prep_next_application_does_not_crash_when_zip_creation_fails(monkeypatc
     assert "Package zip creation failed" in payload["warnings"]
 def test_scheduled_workflow_runs_prep_next_with_skip_browser_and_notify():
     workflow = Path('.github/workflows/job-agent.yml').read_text()
-    assert "python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram" in workflow
+    assert "python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram" in workflow
+    assert "--skip-pdf" not in workflow
+
+
+def test_scheduled_workflow_installs_pdf_dependencies():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    assert 'name: Install PDF export dependencies' in workflow
+    assert 'sudo apt-get update' in workflow
+    assert 'sudo apt-get install -y pandoc texlive-latex-base texlive-fonts-recommended lmodern' in workflow
 
 
 def test_scheduled_workflow_uploads_application_artifact():
@@ -503,7 +511,7 @@ def test_telegram_message_mentions_actions_artifact(monkeypatch):
     )
     main(['prep-next-application', '--notify-telegram'])
     assert "Generated files are available in this run's artifact" in sent['text']
-    assert 'use submit_resume.md for manual submission' in sent['text']
+    assert 'If resume PDF export fails, use submit_resume.md for manual submission.' in sent['text']
 
 
 def test_telegram_message_includes_github_actions_run_url_when_present(monkeypatch):
@@ -605,3 +613,70 @@ def test_scheduled_workflow_prep_step_has_telegram_secrets_only():
     prep_block = workflow[prep_idx:]
     assert '${{ secrets.TELEGRAM_BOT_TOKEN }}' in prep_block
     assert '${{ secrets.TELEGRAM_CHAT_ID }}' in prep_block
+
+
+def test_notify_telegram_shows_resume_pdf_included_when_present(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(
+        'job_fit_agent.main.prep_next_application',
+        lambda **kwargs: {
+            'company': 'Acme',
+            'title': 'PM',
+            'score': 92,
+            'classification': 'priority',
+            'viability_level': 'apply_now',
+            'geographic_eligibility': 'eligible',
+            'url': 'https://example.org/job/1',
+            'application_folder': 'applications/acme',
+            'submit_resume_path': 'applications/acme/submit_resume.md',
+            'resume_pdf_path': 'applications/acme/Cody_McKeon_Acme_PM_Resume.pdf',
+            'cover_letter_path': 'applications/acme/cover_letter.md',
+            'recruiter_note_path': 'applications/acme/recruiter_note.md',
+            'risk_flags_path': 'applications/acme/risk_flags.md',
+            'reasons': [],
+            'viability_reasons': [],
+            'red_flags': [],
+            'skip_browser': True,
+            'pdf_export': 'generated',
+        },
+    )
+    monkeypatch.setattr(
+        'job_fit_agent.main.load_notification_config',
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token='token', chat_id='chat')),
+    )
+    monkeypatch.setattr(
+        'job_fit_agent.main.send_message_with_credentials',
+        lambda text, bot_token, chat_id: sent.update({'text': text}),
+    )
+    main(['prep-next-application', '--notify-telegram'])
+    assert 'Resume PDF: included' in sent['text']
+
+
+def test_package_zip_contains_pdf_when_resume_pdf_exists(monkeypatch, capsys, tmp_path):
+    import zipfile
+
+    job = _job(76)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr('job_fit_agent.main.initialize', lambda: None)
+    monkeypatch.setattr('job_fit_agent.main._get_prep_next_application_candidates', lambda: [job])
+
+    def _prep(job_id):
+        app_dir = Path('applications/acme_product_manager_76')
+        app_dir.mkdir(parents=True, exist_ok=True)
+        for name in ['fit_summary.md', 'submit_resume.md', 'cover_letter.md']:
+            (app_dir / name).write_text('x', encoding='utf-8')
+
+    def _export(job_id):
+        app_dir = Path('applications/acme_product_manager_76')
+        (app_dir / 'Cody_McKeon_acme_Product_Manager_Resume.pdf').write_bytes(b'%PDF-1.4')
+
+    monkeypatch.setattr('job_fit_agent.main.prep_application', _prep)
+    monkeypatch.setattr('job_fit_agent.main.export_resume_pdf', _export)
+    monkeypatch.setattr('job_fit_agent.main.update_status', lambda job_id, status: None)
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    with zipfile.ZipFile(payload['package_zip_path']) as zf:
+        names = set(zf.namelist())
+    assert 'applications/acme_product_manager_76/Cody_McKeon_acme_Product_Manager_Resume.pdf' in names
+
