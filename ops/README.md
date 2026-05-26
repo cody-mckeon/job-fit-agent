@@ -143,8 +143,12 @@ Daily scheduled flow includes Telegram package summary handoff:
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
 - `python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram`
+- Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
 
 Scheduled GitHub Actions uses `--skip-pdf` to avoid failures when `pandoc` is unavailable on hosted runners. Desktop/local Docker/VPS runs can still export resume PDFs when `pandoc` and LaTeX dependencies are present. `submit_resume.md` is always generated and remains the fallback for manual submission.
+
+Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
+Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
 Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications).
 

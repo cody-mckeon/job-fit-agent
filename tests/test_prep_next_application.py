@@ -346,6 +346,50 @@ def test_scheduled_workflow_runs_prep_next_with_skip_browser_and_notify():
     assert "python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram" in workflow
 
 
+def test_scheduled_workflow_uploads_application_artifact():
+    workflow = Path('.github/workflows/job-agent.yml').read_text()
+    assert 'uses: actions/upload-artifact@v4' in workflow
+    assert 'path: applications/' in workflow
+    assert 'retention-days: 14' in workflow
+    assert 'if-no-files-found: warn' in workflow
+
+
+def test_telegram_message_mentions_actions_artifact(monkeypatch):
+    sent = {}
+    monkeypatch.setattr('job_fit_agent.main.prep_next_application', lambda **kwargs: {
+        'company': 'Acme',
+        'title': 'PM',
+        'score': 92,
+        'classification': 'priority',
+        'viability_level': 'apply_now',
+        'geographic_eligibility': 'eligible',
+        'url': 'https://example.org/job/1',
+        'application_folder': 'applications/acme',
+        'submit_resume_path': 'applications/acme/submit_resume.md',
+        'resume_pdf_path': None,
+        'pdf_skipped': True,
+        'cover_letter_path': 'applications/acme/cover_letter.md',
+        'recruiter_note_path': 'applications/acme/recruiter_note.md',
+        'risk_flags_path': 'applications/acme/risk_flags.md',
+        'reasons': [],
+        'viability_reasons': [],
+        'red_flags': [],
+        'skip_browser': True,
+        'pdf_export': 'skipped',
+    })
+    monkeypatch.setattr(
+        'job_fit_agent.main.load_notification_config',
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token='token', chat_id='chat')),
+    )
+    monkeypatch.setattr(
+        'job_fit_agent.main.send_message_with_credentials',
+        lambda text, bot_token, chat_id: sent.update({'text': text}),
+    )
+    main(['prep-next-application', '--notify-telegram'])
+    assert "Generated files are available in this run's artifact" in sent['text']
+    assert 'use submit_resume.md for manual submission' in sent['text']
+
+
 def test_scheduled_workflow_does_not_commit_jobs_sqlite():
     workflow = Path('.github/workflows/job-agent.yml').read_text()
     assert "git add data/jobs.sqlite" not in workflow

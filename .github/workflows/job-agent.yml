@@ -61,3 +61,11 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram
+
+      - name: Upload application package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-fit-application-package-${{ github.run_id }}
+          path: applications/
+          retention-days: 14
+          if-no-files-found: warn
