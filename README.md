@@ -299,8 +299,12 @@ The scheduled workflow runs:
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
 - `python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram`
+- Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
 
 In GitHub Actions, scheduled prep intentionally uses `--skip-pdf` for reliability because hosted runners may not include `pandoc`/LaTeX. `submit_resume.md` is always generated and used as the resume fallback path in Telegram summaries when PDF export is skipped or fails.
+
+Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
+Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
 Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`).
 

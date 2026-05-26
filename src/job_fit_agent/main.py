@@ -1960,6 +1960,7 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
     if warnings:
         lines.extend(["", "Warnings", *warnings])
 
+    lines.extend(["", "GitHub Actions artifact", "Generated files are available in this run's artifact: job-fit-application-package-<run_id>.", "Download: GitHub → Actions → Job Fit Agent → latest run → Artifacts.", "If resume PDF is skipped in GitHub Actions, use submit_resume.md for manual submission."])
     lines.extend(["", "Next action: Review materials manually before submitting."])
     return "\n".join(lines)
 
