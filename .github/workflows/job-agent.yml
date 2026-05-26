@@ -56,11 +56,17 @@ jobs:
       - name: Print digest
         run: python -m job_fit_agent.main digest
 
+
+      - name: Install PDF export dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-latex-base texlive-fonts-recommended lmodern
+
       - name: Prep next application package and notify Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram
+        run: python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram
 
       - name: Upload application package artifact
         uses: actions/upload-artifact@v4

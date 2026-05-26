@@ -142,10 +142,10 @@ Daily scheduled flow includes Telegram package summary handoff:
 - `python -m job_fit_agent.main run`
 - `python -m job_fit_agent.main rescore`
 - `python -m job_fit_agent.main digest`
-- `python -m job_fit_agent.main prep-next-application --skip-browser --skip-pdf --notify-telegram`
+- `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
 - Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
 
-Scheduled GitHub Actions uses `--skip-pdf` to avoid failures when `pandoc` is unavailable on hosted runners. Desktop/local Docker/VPS runs can still export resume PDFs when `pandoc` and LaTeX dependencies are present. `submit_resume.md` is always generated and remains the fallback for manual submission.
+Scheduled GitHub Actions now installs PDF dependencies and attempts resume PDF export before packaging. When export succeeds, the PDF is included in both the Telegram zip and the GitHub artifact; when export fails, the workflow continues and `submit_resume.md` remains the manual fallback.
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
 Telegram package summaries include a direct **GitHub Actions run URL** (when executed in Actions), so you can open the run from Telegram, go to **Artifacts**, and download the application package.

@@ -254,7 +254,7 @@ Recommended application prep workflow:
      Use `--force` to override intentionally:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --force`
    - `--dry-run` output includes an `actionable` field so you can verify if the selected job is actionable before prep.
-   - `--skip-pdf` skips `pandoc` PDF export and still generates package markdown outputs (`submit_resume.md`, `cover_letter.md`, `answer_bank.md`) for reliable headless automation.
+   - `--skip-pdf` keeps fast local/dev runs by skipping `pandoc` PDF export while still generating markdown outputs (`submit_resume.md`, `cover_letter.md`, `answer_bank.md`).
    - Note: job IDs are local database IDs and can differ between environments/machines.
 3. Review/edit package artifacts
 4. Submit manually

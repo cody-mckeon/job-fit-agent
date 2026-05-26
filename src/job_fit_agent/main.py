@@ -1935,10 +1935,10 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
         return []
 
     resume_pdf_line = f"Resume PDF: {summary.get('resume_pdf_path', '')}"
-    if summary.get("pdf_skipped"):
-        resume_pdf_line = "Resume PDF: skipped in GitHub Actions"
-    elif not summary.get("resume_pdf_path"):
-        resume_pdf_line = "Resume PDF: unavailable"
+    if summary.get("resume_pdf_path"):
+        resume_pdf_line = "Resume PDF: included"
+    else:
+        resume_pdf_line = "Resume PDF: failed or skipped, use submit_resume.md"
 
     submit_resume_path = str(Path(summary.get("application_folder", "")) / "submit_resume.md")
     lines = [
@@ -2010,7 +2010,7 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
         [
             "Generated files are available in this run's artifact: job-fit-application-package-<run_id>.",
             "Download: GitHub → Actions → Job Fit Agent → latest run → Artifacts.",
-            "If resume PDF is skipped in GitHub Actions, use submit_resume.md for manual submission.",
+            "If resume PDF export fails, use submit_resume.md for manual submission.",
         ]
     )
     lines.extend(["", "Next action: Review materials manually before submitting."])
