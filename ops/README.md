@@ -145,7 +145,7 @@ Daily scheduled flow includes Telegram package summary handoff:
 - `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
 - Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
 
-Scheduled GitHub Actions now installs PDF dependencies and attempts resume PDF export before packaging. When export succeeds, the PDF is included in both the Telegram zip and the GitHub artifact; when export fails, the workflow continues and `submit_resume.md` remains the manual fallback.
+Scheduled GitHub Actions now installs `pandoc` plus LaTeX dependencies (`texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`) and attempts resume PDF export before packaging. `setspace.sty` is provided by `texlive-latex-recommended`. When export succeeds, the PDF is included in both the Telegram zip and the GitHub artifact; when export fails, the workflow continues and `submit_resume.md` remains the manual fallback.
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
 Telegram package summaries include a direct **GitHub Actions run URL** (when executed in Actions), so you can open the run from Telegram, go to **Artifacts**, and download the application package.

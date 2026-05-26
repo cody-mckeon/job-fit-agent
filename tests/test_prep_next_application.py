@@ -467,7 +467,7 @@ def test_scheduled_workflow_installs_pdf_dependencies():
     workflow = Path('.github/workflows/job-agent.yml').read_text()
     assert 'name: Install PDF export dependencies' in workflow
     assert 'sudo apt-get update' in workflow
-    assert 'sudo apt-get install -y pandoc texlive-latex-base texlive-fonts-recommended lmodern' in workflow
+    assert 'sudo apt-get install -y pandoc texlive-latex-base texlive-latex-recommended texlive-fonts-recommended lmodern' in workflow
 
 
 def test_scheduled_workflow_uploads_application_artifact():
