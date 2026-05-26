@@ -149,6 +149,9 @@ Scheduled GitHub Actions uses `--skip-pdf` to avoid failures when `pandoc` is un
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
 Telegram package summaries include a direct **GitHub Actions run URL** (when executed in Actions), so you can open the run from Telegram, go to **Artifacts**, and download the application package.
+Telegram now also sends the application package `.zip` directly in the chat for mobile download.
+Mobile workflow: **Telegram → download zip → review files → submit manually**.
+GitHub Actions artifact upload remains unchanged as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
 Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications).

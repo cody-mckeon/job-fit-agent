@@ -305,6 +305,9 @@ In GitHub Actions, scheduled prep intentionally uses `--skip-pdf` for reliabilit
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
 Telegram package summaries now include a direct **GitHub Actions run link** when running in Actions, so you can tap from Telegram, open **Artifacts**, and download the package quickly.
+Telegram now also sends the generated application package `.zip` directly as a document attachment for mobile-friendly download.
+Mobile flow: **Telegram → download zip → review files → submit manually**.
+GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
 Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`).
