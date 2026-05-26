@@ -199,6 +199,38 @@ def test_json_summary_includes_required_paths(monkeypatch, capsys):
     assert payload["risk_flags_path"].endswith("risk_flags.md")
 
 
+def test_json_summary_includes_github_actions_run_url_when_env_present(monkeypatch, capsys):
+    job = _job(19)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "cody-mckeon/job-fit-agent")
+    monkeypatch.setenv("GITHUB_RUN_ID", "123456789")
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["github_actions_run_url"] == "https://github.com/cody-mckeon/job-fit-agent/actions/runs/123456789"
+
+
+def test_json_summary_omits_github_actions_run_url_when_env_missing(monkeypatch, capsys):
+    job = _job(21)
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [job])
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+    monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
+
+    prep_next_application(skip_browser=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert "github_actions_run_url" not in payload
+
+
 def test_browser_extraction_failure_returns_warning_but_succeeds(monkeypatch, capsys, tmp_path):
     job = _job(11)
     monkeypatch.chdir(tmp_path)
@@ -388,6 +420,43 @@ def test_telegram_message_mentions_actions_artifact(monkeypatch):
     main(['prep-next-application', '--notify-telegram'])
     assert "Generated files are available in this run's artifact" in sent['text']
     assert 'use submit_resume.md for manual submission' in sent['text']
+
+
+def test_telegram_message_includes_github_actions_run_url_when_present(monkeypatch):
+    sent = {}
+    monkeypatch.setattr('job_fit_agent.main.prep_next_application', lambda **kwargs: {
+        'company': 'Acme',
+        'title': 'PM',
+        'score': 92,
+        'classification': 'priority',
+        'viability_level': 'apply_now',
+        'geographic_eligibility': 'eligible',
+        'url': 'https://example.org/job/1',
+        'application_folder': 'applications/acme',
+        'submit_resume_path': 'applications/acme/submit_resume.md',
+        'resume_pdf_path': None,
+        'pdf_skipped': True,
+        'cover_letter_path': 'applications/acme/cover_letter.md',
+        'recruiter_note_path': 'applications/acme/recruiter_note.md',
+        'risk_flags_path': 'applications/acme/risk_flags.md',
+        'reasons': [],
+        'viability_reasons': [],
+        'red_flags': [],
+        'skip_browser': True,
+        'pdf_export': 'skipped',
+        'github_actions_run_url': 'https://github.com/cody-mckeon/job-fit-agent/actions/runs/123456789',
+    })
+    monkeypatch.setattr(
+        'job_fit_agent.main.load_notification_config',
+        lambda: NotificationConfig(telegram=TelegramConfig(bot_token='token', chat_id='chat')),
+    )
+    monkeypatch.setattr(
+        'job_fit_agent.main.send_message_with_credentials',
+        lambda text, bot_token, chat_id: sent.update({'text': text}),
+    )
+    main(['prep-next-application', '--notify-telegram'])
+    assert 'GitHub Actions run: https://github.com/cody-mckeon/job-fit-agent/actions/runs/123456789' in sent['text']
+    assert 'Open the run, then download the application package artifact.' in sent['text']
 
 
 def test_scheduled_workflow_does_not_commit_jobs_sqlite():

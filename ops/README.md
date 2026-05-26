@@ -148,6 +148,7 @@ Daily scheduled flow includes Telegram package summary handoff:
 Scheduled GitHub Actions uses `--skip-pdf` to avoid failures when `pandoc` is unavailable on hosted runners. Desktop/local Docker/VPS runs can still export resume PDFs when `pandoc` and LaTeX dependencies are present. `submit_resume.md` is always generated and remains the fallback for manual submission.
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
+Telegram package summaries include a direct **GitHub Actions run URL** (when executed in Actions), so you can open the run from Telegram, go to **Artifacts**, and download the application package.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
 Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications).

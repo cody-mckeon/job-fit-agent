@@ -304,6 +304,7 @@ The scheduled workflow runs:
 In GitHub Actions, scheduled prep intentionally uses `--skip-pdf` for reliability because hosted runners may not include `pandoc`/LaTeX. `submit_resume.md` is always generated and used as the resume fallback path in Telegram summaries when PDF export is skipped or fails.
 
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
+Telegram package summaries now include a direct **GitHub Actions run link** when running in Actions, so you can tap from Telegram, open **Artifacts**, and download the package quickly.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
 Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`).

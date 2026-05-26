@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import subprocess
@@ -1774,6 +1775,15 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     return True
 
 
+def _build_github_actions_run_url() -> str | None:
+    server_url = str(os.getenv("GITHUB_SERVER_URL", "")).strip().rstrip("/")
+    repository = str(os.getenv("GITHUB_REPOSITORY", "")).strip().strip("/")
+    run_id = str(os.getenv("GITHUB_RUN_ID", "")).strip()
+    if not (server_url and repository and run_id):
+        return None
+    return f"{server_url}/{repository}/actions/runs/{run_id}"
+
+
 def prep_next_application(
     dry_run: bool = False,
     job_id: int | None = None,
@@ -1887,6 +1897,9 @@ def prep_next_application(
         summary["warnings"] = warnings
     if force and not selected_job_actionable:
         summary["warning"] = "Prepared despite non-actionable status because --force was used."
+    github_actions_run_url = _build_github_actions_run_url()
+    if github_actions_run_url:
+        summary["github_actions_run_url"] = github_actions_run_url
     print(json.dumps(summary, indent=2))
     return summary
 
@@ -1960,7 +1973,22 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
     if warnings:
         lines.extend(["", "Warnings", *warnings])
 
-    lines.extend(["", "GitHub Actions artifact", "Generated files are available in this run's artifact: job-fit-application-package-<run_id>.", "Download: GitHub → Actions → Job Fit Agent → latest run → Artifacts.", "If resume PDF is skipped in GitHub Actions, use submit_resume.md for manual submission."])
+    lines.extend(["", "Download package"])
+    github_actions_run_url = str(summary.get("github_actions_run_url", "")).strip()
+    if github_actions_run_url:
+        lines.extend(
+            [
+                f"GitHub Actions run: {github_actions_run_url}",
+                "Open the run, then download the application package artifact.",
+            ]
+        )
+    lines.extend(
+        [
+            "Generated files are available in this run's artifact: job-fit-application-package-<run_id>.",
+            "Download: GitHub → Actions → Job Fit Agent → latest run → Artifacts.",
+            "If resume PDF is skipped in GitHub Actions, use submit_resume.md for manual submission.",
+        ]
+    )
     lines.extend(["", "Next action: Review materials manually before submitting."])
     return "\n".join(lines)
 
