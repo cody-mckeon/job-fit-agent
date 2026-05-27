@@ -53,6 +53,58 @@ NEAR_FIT_TERMS = {
 }
 
 PMM_HIGH_FIT_KEYWORDS = {"product analytics", "experimentation", "ai", "platform", "customer-facing web"}
+FORWARD_DEPLOYED_HIGH_PRIORITY_TITLES = {
+    "forward deployed engineer",
+    "forward-deployed engineer",
+    "forward deployed ai engineer",
+    "forward deployed product engineer",
+    "forward deployed software engineer",
+}
+FORWARD_DEPLOYED_STRONG_SIGNALS = {
+    "forward deployed",
+    "customer-facing engineering",
+    "implementation engineer",
+    "product engineering",
+    "solutions engineering",
+    "applied ai",
+    "ai agents",
+    "agentic workflows",
+    "enterprise deployment",
+    "technical discovery",
+    "customer workflows",
+    "workflow automation",
+    "prototypes",
+    "proof of concept",
+    "poc",
+    "deployment",
+    "integrations",
+}
+FORWARD_DEPLOYED_CONTEXT_SIGNALS = {
+    "ai",
+    "applied ai",
+    "product engineering",
+    "customer implementation",
+    "implementation",
+    "workflow automation",
+    "data",
+    "ml",
+    "machine learning",
+    "agentic",
+    "agents",
+    "enterprise software",
+    "technical product delivery",
+    "integrations",
+}
+FORWARD_DEPLOYED_DOWNRANK_GUARDRAILS = {
+    "sales engineer",
+    "solutions consultant",
+    "customer support engineer",
+    "technical account manager",
+    "implementation specialist",
+    "field service engineer",
+    "hardware deployment engineer",
+    "it support engineer",
+}
 FORCED_LOW_FIT_TITLES = {
     "software engineer",
     "member of technical staff",
@@ -349,6 +401,8 @@ def classify_role_family(title: str) -> str:
         return "developer_tools"
     if "product engineer" in normalized:
         return "product_engineering"
+    if "forward deployed" in normalized:
+        return "product_engineering"
     if any(term in normalized for term in ("ai builder", "agent builder", "agentic", "ai platform")):
         return "ai_builder"
     if "sre" in normalized or "site reliability" in normalized:
@@ -486,6 +540,12 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             keyword_hits += 1
             score += BASE_KEYWORD_SCORE
             reasons.append(f"Keyword match: {keyword} (+{BASE_KEYWORD_SCORE})")
+    forward_deployed_signal_boost = 0
+    for keyword in FORWARD_DEPLOYED_STRONG_SIGNALS:
+        if keyword in text:
+            forward_deployed_signal_boost += BASE_KEYWORD_SCORE
+            score += BASE_KEYWORD_SCORE
+            reasons.append(f"Forward deployed signal: {keyword} (+{BASE_KEYWORD_SCORE})")
     capability_boost = 0
     for keyword in AI_BUILDER_KEYWORDS:
         if keyword in text and capability_boost < AI_BUILDER_BONUS_CAP:
@@ -544,6 +604,10 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         score = min(score, LOCATION_NOT_FIT_CAP)
 
     has_strong_match = title_hits > 0 and keyword_hits > 0
+    has_forward_deployed_title = any(term in title_text for term in FORWARD_DEPLOYED_HIGH_PRIORITY_TITLES)
+    forward_deployed_has_context = any(term in text for term in FORWARD_DEPLOYED_CONTEXT_SIGNALS)
+    if has_forward_deployed_title:
+        has_strong_match = forward_deployed_has_context or forward_deployed_signal_boost >= 16
     lower_description = job.description.lower()
     is_product_marketing_manager = "product marketing manager" in text
     pmm_has_required_context = any(term in lower_description for term in PMM_HIGH_FIT_KEYWORDS)
@@ -557,11 +621,16 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if role_family not in ROLE_FAMILIES:
         role_family = "unknown"
     has_forced_low_fit_title = any(term in job.title.lower() for term in FORCED_LOW_FIT_TITLES)
+    if has_forward_deployed_title and forward_deployed_has_context:
+        has_forced_low_fit_title = False
     has_location_blocker = location_score <= EXCLUDED_LOCATION_PENALTY
     preferred_families = set(target_profile.preferred_role_families) if target_profile.preferred_role_families else set()
     disliked_families = set(target_profile.disliked_role_families) if target_profile.disliked_role_families else set()
     ai_native_families = {"ai_builder", "product_engineering", "workflow_automation", "ai_operations", "developer_tools", "technical_product"}
     is_high_fit_role_match = has_strong_match and role_family in {"product_management", "product_operations", "technical_product"}
+    if has_forward_deployed_title and forward_deployed_has_context:
+        is_high_fit_role_match = True
+        reasons.append("Forward deployed engineering role aligns with Cody's AI systems, product implementation, and customer-facing technical delivery experience.")
     if role_family in ai_native_families and capability_boost >= 12:
         is_high_fit_role_match = True
     if is_high_fit_role_match and not has_location_blocker:
@@ -595,6 +664,10 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         red_flags.append("Role is geographically viable but weak functional fit")
     if "technical account manager" in title_lower:
         red_flags.append("Account management role is outside target product path")
+    if any(term in title_lower for term in FORWARD_DEPLOYED_DOWNRANK_GUARDRAILS):
+        if not (forward_deployed_has_context and (forward_deployed_signal_boost >= 8 or capability_boost >= 6)):
+            classification = "low_fit" if "field service engineer" in title_lower or "it support engineer" in title_lower else "near_fit"
+            red_flags.append("Role title matches downrank guardrails without strong AI/product implementation overlap")
 
     viability_score = 0
     viability_reasons: list[str] = []
@@ -635,6 +708,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if role_family == "engineering":
         viability_score -= 25
         viability_reasons.append("Engineering role should not be apply_now for Cody")
+    if has_forward_deployed_title and not forward_deployed_has_context:
+        viability_score -= 20
+        viability_reasons.append("Forward deployed title without AI/product implementation context requires review")
 
     has_senior_company_scope = ("10+ years" in text or (years_required or 0) >= 10) and (
         "senior capacity" in text or "company-level product decisions" in text

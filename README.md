@@ -90,6 +90,16 @@ The scoring profile now targets not only traditional PM roles, but also adjacent
 - Workflow automation
 - AI operations
 - Developer tools
+- Forward deployed engineering
+
+Primary target role set includes:
+
+- Product Manager
+- Technical Product Manager
+- AI Product Manager
+- Forward Deployed Engineer
+- Forward Deployed Product Engineer
+- Forward Deployed AI Engineer
 
 The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles.
 
