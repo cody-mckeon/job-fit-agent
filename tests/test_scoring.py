@@ -188,6 +188,78 @@ def test_remote_technical_account_manager_is_near_fit() -> None:
     assert fit.classification == "near_fit"
 
 
+def test_forward_deployed_engineer_ai_ranks_high() -> None:
+    job = _job(
+        title="Forward Deployed Engineer, AI",
+        location="Remote US",
+        description="Build applied AI agents for enterprise deployment, integrations, and customer workflows.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+    assert any("Forward deployed engineering role aligns" in reason for reason in fit.reasons)
+
+
+def test_forward_deployed_product_engineer_ranks_high() -> None:
+    job = _job(
+        title="Forward Deployed Product Engineer",
+        location="Remote US",
+        description="Own customer-facing engineering and product implementation for AI workflow automation.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+
+
+def test_forward_deployed_software_engineer_agents_ranks_high() -> None:
+    job = _job(
+        title="Forward Deployed Software Engineer, Agents",
+        location="Remote US",
+        description="Deliver agentic workflows, technical discovery, prototypes, and POC integrations.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+
+
+def test_forward_deployed_engineer_without_context_is_not_auto_apply_now() -> None:
+    job = _job(
+        title="Forward Deployed Engineer",
+        location="Remote US",
+        description="General client delivery and stakeholder communication.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "low_fit"}
+    assert fit.viability_level != "apply_now"
+
+
+def test_technical_account_manager_stays_downranked() -> None:
+    job = _job(
+        title="Technical Account Manager",
+        location="Remote US",
+        description="Manage renewals and customer support escalation.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "near_fit"
+
+
+def test_solutions_consultant_stays_downranked_without_context() -> None:
+    job = _job(
+        title="Solutions Consultant",
+        location="Remote US",
+        description="Support pre-sales demos and customer presentations.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification in {"near_fit", "low_fit"}
+
+
+def test_field_service_engineer_stays_low_fit() -> None:
+    job = _job(
+        title="Field Service Engineer",
+        location="Remote US",
+        description="Install and maintain hardware systems onsite at customer facilities.",
+    )
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "low_fit"
+
+
 def test_onsite_product_manager_outside_nevada_not_high_fit() -> None:
     job = _job(
         title="Product Manager",
