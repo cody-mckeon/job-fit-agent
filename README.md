@@ -340,3 +340,104 @@ Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_CHAT_ID`
 
 Docker/VPS remains the future multi-client runtime path.
+
+## Phase 2: serverless Telegram status command bridge
+
+Phase 2 lets Cody update job application status directly from Telegram without remembering local CLI commands and without running an always-on VPS or bot process.
+
+Architecture:
+
+```text
+Telegram message
+→ Cloudflare Worker webhook
+→ validate Telegram secret and allowed chat id
+→ parse/allowlist command
+→ GitHub repository_dispatch API
+→ GitHub Actions Job Status Command workflow
+→ python -m job_fit_agent.main telegram-command "<message>"
+→ Telegram confirmation
+```
+
+Supported Telegram messages:
+
+```text
+applied 19
+/applied 19
+mark applied 19
+skip 19 Not US eligible
+/skip 19 Not US eligible
+save 19
+/save 19
+```
+
+Equivalent local short commands are also available:
+
+```bash
+python -m job_fit_agent.main applied <job_id>
+python -m job_fit_agent.main skip <job_id> "<reason>"
+python -m job_fit_agent.main save <job_id>
+python -m job_fit_agent.main telegram-command "applied 19"
+```
+
+The Telegram package summary now includes copy/paste status commands for the prepared job:
+
+```text
+After applying:
+applied 19
+
+To skip:
+skip 19 <reason>
+
+To save:
+save 19
+```
+
+### GitHub Actions workflow
+
+`.github/workflows/job-status-command.yml` listens for:
+
+- `repository_dispatch` with type `job_status_command` from the Cloudflare Worker.
+- Manual `workflow_dispatch` with `command_text` for testing.
+
+The workflow installs the package, runs targeted tests, executes the parsed status command, sends a Telegram confirmation through the existing Telegram notifier, and commits `data/jobs.sqlite` if the repository is using a committed SQLite database as state.
+
+GitHub Actions secrets required for confirmations:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+### Cloudflare Worker integration
+
+Reference implementation: `ops/telegram-worker/worker.js`.
+
+Cloudflare Worker secrets required:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ALLOWED_CHAT_ID`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `GITHUB_OWNER`
+- `GITHUB_REPO`
+- `GITHUB_DISPATCH_TOKEN`
+
+Security expectations:
+
+- Verify Telegram's `X-Telegram-Bot-Api-Secret-Token` header.
+- Verify the Telegram chat id equals `TELEGRAM_ALLOWED_CHAT_ID`.
+- Only allow the supported status commands.
+- Reject or ignore all other messages.
+- Never expose the GitHub token or Telegram token in responses.
+
+Setup summary:
+
+1. Create and deploy the Cloudflare Worker.
+2. Add Worker secrets.
+3. Set the Telegram webhook with `secret_token=${TELEGRAM_WEBHOOK_SECRET}`.
+4. Send `applied 19` from the allowed Telegram chat.
+5. Verify the **Job Status Command** GitHub Action runs.
+6. Verify the Telegram confirmation arrives.
+
+Limitations:
+
+- GitHub Actions may take some time to start and run.
+- Confirmation is not instant.
+- Status updates depend on the repository's current database persistence model. If `data/jobs.sqlite` is not persisted between scheduled runs and command runs, the workflow cannot update jobs that are absent from that database.

@@ -69,6 +69,7 @@ def initialize(db_path: Path = DB_PATH) -> None:
                 application_status TEXT DEFAULT "not_applied",
                 applied_at TEXT,
                 skipped_at TEXT,
+                saved_at TEXT,
                 application_notes TEXT DEFAULT ""
             )
             """
@@ -109,6 +110,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute('ALTER TABLE jobs ADD COLUMN applied_at TEXT')
     if "skipped_at" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN skipped_at TEXT')
+    if "saved_at" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN saved_at TEXT')
     if "application_notes" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN application_notes TEXT DEFAULT ""')
         conn.execute('UPDATE jobs SET application_notes = "" WHERE application_notes IS NULL')
@@ -315,6 +318,7 @@ def update_application_tracking(
     *,
     applied_at: str | None = None,
     skipped_at: str | None = None,
+    saved_at: str | None = None,
     application_notes: str | None = None,
     db_path: Path = DB_PATH,
 ) -> None:
@@ -327,6 +331,9 @@ def update_application_tracking(
     if skipped_at is not None:
         assignments.append("skipped_at = ?")
         values.append(skipped_at)
+    if saved_at is not None:
+        assignments.append("saved_at = ?")
+        values.append(saved_at)
     if application_notes is not None:
         assignments.append("application_notes = ?")
         values.append(application_notes)
@@ -346,7 +353,7 @@ def get_jobs_by_application_status(application_status: str, limit: int = 50, db_
             """
             SELECT * FROM jobs
             WHERE application_status = ?
-            ORDER BY COALESCE(applied_at, skipped_at, last_seen_at) DESC, score DESC
+            ORDER BY COALESCE(applied_at, skipped_at, saved_at, last_seen_at) DESC, score DESC
             LIMIT ?
             """,
             (application_status, limit),

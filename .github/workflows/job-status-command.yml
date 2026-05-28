@@ -1,0 +1,111 @@
+name: Job Status Command
+
+on:
+  repository_dispatch:
+    types: [job_status_command]
+  workflow_dispatch:
+    inputs:
+      command_text:
+        description: "Command text, e.g. applied 19"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  job-status-command:
+    runs-on: ubuntu-latest
+    env:
+      COMMAND_TEXT: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.command_text || inputs.command_text }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run targeted tests
+        env:
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+        run: pytest tests/test_telegram_command_bridge.py tests/test_job_status_workflow.py
+
+      - name: Execute Telegram status command
+        run: |
+          python -m job_fit_agent.main telegram-command "$COMMAND_TEXT" | tee command_result.json
+
+      - name: Send Telegram confirmation
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from job_fit_agent.notifications.telegram import send_message_with_credentials
+
+          result_path = Path("command_result.json")
+          if result_path.exists():
+              try:
+                  result = json.loads(result_path.read_text())
+              except json.JSONDecodeError as exc:
+                  result = {"success": False, "message": f"Invalid command result JSON: {exc}"}
+          else:
+              result = {"success": False, "message": "Command did not produce a result."}
+
+          if result.get("success"):
+              status = result.get("new_status")
+              company = result.get("company", "")
+              title = result.get("title", "")
+              job_id = result.get("job_id", "")
+              note = result.get("note", "")
+              if status == "applied":
+                  text = f"Marked applied: {company} {title}, job {job_id}."
+              elif status == "skipped":
+                  text = f"Marked skipped: {company} {title}, job {job_id}. Reason: {note}"
+              elif status == "saved":
+                  text = f"Saved for later: {company} {title}, job {job_id}."
+              else:
+                  text = result.get("message", "Job status command completed.")
+          else:
+              text = f"Job status command failed: {result.get('message', 'unknown error')}"
+
+          bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+          chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+          if bot_token and chat_id:
+              send_message_with_credentials(text=text, bot_token=bot_token, chat_id=chat_id)
+          else:
+              print(text)
+          PY
+
+      - name: Commit updated job database
+        if: success()
+        run: |
+          if python -c 'import json; raise SystemExit(0 if json.load(open("command_result.json")).get("success") else 1)'; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git ls-files --error-unmatch data/jobs.sqlite >/dev/null 2>&1; then
+              git add data/jobs.sqlite
+              if git diff --cached --quiet; then
+                echo "No job database changes to commit."
+              else
+                git commit -m "Update job status from Telegram command"
+                git push
+              fi
+            else
+              echo "data/jobs.sqlite is not tracked; leaving persistence to the existing runtime pattern."
+            fi
+          else
+            echo "Skipping database commit because command failed."
+          fi

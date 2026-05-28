@@ -61,6 +61,7 @@ from job_fit_agent.repository import (
     upsert_job,
 )
 from job_fit_agent.scoring import score_job
+from job_fit_agent.telegram_commands import parse_telegram_command
 
 LOGGER = logging.getLogger(__name__)
 
@@ -710,7 +711,7 @@ def _resolve_job_for_application_command(job_id: int | None, url: str | None) ->
     return dict(row)
 
 
-def mark_applied(job_id: int | None = None, url: str | None = None, note: str | None = None) -> dict[str, Any]:
+def mark_applied(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
     initialize()
     job = _resolve_job_for_application_command(job_id, url)
     applied_at = _utc_timestamp()
@@ -720,18 +721,70 @@ def mark_applied(job_id: int | None = None, url: str | None = None, note: str | 
     except ValueError:
         pass
     updated = dict(get_job_by_id(int(job["id"])) or job)
-    print(f"Marked applied: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
+    if not quiet:
+        print(f"Marked applied: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
     return updated
 
 
-def mark_skipped(job_id: int | None = None, url: str | None = None, reason: str | None = None) -> dict[str, Any]:
+def mark_skipped(job_id: int | None = None, url: str | None = None, reason: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
     initialize()
     job = _resolve_job_for_application_command(job_id, url)
     skipped_at = _utc_timestamp()
     update_application_tracking(int(job["id"]), "skipped", skipped_at=skipped_at, application_notes=reason)
     updated = dict(get_job_by_id(int(job["id"])) or job)
-    print(f"Marked skipped: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
+    if not quiet:
+        print(f"Marked skipped: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
     return updated
+
+
+def mark_saved(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
+    initialize()
+    job = _resolve_job_for_application_command(job_id, url)
+    saved_at = _utc_timestamp()
+    update_application_tracking(int(job["id"]), "saved", saved_at=saved_at, application_notes=note)
+    updated = dict(get_job_by_id(int(job["id"])) or job)
+    if not quiet:
+        print(f"Saved for later: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
+    return updated
+
+
+def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> str:
+    company = str(job.get("company", "")).strip()
+    title = str(job.get("title", "")).strip()
+    label = f"{company} {title}".strip()
+    if action == "applied":
+        return f"Marked {label} as applied."
+    if action == "skip":
+        suffix = f" Reason: {note}" if note else ""
+        return f"Marked {label} as skipped.{suffix}"
+    return f"Saved {label} for later."
+
+
+def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
+    try:
+        parsed = parse_telegram_command(command_text)
+        if parsed.action == "applied":
+            updated = mark_applied(job_id=parsed.job_id, quiet=True)
+            new_status = "applied"
+        elif parsed.action == "skip":
+            updated = mark_skipped(job_id=parsed.job_id, reason=parsed.note, quiet=True)
+            new_status = "skipped"
+        elif parsed.action == "save":
+            updated = mark_saved(job_id=parsed.job_id, quiet=True)
+            new_status = "saved"
+        else:  # pragma: no cover - parser constrains action values
+            raise ValueError("Unsupported command.")
+        return {
+            "success": True,
+            "job_id": int(updated.get("id", parsed.job_id)),
+            "company": updated.get("company", ""),
+            "title": updated.get("title", ""),
+            "new_status": new_status,
+            "note": parsed.note,
+            "message": _status_result_message(parsed.action, updated, parsed.note),
+        }
+    except Exception as exc:
+        return {"success": False, "message": str(exc) or "Job status command failed."}
 
 
 def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
@@ -2316,6 +2369,21 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
             ]
         )
 
+    job_id = summary.get("job_id", "")
+    if job_id:
+        lines.extend(
+            [
+                "",
+                "Telegram status commands",
+                "After applying:",
+                f"applied {job_id}",
+                "To skip:",
+                f"skip {job_id} <reason>",
+                "To save:",
+                f"save {job_id}",
+            ]
+        )
+
     warnings: list[str] = []
     if summary.get("warning") == "application question extraction failed; inspect manually":
         warnings.append("Browser extraction failed: inspect manually.")
@@ -2408,12 +2476,45 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if command == "applied":
+        if len(args) == 2 and args[1].isdigit():
+            try:
+                mark_applied(job_id=int(args[1]))
+            except ValueError as exc:
+                print(str(exc))
+            return
         try:
             limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else 50
         except (ValueError, IndexError):
-            print("Usage: python -m job_fit_agent.main applied [--limit <n>] [--json]")
+            print("Usage: python -m job_fit_agent.main applied <job_id> OR applied [--limit <n>] [--json]")
             return
         print_applied_jobs(limit=limit, as_json="--json" in args[1:])
+        return
+
+    if command == "skip":
+        if len(args) < 3:
+            print('Usage: python -m job_fit_agent.main skip <job_id> "<reason>"')
+            return
+        try:
+            mark_skipped(job_id=int(args[1]), reason=" ".join(args[2:]))
+        except ValueError as exc:
+            print(str(exc))
+        return
+
+    if command == "save":
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main save <job_id>")
+            return
+        try:
+            mark_saved(job_id=int(args[1]))
+        except ValueError as exc:
+            print(str(exc))
+        return
+
+    if command == "telegram-command":
+        if len(args) != 2:
+            print(json.dumps({"success": False, "message": 'Usage: python -m job_fit_agent.main telegram-command "applied 19"'}))
+            return
+        print(json.dumps(execute_telegram_status_command(args[1]), indent=2))
         return
 
     if command == "run":
@@ -2643,6 +2744,10 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main unapplied-high-fit [--eligible-only] [--include-ineligible] [--limit <n>] [--json]")
     print("python -m job_fit_agent.main mark-applied (--job-id <id> | --url <job_url>) [--note <note>]")
     print("python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
+    print("python -m job_fit_agent.main applied <job_id>")
+    print('python -m job_fit_agent.main skip <job_id> "<reason>"')
+    print("python -m job_fit_agent.main save <job_id>")
+    print('python -m job_fit_agent.main telegram-command "applied 19"')
     print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main set-status <job_id> <status>")

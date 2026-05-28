@@ -181,3 +181,57 @@ Set repository secrets:
 - `TELEGRAM_CHAT_ID`
 
 Docker/VPS remains the future multi-client runtime pattern.
+
+## Phase 2 serverless Telegram command bridge
+
+Cody can mark jobs from Telegram without an always-on bot server. Telegram sends bot updates to a Cloudflare Worker webhook; the Worker validates the secret token and Cody's chat id, allowlists a status command, and calls GitHub's `repository_dispatch` API. GitHub Actions then runs the status update in the repository and sends a Telegram confirmation.
+
+Supported commands from Telegram:
+
+```text
+applied 19
+/applied 19
+mark applied 19
+skip 19 Not US eligible
+/skip 19 Not US eligible
+save 19
+/save 19
+```
+
+Local equivalents:
+
+```bash
+python -m job_fit_agent.main applied <job_id>
+python -m job_fit_agent.main skip <job_id> "<reason>"
+python -m job_fit_agent.main save <job_id>
+python -m job_fit_agent.main telegram-command "applied 19"
+```
+
+Reference Worker files live in `ops/telegram-worker/`.
+
+Required Cloudflare Worker secrets:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ALLOWED_CHAT_ID`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `GITHUB_OWNER`
+- `GITHUB_REPO`
+- `GITHUB_DISPATCH_TOKEN`
+
+Required GitHub Actions secrets:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+Security expectations:
+
+- Validate `X-Telegram-Bot-Api-Secret-Token`.
+- Validate `TELEGRAM_ALLOWED_CHAT_ID`.
+- Only dispatch supported commands.
+- Never return GitHub or Telegram tokens in responses.
+
+Limitations:
+
+- GitHub Actions startup means confirmations are delayed.
+- The command workflow can only update jobs present in the persisted job database.
+- If the runtime uses artifacts/caches instead of a committed `data/jobs.sqlite`, keep the command workflow aligned with that persistence pattern rather than adding a second state store.
