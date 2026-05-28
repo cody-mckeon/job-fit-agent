@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 
 from job_fit_agent.config import NotificationConfig, TelegramConfig
+from job_fit_agent import main as job_main
 from job_fit_agent.main import main, prep_next_application
 
 
@@ -680,3 +681,76 @@ def test_package_zip_contains_pdf_when_resume_pdf_exists(monkeypatch, capsys, tm
         names = set(zf.namelist())
     assert 'applications/acme_product_manager_76/Cody_McKeon_acme_Product_Manager_Resume.pdf' in names
 
+
+def test_forward_deployed_remote_us_is_auto_prep_eligible():
+    job = _job(
+        901,
+        title="Forward Deployed Engineer, AI",
+        location="Remote US",
+        classification="high_fit",
+        viability_level="apply_now",
+        geographic_eligibility="eligible",
+    )
+    assert job_main._is_prep_next_application_eligible(job) is True
+
+
+def test_forward_deployed_dach_is_high_fit_but_not_auto_prep_eligible():
+    job = _job(
+        902,
+        title="Forward Deployed Engineer, GTM, DACH",
+        location="Remote",
+        classification="high_fit",
+        viability_level="apply_now",
+        geographic_eligibility="review",
+        red_flags='["DACH region role may not be US eligible"]',
+    )
+    assert job_main._is_prep_next_application_eligible(job) is False
+
+
+def test_forward_deployed_new_york_onsite_is_not_auto_prep_eligible():
+    job = _job(
+        903,
+        title="Forward Deployed Engineer, AI",
+        location="New York, NY",
+        classification="high_fit",
+        viability_level="apply_now",
+        geographic_eligibility="ineligible",
+    )
+    assert job_main._is_prep_next_application_eligible(job) is False
+
+
+def test_forward_deployed_emea_is_not_auto_prep_eligible():
+    job = _job(
+        904,
+        title="Forward Deployed Engineer, EMEA",
+        location="Remote",
+        classification="high_fit",
+        viability_level="apply_now",
+        geographic_eligibility="review",
+    )
+    assert job_main._is_prep_next_application_eligible(job) is False
+
+
+def test_product_manager_remote_us_still_auto_prep_eligible():
+    job = _job(905, title="Product Manager", location="Remote US")
+    assert job_main._is_prep_next_application_eligible(job) is True
+
+
+def test_high_score_geo_review_is_excluded_from_auto_selection():
+    job = _job(906, score=100, geographic_eligibility="review")
+    assert job_main._is_prep_next_application_eligible(job) is False
+
+
+def test_force_allows_explicit_geography_review_job(monkeypatch, capsys):
+    job = _job(907, geographic_eligibility="review")
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 907 else None)
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    prep_next_application(job_id=907, skip_browser=True, force=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 907
+    assert payload["actionable"] is False
+    assert "Geography requires manual review before applying." in payload["warnings"]

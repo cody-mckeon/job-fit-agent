@@ -260,9 +260,12 @@ Recommended application prep workflow:
      `python -m job_fit_agent.main prep-next-application --notify-telegram`
    - Optional explicit job selection with Telegram:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
-   - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, `ineligible`, or `applied/rejected/archived`).
-     Use `--force` to override intentionally:
+   - Auto-prep requires both strong role fit and acceptable geography; high role fit never overrides geography gating.
+   - Auto-selection only prepares valid-URL jobs with acceptable geography (`eligible`/Remote US) and apply-ready viability. Geography-review or geography-ineligible jobs are excluded from default auto-prep and actionable digest sections.
+   - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, geography `review`/`ineligible`, non-US geography signals, invalid URL, or `applied/rejected/archived`).
+     Use `--force` to override intentionally for manual review cases:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --force`
+   - Geography-review jobs require manual selection and `--force`; forced packages and Telegram summaries include a manual geography review warning before applying.
    - `--dry-run` output includes an `actionable` field so you can verify if the selected job is actionable before prep.
    - `--skip-pdf` keeps fast local/dev runs by skipping `pandoc` PDF export while still generating markdown outputs (`submit_resume.md`, `cover_letter.md`, `answer_bank.md`).
    - Note: job IDs are local database IDs and can differ between environments/machines.
@@ -320,7 +323,7 @@ Mobile flow: **Telegram → download zip → review files → submit manually**.
 GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`).
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude geography-review and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section.
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`

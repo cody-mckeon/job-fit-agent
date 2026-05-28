@@ -47,6 +47,8 @@ make docker-prep-next
 docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-application --notify-telegram
 ```
 
+Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
+
 Telegram handoff env vars:
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
@@ -154,7 +156,7 @@ Mobile workflow: **Telegram → download zip → review files → submit manuall
 GitHub Actions artifact upload remains unchanged as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications).
+Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications). Geography-review and geography-ineligible jobs are also excluded from actionable defaults; high role-fit geography-review jobs belong in manual review, not scheduled auto-prep.
 
 Set repository secrets:
 - `TELEGRAM_BOT_TOKEN`

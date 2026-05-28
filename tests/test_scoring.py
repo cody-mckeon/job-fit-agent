@@ -969,3 +969,32 @@ def test_us_remote_is_eligible() -> None:
     fit = score_job(job, TARGET_PROFILE)
     assert job.geographic_eligibility == "eligible"
     assert fit.viability_level == "apply_now"
+
+
+def test_forward_deployed_dach_keeps_role_fit_but_geography_blocks_actionability() -> None:
+    job = _job(
+        title="Forward Deployed Engineer, GTM, DACH",
+        location="Remote",
+        description="Build applied AI agents for enterprise deployment, integrations, and customer workflows.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "high_fit"
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level == "skip"
+    assert "DACH region role may not be US eligible" in fit.red_flags
+
+
+def test_forward_deployed_emea_keeps_role_fit_but_requires_geography_review() -> None:
+    job = _job(
+        title="Forward Deployed Engineer, EMEA",
+        location="Remote",
+        description="Build applied AI agents for enterprise deployment, integrations, and customer workflows.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "high_fit"
+    assert job.geographic_eligibility in {"review", "ineligible"}
+    assert fit.viability_level != "apply_now"

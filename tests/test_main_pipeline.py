@@ -400,6 +400,8 @@ def test_digest_returns_saved_near_fit_jobs(monkeypatch, capsys) -> None:
                 "company": "openai",
                 "source": "greenhouse",
                 "url": "https://jobs.lever.co/acme/near_fit",
+                "viability_level": "apply_now",
+                "geographic_eligibility": "eligible",
                 "red_flags": "[]",
             }
         ]
@@ -461,6 +463,8 @@ def test_digest_uses_saved_jobs_not_only_new_jobs(monkeypatch, capsys) -> None:
                 "company": "openai",
                 "source": "greenhouse",
                 "url": "https://jobs.lever.co/acme/saved_high",
+                "viability_level": "apply_now",
+                "geographic_eligibility": "eligible",
                 "red_flags": "[]",
                 "first_seen_at": "2026-05-01T00:00:00+00:00",
                 "last_seen_at": "2026-05-05T00:00:00+00:00",
@@ -1340,7 +1344,7 @@ def test_digest_marketing_ops_program_manager_without_overlap_not_actionable(mon
     assert "Marketing Operations Program Manager" not in capsys.readouterr().out
 
 
-def test_digest_includes_actionable_review_and_eligible(monkeypatch, capsys) -> None:
+def test_digest_excludes_geography_review_from_actionable_and_shows_review_section(monkeypatch, capsys) -> None:
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     def _rows(classification, limit=10):
         if classification == "high_fit":
@@ -1352,6 +1356,9 @@ def test_digest_includes_actionable_review_and_eligible(monkeypatch, capsys) -> 
     monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", _rows)
     main(["digest"])
     output = capsys.readouterr().out
+    actionable_section = output.split("High role fit but geography review")[0]
+    assert "Geo Review" not in actionable_section
+    assert "High role fit but geography review" in output
     assert "Geo Review" in output
     assert "Eligible Role" in output
 

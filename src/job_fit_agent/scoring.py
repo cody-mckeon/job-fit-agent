@@ -166,8 +166,8 @@ LOCAL_GEOGRAPHY_TERMS = ("las vegas", "henderson", "nevada")
 REMOTE_US_TERMS = ("remote us", "us remote", "remote united states", "united states", "usa")
 REMOTE_NON_US_TERMS = (
     "uae", "united arab emirates", "poland", "france", "ireland", "dublin", "india", "delhi", "new delhi", "bengaluru", "bangalore", "mumbai", "hyderabad", "chennai", "pune", "barcelona", "spain",
-    "mexico", "argentina", "peru", "latam", "emea", "apac", "canada only", "canada", "united kingdom", "uk", "england",
-    "london", "australia", "anz", "japan", "tokyo", "singapore", "sydney", "europe", "western europe",
+    "mexico", "argentina", "peru", "latam", "dach", "emea", "apac", "canada only", "canada", "united kingdom", "uk", "england",
+    "london", "germany", "austria", "switzerland", "berlin", "munich", "paris", "amsterdam", "australia", "anz", "japan", "tokyo", "singapore", "sydney", "europe", "western europe",
 )
 NON_LOCAL_HYBRID_TERMS = ("foster city", "san francisco", "new york", "nyc", "seattle", "toronto")
 
@@ -200,6 +200,7 @@ NON_US_REGIONS = (
     "singapore",
     "sydney",
     "latam",
+    "dach",
     "emea",
     "apac",
     "europe",
@@ -212,12 +213,71 @@ NON_US_REGIONS = (
     "uk",
     "england",
     "london",
+    "germany",
+    "austria",
+    "switzerland",
+    "berlin",
+    "munich",
+    "paris",
+    "amsterdam",
+    "canada",
+    "toronto",
     "australia",
     "anz",
     "canada only",
 )
 REVIEW_REGIONS = ("north america",)
 INDIA_LOCATION_TERMS = ("delhi", "new delhi", "india", "bengaluru", "bangalore", "mumbai", "hyderabad", "chennai", "pune")
+
+GEOGRAPHY_WARNING_TERMS = (
+    "dach",
+    "emea",
+    "apac",
+    "uk",
+    "london",
+    "germany",
+    "austria",
+    "switzerland",
+    "berlin",
+    "munich",
+    "paris",
+    "amsterdam",
+    "dublin",
+    "singapore",
+    "india",
+    "bengaluru",
+    "canada",
+    "toronto",
+)
+EXPLICIT_US_ELIGIBILITY_TERMS = (
+    "remote us",
+    "remote-us",
+    "us remote",
+    "us-remote",
+    "remote usa",
+    "usa remote",
+    "remote united states",
+    "united states",
+    "las vegas",
+    "henderson",
+    "nevada",
+    "us-based",
+    "us based",
+)
+
+
+def _contains_geo_term(text: str, term: str) -> bool:
+    if len(term) <= 3:
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text))
+    return term in text
+
+
+def _has_explicit_us_eligibility(text: str) -> bool:
+    return any(term in text for term in EXPLICIT_US_ELIGIBILITY_TERMS)
+
+
+def _geography_warning_terms_in_text(text: str) -> list[str]:
+    return [term.upper() if term in {"dach", "emea", "apac", "uk"} else term.title() for term in GEOGRAPHY_WARNING_TERMS if _contains_geo_term(text, term)]
 
 
 def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]:
@@ -245,7 +305,7 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
             geographic_eligibility = "review"
         else:
             geographic_eligibility = "ineligible"
-    if any(region in combined for region in NON_US_REGIONS):
+    if any(region in combined for region in NON_US_REGIONS) and not (has_multi_country and re.search(r"\b(us|usa|united states)\b", combined)):
         geographic_eligibility = "ineligible"
     if any(region in combined for region in REVIEW_REGIONS):
         geographic_eligibility = "review"
@@ -590,6 +650,18 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if job.normalized_location_type == "unknown" and "Onsite or location-specific US role outside Las Vegas/Nevada" in red_flags:
         job.geographic_eligibility = "ineligible"
 
+    geography_warning_text = f"{job.title} {job.description} {job.location} {job.workplace_type}".lower()
+    geography_warning_terms = _geography_warning_terms_in_text(geography_warning_text)
+    has_explicit_us_eligibility = _has_explicit_us_eligibility(geography_warning_text)
+    if geography_warning_terms and not has_explicit_us_eligibility:
+        if job.geographic_eligibility == "eligible":
+            job.geographic_eligibility = "review"
+        elif job.geographic_eligibility != "ineligible":
+            job.geographic_eligibility = "review"
+        red_flags.append(f"Geography warning: {', '.join(geography_warning_terms)} signal may not be US eligible")
+    if _contains_geo_term(geography_warning_text, "dach") and not has_explicit_us_eligibility:
+        job.geographic_eligibility = "ineligible"
+        red_flags.append("DACH region role may not be US eligible")
 
     for keyword, points in NEGATIVE_KEYWORDS.items():
         if keyword in text:
@@ -673,6 +745,12 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     viability_reasons: list[str] = []
     viability_level = "apply_now"
     location_viability_level, location_viability_reasons = evaluate_location_viability(job.location, job.workplace_type)
+    if job.geographic_eligibility == "ineligible" and location_viability_level != "skip":
+        location_viability_level = "skip"
+        location_viability_reasons = ["Location outside target geography"]
+    elif job.geographic_eligibility == "review" and location_viability_level == "apply_now":
+        location_viability_level = "review"
+        location_viability_reasons = ["Location requires manual review"]
     viability_reasons.extend(location_viability_reasons)
 
     if location_viability_level == "skip":
