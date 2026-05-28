@@ -50,9 +50,12 @@ from job_fit_agent.repository import (
     DB_PATH,
     VALID_STATUSES,
     get_job_by_id,
+    get_job_by_url,
+    get_jobs_by_application_status,
     get_jobs_by_status,
     get_top_jobs_by_classification,
     initialize,
+    update_application_tracking,
     update_notes,
     update_status,
     upsert_job,
@@ -468,7 +471,10 @@ def _is_actionable_digest_row(row: dict) -> bool:
     viability_level = str(safe_row_value(row, "viability_level", "review")).lower()
     geographic_eligibility = str(safe_row_value(row, "geographic_eligibility", "review")).lower()
 
+    application_status = str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower()
     if status in {"archived", "rejected", "applied"}:
+        return False
+    if application_status in {"applied", "skipped"}:
         return False
     if viability_level not in {"apply_now", "strong_review"}:
         return False
@@ -527,6 +533,226 @@ def _print_skipped_rows(section_title: str, rows: list[dict], empty_message: str
         print("-")
 
 
+
+def _application_tracking_status(row: dict[str, Any]) -> str:
+    return str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower()
+
+
+def _is_unapplied_high_fit_candidate(row: dict[str, Any]) -> bool:
+    classification = str(safe_row_value(row, "classification", "")).lower()
+    if classification not in {"high_fit", "apply_now"}:
+        return False
+    if _application_tracking_status(row) not in {"", "not_applied"}:
+        return False
+    if not _is_actionable_real_job_url(str(safe_row_value(row, "url", ""))):
+        return False
+    return True
+
+
+def _unapplied_high_fit_rank_key(row: dict[str, Any]) -> tuple[int, int, int]:
+    geography_rank = {"eligible": 0, "remote_us": 0, "review": 1, "ineligible": 2}
+    classification_rank = {"apply_now": 0, "high_fit": 1}
+    return (
+        geography_rank.get(str(safe_row_value(row, "geographic_eligibility", "review")).lower(), 9),
+        classification_rank.get(str(safe_row_value(row, "classification", "")).lower(), 9),
+        -int(safe_row_value(row, "score", 0) or 0),
+    )
+
+
+def _job_has_application_package(row: dict[str, Any]) -> bool:
+    try:
+        job_id = int(safe_row_value(row, "id", 0) or 0)
+    except (TypeError, ValueError):
+        return False
+    if job_id <= 0:
+        return False
+    app_dir = _application_dir_for_job(row, job_id)
+    return app_dir.exists() or app_dir.with_suffix(".zip").exists()
+
+
+def _format_application_tracking_row(row: dict[str, Any]) -> dict[str, Any]:
+    geo = str(safe_row_value(row, "geographic_eligibility", "review") or "review").lower()
+    warnings = _geography_warnings_for_job(row) if geo in {"review", "ineligible"} else []
+    return {
+        "job_id": safe_row_value(row, "id"),
+        "company": safe_row_value(row, "company", ""),
+        "title": safe_row_value(row, "title", ""),
+        "score": safe_row_value(row, "score", ""),
+        "classification": safe_row_value(row, "classification", ""),
+        "viability_level": safe_row_value(row, "viability_level", "review"),
+        "geographic_eligibility": safe_row_value(row, "geographic_eligibility", "review"),
+        "source": safe_row_value(row, "source", ""),
+        "url": safe_row_value(row, "url", ""),
+        "warnings": warnings,
+        "application_package_exists": _job_has_application_package(row),
+    }
+
+
+
+def _application_tracking_counts(rows: list[dict[str, Any]] | None = None) -> dict[str, int]:
+    if rows is None:
+        try:
+            rows = _load_all_jobs()
+        except Exception:
+            rows = []
+    return {
+        "unapplied_high_fit_count": sum(1 for row in rows if _is_unapplied_high_fit_candidate(row)),
+        "applied_count": sum(
+            1
+            for row in rows
+            if _application_tracking_status(row) == "applied" or str(safe_row_value(row, "status", "")).lower() == "applied"
+        ),
+        "skipped_count": sum(1 for row in rows if _application_tracking_status(row) == "skipped"),
+    }
+
+def _load_all_jobs() -> list[dict[str, Any]]:
+    initialize()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM jobs").fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_unapplied_high_fit_rows(
+    *,
+    eligible_only: bool = False,
+    include_review: bool = True,
+    include_ineligible: bool = False,
+    limit: int | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    rows = sorted([row for row in _load_all_jobs() if _is_unapplied_high_fit_candidate(row)], key=_unapplied_high_fit_rank_key)
+    eligible_rows: list[dict[str, Any]] = []
+    review_rows: list[dict[str, Any]] = []
+    ineligible_rows: list[dict[str, Any]] = []
+    for row in rows:
+        geo = str(safe_row_value(row, "geographic_eligibility", "review") or "review").lower()
+        if geo in {"eligible", "remote_us"} and not _has_non_us_geography_signal(row):
+            eligible_rows.append(row)
+        elif geo == "review" or _has_non_us_geography_signal(row):
+            if include_review and not eligible_only:
+                review_rows.append(row)
+        elif geo == "ineligible":
+            if include_ineligible and not eligible_only:
+                ineligible_rows.append(row)
+    if limit is not None:
+        remaining = max(limit, 0)
+        eligible_rows = eligible_rows[:remaining]
+        remaining -= len(eligible_rows)
+        review_rows = review_rows[: max(remaining, 0)]
+        remaining -= len(review_rows)
+        ineligible_rows = ineligible_rows[: max(remaining, 0)]
+    return eligible_rows, review_rows, ineligible_rows
+
+
+def print_unapplied_high_fit(
+    *,
+    eligible_only: bool = False,
+    include_review: bool = True,
+    include_ineligible: bool = False,
+    limit: int | None = None,
+    as_json: bool = False,
+) -> None:
+    eligible_rows, review_rows, ineligible_rows = get_unapplied_high_fit_rows(
+        eligible_only=eligible_only,
+        include_review=include_review,
+        include_ineligible=include_ineligible,
+        limit=limit,
+    )
+    if as_json:
+        print(json.dumps({
+            "eligible": [_format_application_tracking_row(row) for row in eligible_rows],
+            "review": [_format_application_tracking_row(row) for row in review_rows],
+            "ineligible": [_format_application_tracking_row(row) for row in ineligible_rows],
+        }, indent=2))
+        return
+
+    _print_application_tracking_rows("Unapplied high-fit jobs", eligible_rows, "No unapplied eligible high-fit jobs.")
+    if review_rows:
+        print()
+        _print_application_tracking_rows("Unapplied high-fit jobs needing geography review", review_rows, "No geography-review high-fit jobs.")
+    if ineligible_rows:
+        print()
+        _print_application_tracking_rows("Unapplied high-fit jobs marked geography ineligible", ineligible_rows, "No geography-ineligible high-fit jobs.")
+
+
+def _print_application_tracking_rows(section_title: str, rows: list[dict[str, Any]], empty_message: str) -> None:
+    print(section_title)
+    if not rows:
+        print(empty_message)
+        return
+    for row in rows:
+        payload = _format_application_tracking_row(row)
+        print(f"id: {payload['job_id']}")
+        print(f"company: {payload['company']}")
+        print(f"title: {payload['title']}")
+        print(f"score: {payload['score']}")
+        print(f"classification: {payload['classification']}")
+        print(f"viability_level: {payload['viability_level']}")
+        print(f"geographic_eligibility: {payload['geographic_eligibility']}")
+        print(f"source: {payload['source']}")
+        print(f"url: {payload['url']}")
+        print(f"application_package_exists: {payload['application_package_exists']}")
+        if payload["warnings"]:
+            print(f"warning: {'; '.join(payload['warnings'])}")
+        print("-")
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _resolve_job_for_application_command(job_id: int | None, url: str | None) -> dict[str, Any]:
+    if job_id is None and not url:
+        raise ValueError("Provide --job-id <id> or --url <job_url>.")
+    row = get_job_by_id(job_id) if job_id is not None else get_job_by_url(str(url))
+    if row is None:
+        raise ValueError("Job not found.")
+    return dict(row)
+
+
+def mark_applied(job_id: int | None = None, url: str | None = None, note: str | None = None) -> dict[str, Any]:
+    initialize()
+    job = _resolve_job_for_application_command(job_id, url)
+    applied_at = _utc_timestamp()
+    update_application_tracking(int(job["id"]), "applied", applied_at=applied_at, application_notes=note)
+    try:
+        update_status(int(job["id"]), "applied")
+    except ValueError:
+        pass
+    updated = dict(get_job_by_id(int(job["id"])) or job)
+    print(f"Marked applied: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
+    return updated
+
+
+def mark_skipped(job_id: int | None = None, url: str | None = None, reason: str | None = None) -> dict[str, Any]:
+    initialize()
+    job = _resolve_job_for_application_command(job_id, url)
+    skipped_at = _utc_timestamp()
+    update_application_tracking(int(job["id"]), "skipped", skipped_at=skipped_at, application_notes=reason)
+    updated = dict(get_job_by_id(int(job["id"])) or job)
+    print(f"Marked skipped: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
+    return updated
+
+
+def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
+    initialize()
+    rows = [dict(row) for row in get_jobs_by_application_status("applied", limit=limit)]
+    if as_json:
+        print(json.dumps(rows, indent=2))
+        return
+    print("Applied jobs")
+    if not rows:
+        print("No applied jobs.")
+        return
+    for row in rows:
+        print(f"company: {safe_row_value(row, 'company', '')}")
+        print(f"title: {safe_row_value(row, 'title', '')}")
+        print(f"applied_at: {safe_row_value(row, 'applied_at', '')}")
+        print(f"score: {safe_row_value(row, 'score', '')}")
+        print(f"url: {safe_row_value(row, 'url', '')}")
+        print(f"notes: {safe_row_value(row, 'application_notes', '') or 'none'}")
+        print("-")
+
 def print_digest(group_by_status: bool = False, include_skipped: bool = False) -> None:
     initialize()
     high_fit_rows = get_top_jobs_by_classification("high_fit", limit=50)
@@ -540,8 +766,16 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         for row in high_fit_rows
         if str(safe_row_value(row, "geographic_eligibility", "review")).lower() == "review"
         and str(safe_row_value(row, "status", "")).lower() not in {"archived", "rejected", "applied"}
+        and str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower() not in {"applied", "skipped"}
         and _is_actionable_real_job_url(str(safe_row_value(row, "url", "")))
     ]
+    tracking_counts = _application_tracking_counts(list(high_fit_rows) + list(near_fit_rows))
+
+    print("Application tracking summary")
+    print(f"unapplied_high_fit_count: {tracking_counts['unapplied_high_fit_count']}")
+    print(f"applied_count: {tracking_counts['applied_count']}")
+    print(f"skipped_count: {tracking_counts['skipped_count']}")
+    print()
 
     if not group_by_status:
         _print_digest_rows("Actionable high-fit jobs", actionable_high_fit_rows, "No actionable high-fit jobs.")
@@ -1778,7 +2012,10 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
     classification = str(safe_row_value(job, "classification", "")).lower()
     viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
     geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
+    application_status = str(safe_row_value(job, "application_status", "not_applied") or "not_applied").lower()
     if status not in {"new", "interested"}:
+        return False
+    if application_status in {"applied", "skipped"}:
         return False
     if classification not in {"high_fit", "apply_now"}:
         return False
@@ -1787,6 +2024,8 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
     if geographic_eligibility not in {"eligible", "remote_us"}:
         return False
     if status in {"applied", "rejected", "archived"}:
+        return False
+    if application_status in {"applied", "skipped"}:
         return False
     if _has_non_us_geography_signal(job):
         return False
@@ -1842,7 +2081,10 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     classification = str(safe_row_value(job, "classification", "")).lower()
     viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
     geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
+    application_status = str(safe_row_value(job, "application_status", "not_applied") or "not_applied").lower()
     if classification not in {"high_fit", "apply_now"}:
+        return False
+    if application_status in {"applied", "skipped"}:
         return False
     if viability_level not in {"apply_now", "strong_review"}:
         return False
@@ -1899,7 +2141,7 @@ def prep_next_application(
             print(json.dumps({"error": "Job is not actionable. Use --force to prepare anyway."}))
             return None
     else:
-        candidates = _get_prep_next_application_candidates()
+        candidates = [job for job in _get_prep_next_application_candidates() if _is_prep_next_application_eligible(job)]
         if not candidates:
             print(json.dumps({"error": "No actionable jobs found"}))
             return None
@@ -1991,6 +2233,7 @@ def prep_next_application(
         "actionable": selected_job_actionable,
         "skip_browser": skip_browser,
         "pdf_export": pdf_export_status,
+        "application_tracking": _application_tracking_counts(),
     }
     if questions_created:
         summary["application_questions_path"] = str(app_dir / "application_questions.yaml")
@@ -2061,6 +2304,18 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
     if why_lines:
         lines.extend(["", "Why this surfaced", *why_lines])
 
+    tracking = summary.get("application_tracking")
+    if isinstance(tracking, dict):
+        lines.extend(
+            [
+                "",
+                "Application tracking",
+                f"Unapplied high-fit: {tracking.get('unapplied_high_fit_count', 0)}",
+                f"Applied: {tracking.get('applied_count', 0)}",
+                f"Skipped: {tracking.get('skipped_count', 0)}",
+            ]
+        )
+
     warnings: list[str] = []
     if summary.get("warning") == "application question extraction failed; inspect manually":
         warnings.append("Browser extraction failed: inspect manually.")
@@ -2115,6 +2370,50 @@ def main(argv: list[str] | None = None) -> None:
             group_by_status="--group-by-status" in args[1:],
             include_skipped="--include-skipped" in args[1:],
         )
+        return
+
+    if command == "unapplied-high-fit":
+        try:
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else None
+        except (ValueError, IndexError):
+            print("Usage: python -m job_fit_agent.main unapplied-high-fit [--eligible-only] [--include-review] [--include-ineligible] [--limit <n>] [--json]")
+            return
+        print_unapplied_high_fit(
+            eligible_only="--eligible-only" in args[1:],
+            include_review=True,
+            include_ineligible="--include-ineligible" in args[1:],
+            limit=limit,
+            as_json="--json" in args[1:],
+        )
+        return
+
+    if command == "mark-applied":
+        try:
+            selected_job_id = int(args[args.index("--job-id") + 1]) if "--job-id" in args[1:] else None
+            selected_url = args[args.index("--url") + 1] if "--url" in args[1:] else None
+            note = args[args.index("--note") + 1] if "--note" in args[1:] else None
+            mark_applied(job_id=selected_job_id, url=selected_url, note=note)
+        except (ValueError, IndexError) as exc:
+            print(str(exc) if str(exc) else "Usage: python -m job_fit_agent.main mark-applied (--job-id <id> | --url <job_url>) [--note <note>]")
+        return
+
+    if command == "mark-skipped":
+        try:
+            selected_job_id = int(args[args.index("--job-id") + 1]) if "--job-id" in args[1:] else None
+            selected_url = args[args.index("--url") + 1] if "--url" in args[1:] else None
+            reason = args[args.index("--reason") + 1] if "--reason" in args[1:] else None
+            mark_skipped(job_id=selected_job_id, url=selected_url, reason=reason)
+        except (ValueError, IndexError) as exc:
+            print(str(exc) if str(exc) else "Usage: python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
+        return
+
+    if command == "applied":
+        try:
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else 50
+        except (ValueError, IndexError):
+            print("Usage: python -m job_fit_agent.main applied [--limit <n>] [--json]")
+            return
+        print_applied_jobs(limit=limit, as_json="--json" in args[1:])
         return
 
     if command == "run":
@@ -2341,6 +2640,10 @@ def main(argv: list[str] | None = None) -> None:
 
     print("python -m job_fit_agent.main run")
     print("python -m job_fit_agent.main digest")
+    print("python -m job_fit_agent.main unapplied-high-fit [--eligible-only] [--include-ineligible] [--limit <n>] [--json]")
+    print("python -m job_fit_agent.main mark-applied (--job-id <id> | --url <job_url>) [--note <note>]")
+    print("python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
+    print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main set-status <job_id> <status>")
     print("python -m job_fit_agent.main list-status <status>")

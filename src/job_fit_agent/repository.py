@@ -13,6 +13,7 @@ from job_fit_agent.models import FitScore, JobPosting
 DB_PATH = Path("data/jobs.sqlite")
 
 VALID_STATUSES = {"new", "interested", "applying", "applied", "interviewing", "rejected", "archived"}
+VALID_APPLICATION_STATUSES = {"not_applied", "applied", "skipped", "saved"}
 
 
 @dataclass
@@ -64,12 +65,15 @@ def initialize(db_path: Path = DB_PATH) -> None:
                 first_seen_at TEXT,
                 last_seen_at TEXT,
                 status TEXT DEFAULT "new",
-                notes TEXT DEFAULT ""
+                notes TEXT DEFAULT "",
+                application_status TEXT DEFAULT "not_applied",
+                applied_at TEXT,
+                skipped_at TEXT,
+                application_notes TEXT DEFAULT ""
             )
             """
         )
-
-
+        _ensure_schema(conn)
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -98,11 +102,29 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute('ALTER TABLE jobs ADD COLUMN normalized_location_type TEXT DEFAULT ""')
     if "geographic_eligibility" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN geographic_eligibility TEXT DEFAULT "review"')
+    if "application_status" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN application_status TEXT DEFAULT "not_applied"')
+        conn.execute('UPDATE jobs SET application_status = "not_applied" WHERE application_status IS NULL')
+    if "applied_at" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN applied_at TEXT')
+    if "skipped_at" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN skipped_at TEXT')
+    if "application_notes" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN application_notes TEXT DEFAULT ""')
+        conn.execute('UPDATE jobs SET application_notes = "" WHERE application_notes IS NULL')
 
 
 def _validate_status(status: str) -> None:
     if status not in VALID_STATUSES:
         raise ValueError(f"Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_STATUSES))}.")
+
+
+def _validate_application_status(application_status: str) -> None:
+    if application_status not in VALID_APPLICATION_STATUSES:
+        raise ValueError(
+            f"Invalid application_status '{application_status}'. "
+            f"Must be one of: {', '.join(sorted(VALID_APPLICATION_STATUSES))}."
+        )
 
 def job_exists(url: str, db_path: Path = DB_PATH) -> bool:
     with _connect(db_path) as conn:
@@ -279,3 +301,53 @@ def get_top_jobs_by_classification(classification: str, limit: int = 10, db_path
             (classification, limit),
         ).fetchall()
     return rows
+
+
+def get_job_by_url(url: str, db_path: Path = DB_PATH) -> sqlite3.Row | None:
+    with _connect(db_path) as conn:
+        _ensure_schema(conn)
+        return conn.execute("SELECT * FROM jobs WHERE url = ?", (url,)).fetchone()
+
+
+def update_application_tracking(
+    job_id: int,
+    application_status: str,
+    *,
+    applied_at: str | None = None,
+    skipped_at: str | None = None,
+    application_notes: str | None = None,
+    db_path: Path = DB_PATH,
+) -> None:
+    _validate_application_status(application_status)
+    assignments = ["application_status = ?"]
+    values: list[object] = [application_status]
+    if applied_at is not None:
+        assignments.append("applied_at = ?")
+        values.append(applied_at)
+    if skipped_at is not None:
+        assignments.append("skipped_at = ?")
+        values.append(skipped_at)
+    if application_notes is not None:
+        assignments.append("application_notes = ?")
+        values.append(application_notes)
+    values.append(job_id)
+    with _connect(db_path) as conn:
+        _ensure_schema(conn)
+        result = conn.execute(f"UPDATE jobs SET {', '.join(assignments)} WHERE id = ?", values)
+        if result.rowcount == 0:
+            raise ValueError(f"Job id {job_id} not found.")
+
+
+def get_jobs_by_application_status(application_status: str, limit: int = 50, db_path: Path = DB_PATH) -> list[sqlite3.Row]:
+    _validate_application_status(application_status)
+    with _connect(db_path) as conn:
+        _ensure_schema(conn)
+        return conn.execute(
+            """
+            SELECT * FROM jobs
+            WHERE application_status = ?
+            ORDER BY COALESCE(applied_at, skipped_at, last_seen_at) DESC, score DESC
+            LIMIT ?
+            """,
+            (application_status, limit),
+        ).fetchall()
