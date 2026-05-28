@@ -754,3 +754,41 @@ def test_force_allows_explicit_geography_review_job(monkeypatch, capsys):
     assert payload["job_id"] == 907
     assert payload["actionable"] is False
     assert "Geography requires manual review before applying." in payload["warnings"]
+
+
+def test_telegram_summary_includes_mobile_alias_command():
+    message = job_main._format_prep_next_application_telegram_message(
+        _job(19, company="linear", title="Product Manager")
+        | {
+            "mobile_command_alias": "linear-product-manager",
+            "stable_job_key": "ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2",
+        }
+    )
+
+    assert """After applying:
+```
+applied linear-product-manager
+```""" in message
+    assert """To skip:
+```
+skip linear-product-manager Not a fit
+```""" in message
+    assert """To save:
+```
+save linear-product-manager
+```""" in message
+
+
+def test_telegram_summary_includes_stable_fallback_command():
+    message = job_main._format_prep_next_application_telegram_message(
+        _job(19, company="linear", title="Product Manager")
+        | {
+            "mobile_command_alias": "linear-product-manager",
+            "stable_job_key": "ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2",
+        }
+    )
+
+    assert """Stable fallback:
+```
+applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+```""" in message

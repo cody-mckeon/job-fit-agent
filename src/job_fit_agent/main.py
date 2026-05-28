@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -702,13 +703,107 @@ def _utc_timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _stable_job_key_for_url(job_url: str) -> str:
+    parsed = parse_job_url(job_url)
+    return f"{parsed.source}:{parsed.company}:{parsed.job_id}"
+
+
+def _stable_job_key_for_job(job: dict[str, Any]) -> str:
+    try:
+        return _stable_job_key_for_url(str(safe_row_value(job, "url", "")))
+    except ValueError:
+        source = _mobile_slug(str(safe_row_value(job, "source", "job") or "job"))
+        company = _mobile_slug(str(safe_row_value(job, "company", "company") or "company"))
+        job_id = str(safe_row_value(job, "id", "") or _mobile_alias_suffix_for_job(job))
+        return f"{source}:{company}:{job_id}"
+
+
+def _mobile_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "job"
+
+
+def _mobile_alias_base_for_job(job: dict[str, Any]) -> str:
+    company_slug = _mobile_slug(str(safe_row_value(job, "company", "company") or "company"))
+    role_slug = _mobile_slug(str(safe_row_value(job, "title", "role") or "role"))
+    return f"{company_slug}-{role_slug}"
+
+
+def _mobile_alias_suffix_for_job(job: dict[str, Any]) -> str:
+    try:
+        parsed = parse_job_url(str(safe_row_value(job, "url", "")))
+        if parsed.job_id:
+            return _mobile_slug(parsed.job_id)[:6] or str(safe_row_value(job, "id", ""))
+    except ValueError:
+        pass
+    stable = str(safe_row_value(job, "url", "")) or str(safe_row_value(job, "id", ""))
+    return hashlib.sha1(stable.encode("utf-8")).hexdigest()[:6]
+
+
+def _recent_jobs_for_alias_lookup() -> list[dict[str, Any]]:
+    try:
+        return _load_all_jobs()
+    except Exception:
+        return []
+
+
+def mobile_command_alias_for_job(job: dict[str, Any], recent_jobs: list[dict[str, Any]] | None = None) -> str:
+    base = _mobile_alias_base_for_job(job)
+    rows = recent_jobs if recent_jobs is not None else _recent_jobs_for_alias_lookup()
+    matching = [row for row in rows if _mobile_alias_base_for_job(row) == base]
+    if len(matching) <= 1:
+        return base
+    return f"{base}-{_mobile_alias_suffix_for_job(job)}"
+
+
+def _job_matches_stable_key(job: dict[str, Any], identifier: str) -> bool:
+    try:
+        return _stable_job_key_for_job(job) == identifier
+    except ValueError:
+        return False
+
+
+def _resolve_job_identifier(identifier: str) -> dict[str, Any]:
+    token = identifier.strip()
+    if not token:
+        raise ValueError("Job identifier is required.")
+    if token.isdigit():
+        row = get_job_by_id(int(token))
+        if row is None:
+            raise ValueError("Job not found.")
+        return dict(row)
+    if token.startswith(("http://", "https://")):
+        row = get_job_by_url(token)
+        if row is None:
+            raise ValueError("Job not found.")
+        return dict(row)
+
+    rows = _recent_jobs_for_alias_lookup()
+    stable_matches = [row for row in rows if _job_matches_stable_key(row, token)]
+    if len(stable_matches) == 1:
+        return stable_matches[0]
+    if len(stable_matches) > 1:
+        raise ValueError("Stable job key matched multiple jobs; use the job URL or numeric id.")
+
+    alias_matches = [row for row in rows if mobile_command_alias_for_job(row, rows) == token]
+    if len(alias_matches) == 1:
+        return alias_matches[0]
+    if len(alias_matches) > 1:
+        raise ValueError("Alias matched multiple jobs. Use the stable fallback command from Telegram.")
+
+    base_matches = [row for row in rows if _mobile_alias_base_for_job(row) == token]
+    if len(base_matches) == 1:
+        return base_matches[0]
+    if len(base_matches) > 1:
+        raise ValueError("Alias matched multiple jobs. Use the stable fallback command from Telegram.")
+
+    raise ValueError("Job not found.")
+
+
 def _resolve_job_for_application_command(job_id: int | None, url: str | None) -> dict[str, Any]:
     if job_id is None and not url:
         raise ValueError("Provide --job-id <id> or --url <job_url>.")
-    row = get_job_by_id(job_id) if job_id is not None else get_job_by_url(str(url))
-    if row is None:
-        raise ValueError("Job not found.")
-    return dict(row)
+    identifier = str(job_id) if job_id is not None else str(url)
+    return _resolve_job_identifier(identifier)
 
 
 def mark_applied(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
@@ -763,20 +858,21 @@ def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> 
 def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
     try:
         parsed = parse_telegram_command(command_text)
+        job = _resolve_job_identifier(parsed.job_identifier)
         if parsed.action == "applied":
-            updated = mark_applied(job_id=parsed.job_id, quiet=True)
+            updated = mark_applied(job_id=int(job["id"]), quiet=True)
             new_status = "applied"
         elif parsed.action == "skip":
-            updated = mark_skipped(job_id=parsed.job_id, reason=parsed.note, quiet=True)
+            updated = mark_skipped(job_id=int(job["id"]), reason=parsed.note, quiet=True)
             new_status = "skipped"
         elif parsed.action == "save":
-            updated = mark_saved(job_id=parsed.job_id, quiet=True)
+            updated = mark_saved(job_id=int(job["id"]), quiet=True)
             new_status = "saved"
         else:  # pragma: no cover - parser constrains action values
             raise ValueError("Unsupported command.")
         return {
             "success": True,
-            "job_id": int(updated.get("id", parsed.job_id)),
+            "job_id": int(updated.get("id", job["id"])),
             "company": updated.get("company", ""),
             "title": updated.get("title", ""),
             "new_status": new_status,
@@ -1466,6 +1562,17 @@ Apply now only if key requirements and location constraints are confirmed; other
     (app_dir / "answer_bank.md").write_text(answer_bank, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
     (app_dir / "cover_letter.md").write_text(cover_letter, encoding="utf-8")
+
+    job_metadata = dict(job)
+    package_metadata = {
+        "job_id": job_id,
+        "company": safe_row_value(job_metadata, "company", ""),
+        "title": safe_row_value(job_metadata, "title", ""),
+        "url": safe_row_value(job_metadata, "url", ""),
+        "stable_job_key": _stable_job_key_for_job(job_metadata),
+        "mobile_command_alias": mobile_command_alias_for_job(job_metadata),
+    }
+    (app_dir / "application_metadata.json").write_text(json.dumps(package_metadata, indent=2), encoding="utf-8")
 
     if job["status"] == "new":
         update_status(job_id, "interested")
@@ -2261,8 +2368,13 @@ def prep_next_application(
         if refreshed_job is not None:
             selected_job = dict(refreshed_job)
 
+    stable_job_key = _stable_job_key_for_job(selected_job)
+    mobile_command_alias = mobile_command_alias_for_job(selected_job)
+
     summary: dict[str, Any] = {
         "job_id": selected_job_id,
+        "stable_job_key": stable_job_key,
+        "mobile_command_alias": mobile_command_alias,
         "company": selected_job.get("company"),
         "title": selected_job.get("title"),
         "url": selected_job.get("url"),
@@ -2369,18 +2481,34 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
             ]
         )
 
-    job_id = summary.get("job_id", "")
-    if job_id:
+    mobile_alias = str(summary.get("mobile_command_alias", "")).strip()
+    stable_job_key = str(summary.get("stable_job_key", "")).strip()
+    if mobile_alias or stable_job_key:
+        lines.extend(["", "Telegram status commands"])
+    if mobile_alias:
         lines.extend(
             [
-                "",
-                "Telegram status commands",
                 "After applying:",
-                f"applied {job_id}",
+                "```",
+                f"applied {mobile_alias}",
+                "```",
                 "To skip:",
-                f"skip {job_id} <reason>",
+                "```",
+                f"skip {mobile_alias} Not a fit",
+                "```",
                 "To save:",
-                f"save {job_id}",
+                "```",
+                f"save {mobile_alias}",
+                "```",
+            ]
+        )
+    if stable_job_key:
+        lines.extend(
+            [
+                "Stable fallback:",
+                "```",
+                f"applied {stable_job_key}",
+                "```",
             ]
         )
 

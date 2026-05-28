@@ -358,39 +358,56 @@ Telegram message
 → Telegram confirmation
 ```
 
-Supported Telegram messages:
+Supported Telegram messages accept a job identifier as a numeric id, job URL, stable job key, or mobile command alias:
 
 ```text
+applied linear-product-manager
+/applied linear-product-manager
+mark applied linear-product-manager
+skip linear-product-manager Not US eligible
+/skip linear-product-manager Not US eligible
+save linear-product-manager
+/save linear-product-manager
+
+applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+applied https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 applied 19
-/applied 19
-mark applied 19
-skip 19 Not US eligible
-/skip 19 Not US eligible
-save 19
-/save 19
 ```
 
-Equivalent local short commands are also available:
+The mobile command alias is the easiest identifier to copy from Telegram. It uses a short `<company_slug>-<role_slug>` format such as `linear-product-manager`; collisions are disambiguated with a job id or short source hash such as `linear-product-manager-19` or `linear-product-manager-b7669c`. The stable job key, such as `ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2`, is the safest fallback because it is derived from the backend job source and job id. Numeric ids are local SQLite row ids only and may fail across separate GitHub Actions runs if the database state differs.
+
+Equivalent local short commands are also available for numeric local ids:
 
 ```bash
 python -m job_fit_agent.main applied <job_id>
 python -m job_fit_agent.main skip <job_id> "<reason>"
 python -m job_fit_agent.main save <job_id>
-python -m job_fit_agent.main telegram-command "applied 19"
+python -m job_fit_agent.main telegram-command "applied linear-product-manager"
 ```
 
-The Telegram package summary now includes copy/paste status commands for the prepared job:
+The Telegram package summary now includes mobile-friendly copy/paste status commands first, followed by the stable fallback command:
 
-```text
+````text
 After applying:
-applied 19
+```
+applied linear-product-manager
+```
 
 To skip:
-skip 19 <reason>
+```
+skip linear-product-manager Not a fit
+```
 
 To save:
-save 19
 ```
+save linear-product-manager
+```
+
+Stable fallback:
+```
+applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+```
+````
 
 ### GitHub Actions workflow
 

@@ -5,18 +5,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-DANGEROUS_SHELL_CHARS = re.compile(r"[;&|`$<>\\\r\n]")
+DANGEROUS_SHELL_CHARS = re.compile(r"[;|`$<>\\\r\n]")
 JOB_ID_RE = re.compile(r"^[0-9]+$")
 
 
 @dataclass(frozen=True)
 class TelegramStatusCommand:
     action: str
-    job_id: int
+    job_identifier: str
     note: str = ""
 
+    @property
+    def job_id(self) -> int | None:
+        return int(self.job_identifier) if JOB_ID_RE.fullmatch(self.job_identifier) else None
+
     def as_dict(self) -> dict[str, object]:
-        return {"action": self.action, "job_id": self.job_id, "note": self.note}
+        payload: dict[str, object] = {"action": self.action, "job_identifier": self.job_identifier, "note": self.note}
+        if self.job_id is not None:
+            payload["job_id"] = self.job_id
+        return payload
 
 
 def parse_telegram_command(text: str) -> TelegramStatusCommand:
@@ -65,10 +72,10 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
     else:
         raise ValueError("Unsupported command.")
 
-    if not JOB_ID_RE.fullmatch(job_id_token):
-        raise ValueError("Job id must be numeric.")
-    job_id = int(job_id_token)
-    if job_id <= 0:
+    job_identifier = job_id_token.strip()
+    if not job_identifier:
+        raise ValueError("Job identifier is required.")
+    if JOB_ID_RE.fullmatch(job_identifier) and int(job_identifier) <= 0:
         raise ValueError("Job id must be positive.")
 
     note = " ".join(note_parts).strip()
@@ -77,4 +84,4 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
     if action == "skip" and not note:
         raise ValueError("Skip reason is required.")
 
-    return TelegramStatusCommand(action=action, job_id=job_id, note=note)
+    return TelegramStatusCommand(action=action, job_identifier=job_identifier, note=note)
