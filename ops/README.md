@@ -39,15 +39,33 @@ The Docker image includes PDF export dependencies: `pandoc`, `texlive-latex-base
 
 ## Run specific workflows
 
-Run prep-next-application:
+Review unapplied high-fit roles and run prep-next-application:
 
 ```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main unapplied-high-fit
 make docker-prep-next
 # or with Telegram handoff:
 docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-application --notify-telegram
 ```
 
-Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
+`unapplied-high-fit` shows eligible high-fit roles first and geography-review roles in a separate section. Add `--eligible-only`, `--include-ineligible`, `--limit <n>`, or `--json` when triaging from automation.
+
+After Cody submits an application, mark it immediately so it is not recommended again:
+
+```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-applied --job-id <id> --note "Applied through Ashby using generated package."
+docker compose run --rm job-fit-agent python -m job_fit_agent.main applied
+```
+
+If Cody decides not to apply, mark it skipped with a reason:
+
+```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped --job-id <id> --reason "Not US eligible"
+# or by URL:
+docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"
+```
+
+Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. Jobs marked `application_status=applied` or `application_status=skipped` are also excluded from default digest actionable sections, prep-next auto-selection, and daily Telegram recommendations. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
 
 Telegram handoff env vars:
 - `TELEGRAM_BOT_TOKEN`
@@ -156,7 +174,7 @@ Mobile workflow: **Telegram → download zip → review files → submit manuall
 GitHub Actions artifact upload remains unchanged as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications). Geography-review and geography-ineligible jobs are also excluded from actionable defaults; high role-fit geography-review jobs belong in manual review, not scheduled auto-prep.
+Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications). Applied and skipped jobs are filtered out as well, and digest includes summary counts for unapplied high-fit, applied, and skipped roles. Geography-review and geography-ineligible jobs are also excluded from actionable defaults; high role-fit geography-review jobs belong in manual review, not scheduled auto-prep.
 
 Set repository secrets:
 - `TELEGRAM_BOT_TOKEN`

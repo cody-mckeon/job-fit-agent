@@ -255,7 +255,12 @@ Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.m
 
 Recommended application prep workflow:
 1. `python -m job_fit_agent.main digest`
-2. `python -m job_fit_agent.main prep-next-application`
+   - Digest prints application tracking counts for unapplied high-fit, applied, and skipped jobs.
+2. Review open high-fit roles before prepping:
+   `python -m job_fit_agent.main unapplied-high-fit`
+   - Default output shows eligible jobs first and geography-review jobs in a separate manual-review section.
+   - Use `--eligible-only` to hide review/ineligible roles, `--include-ineligible` to audit blocked geography roles, `--limit <n>` to cap output, or `--json` for structured output.
+3. `python -m job_fit_agent.main prep-next-application`
    - Optional Telegram handoff:
      `python -m job_fit_agent.main prep-next-application --notify-telegram`
    - Optional explicit job selection with Telegram:
@@ -269,9 +274,14 @@ Recommended application prep workflow:
    - `--dry-run` output includes an `actionable` field so you can verify if the selected job is actionable before prep.
    - `--skip-pdf` keeps fast local/dev runs by skipping `pandoc` PDF export while still generating markdown outputs (`submit_resume.md`, `cover_letter.md`, `answer_bank.md`).
    - Note: job IDs are local database IDs and can differ between environments/machines.
-3. Review/edit package artifacts
-4. Submit manually
-5. `python -m job_fit_agent.main set-status <job_id> applied`
+4. Review/edit package artifacts
+5. Submit manually
+6. Mark the role as applied so it does not appear in future recommendations:
+   `python -m job_fit_agent.main mark-applied --job-id <job_id> --note "Applied through Ashby using generated package."`
+   - You can also mark by URL: `python -m job_fit_agent.main mark-applied --url <job_url>`
+   - Review submitted roles with `python -m job_fit_agent.main applied` or `python -m job_fit_agent.main applied --json`.
+   - If Cody intentionally passes on a role, run `python -m job_fit_agent.main mark-skipped --job-id <job_id> --reason "Not US eligible"` or `python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"`.
+   - `applied` and `skipped` application statuses are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations.
 
 Telegram handoff requires:
 - `TELEGRAM_BOT_TOKEN`
@@ -323,7 +333,7 @@ Mobile flow: **Telegram → download zip → review files → submit manually**.
 GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude geography-review and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section.
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked `application_status=applied` or `application_status=skipped`, geography-review, and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section. Use `unapplied-high-fit` any time to see valid high-fit roles that still need an application decision.
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`
