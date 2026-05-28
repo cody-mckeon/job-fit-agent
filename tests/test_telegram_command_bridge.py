@@ -1,5 +1,6 @@
 import json
 
+from job_fit_agent import main as job_main
 from job_fit_agent.main import main
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.repository import get_job_by_id, get_job_by_url, initialize, upsert_job
@@ -40,7 +41,7 @@ def _insert(url: str, title: str = "Product Manager") -> int:
 
 def test_parser_parses_applied_plain():
     parsed = parse_telegram_command("applied 19")
-    assert parsed.as_dict() == {"action": "applied", "job_id": 19, "note": ""}
+    assert parsed.as_dict() == {"action": "applied", "job_identifier": "19", "note": "", "job_id": 19}
 
 
 def test_parser_parses_applied_slash():
@@ -57,7 +58,7 @@ def test_parser_parses_mark_applied():
 
 def test_parser_parses_skip_with_note():
     parsed = parse_telegram_command("skip 19 Not US eligible")
-    assert parsed.as_dict() == {"action": "skip", "job_id": 19, "note": "Not US eligible"}
+    assert parsed.as_dict() == {"action": "skip", "job_identifier": "19", "note": "Not US eligible", "job_id": 19}
 
 
 def test_parser_parses_slash_skip_with_note():
@@ -68,7 +69,7 @@ def test_parser_parses_slash_skip_with_note():
 
 def test_parser_parses_save():
     parsed = parse_telegram_command("save 19")
-    assert parsed.as_dict() == {"action": "save", "job_id": 19, "note": ""}
+    assert parsed.as_dict() == {"action": "save", "job_identifier": "19", "note": "", "job_id": 19}
 
 
 def test_parser_rejects_missing_job_id():
@@ -80,13 +81,11 @@ def test_parser_rejects_missing_job_id():
         raise AssertionError("expected ValueError")
 
 
-def test_parser_rejects_non_numeric_job_id():
-    try:
-        parse_telegram_command("applied abc")
-    except ValueError as exc:
-        assert "numeric" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("expected ValueError")
+def test_parser_accepts_mobile_alias_identifier():
+    parsed = parse_telegram_command("applied linear-product-manager")
+    assert parsed.action == "applied"
+    assert parsed.job_identifier == "linear-product-manager"
+    assert parsed.job_id is None
 
 
 def test_parser_rejects_unsupported_command():
@@ -186,3 +185,86 @@ def test_short_status_cli_commands_update_jobs(tmp_path, monkeypatch, capsys):
     assert skipped is not None and skipped["application_status"] == "skipped"
     assert skipped["application_notes"] == "Not US eligible"
     assert saved is not None and saved["application_status"] == "saved"
+
+
+def test_telegram_command_applied_mobile_alias_resolves_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2", "Product Manager")
+
+    main(["telegram-command", "applied linear-product-manager"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["job_id"] == job_id
+    assert row is not None and row["application_status"] == "applied"
+
+
+def test_telegram_command_skip_mobile_alias_resolves_job_and_note(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/skip-mobile-alias", "Product Manager")
+
+    main(["telegram-command", "skip linear-product-manager Not a fit"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["job_id"] == job_id
+    assert result["note"] == "Not a fit"
+    assert row is not None and row["application_status"] == "skipped"
+    assert row["application_notes"] == "Not a fit"
+
+
+def test_alias_collision_appends_short_hash_or_job_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    first_id = _insert("https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2", "Product Manager")
+    second_id = _insert("https://jobs.ashbyhq.com/linear/19", "Product Manager")
+
+    first = dict(get_job_by_id(first_id))
+    second = dict(get_job_by_id(second_id))
+
+    assert job_main.mobile_command_alias_for_job(first) == "linear-product-manager-b7669c"
+    assert job_main.mobile_command_alias_for_job(second) == "linear-product-manager-19"
+
+
+def test_ambiguous_alias_returns_useful_error(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert("https://jobs.ashbyhq.com/linear/ambiguous-one", "Product Manager")
+    _insert("https://jobs.ashbyhq.com/linear/ambiguous-two", "Product Manager")
+
+    main(["telegram-command", "applied linear-product-manager"])
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is False
+    assert result["message"] == "Alias matched multiple jobs. Use the stable fallback command from Telegram."
+
+
+def test_stable_job_key_still_resolves_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2", "Product Manager")
+
+    main(["telegram-command", "applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert row is not None and row["application_status"] == "applied"
+
+
+def test_job_url_identifier_resolves_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    url = "https://jobs.ashbyhq.com/linear/url-command"
+    job_id = _insert(url, "Product Manager")
+
+    main(["telegram-command", f"save {url}"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert row is not None and row["application_status"] == "saved"

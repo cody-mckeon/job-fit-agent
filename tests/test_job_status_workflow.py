@@ -43,3 +43,9 @@ def test_worker_calls_github_dispatches_api():
 def test_worker_uses_job_status_command_event_type():
     text = Path("ops/telegram-worker/worker.js").read_text()
     assert 'event_type: "job_status_command"' in text
+
+
+def test_worker_allows_mobile_alias_and_stable_identifiers():
+    text = Path("ops/telegram-worker/worker.js").read_text()
+    assert "JOB_IDENTIFIER" in text
+    assert ":._~/?#@!%&+=,-" in text

@@ -1,6 +1,7 @@
 const GITHUB_API_VERSION = "2022-11-28";
-const ALLOWED_COMMAND = /^(?:\/?applied\s+\d+|mark\s+applied\s+\d+|\/?skip\s+\d+\s+.+|\/?save\s+\d+)$/i;
-const DANGEROUS_SHELL_CHARS = /[;&|`$<>\\\r\n]/;
+const JOB_IDENTIFIER = "[A-Za-z0-9:._~/?#@!%&+=,-]+";
+const ALLOWED_COMMAND = new RegExp(`^(?:\\/?applied\\s+${JOB_IDENTIFIER}|mark\\s+applied\\s+${JOB_IDENTIFIER}|\\/?skip\\s+${JOB_IDENTIFIER}\\s+.+|\\/?save\\s+${JOB_IDENTIFIER})$`, "i");
+const DANGEROUS_SHELL_CHARS = /[;|`$<>\\\r\n]/;
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {

@@ -28,13 +28,16 @@ The Worker must:
 ## Supported Telegram messages
 
 ```text
+applied linear-product-manager
+/applied linear-product-manager
+mark applied linear-product-manager
+skip linear-product-manager Not US eligible
+/skip linear-product-manager Not US eligible
+save linear-product-manager
+/save linear-product-manager
+applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+applied https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 applied 19
-/applied 19
-mark applied 19
-skip 19 Not US eligible
-/skip 19 Not US eligible
-save 19
-/save 19
 ```
 
 The Worker forwards the original Telegram text to GitHub as:
@@ -43,7 +46,7 @@ The Worker forwards the original Telegram text to GitHub as:
 {
   "event_type": "job_status_command",
   "client_payload": {
-    "command_text": "applied 19",
+    "command_text": "applied linear-product-manager",
     "chat_id": "123456"
   }
 }
@@ -62,7 +65,7 @@ The Worker forwards the original Telegram text to GitHub as:
      -F "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
    ```
 
-5. Send `applied 19` in Telegram.
+5. Send `applied linear-product-manager` in Telegram.
 6. Verify the GitHub Actions **Job Status Command** workflow starts from the `repository_dispatch` event.
 7. Verify Telegram receives the confirmation after the workflow updates the job database.
 

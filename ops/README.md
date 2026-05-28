@@ -189,13 +189,16 @@ Cody can mark jobs from Telegram without an always-on bot server. Telegram sends
 Supported commands from Telegram:
 
 ```text
+applied linear-product-manager
+/applied linear-product-manager
+mark applied linear-product-manager
+skip linear-product-manager Not US eligible
+/skip linear-product-manager Not US eligible
+save linear-product-manager
+/save linear-product-manager
+applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+applied https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 applied 19
-/applied 19
-mark applied 19
-skip 19 Not US eligible
-/skip 19 Not US eligible
-save 19
-/save 19
 ```
 
 Local equivalents:
@@ -204,7 +207,7 @@ Local equivalents:
 python -m job_fit_agent.main applied <job_id>
 python -m job_fit_agent.main skip <job_id> "<reason>"
 python -m job_fit_agent.main save <job_id>
-python -m job_fit_agent.main telegram-command "applied 19"
+python -m job_fit_agent.main telegram-command "applied linear-product-manager"
 ```
 
 Reference Worker files live in `ops/telegram-worker/`.
