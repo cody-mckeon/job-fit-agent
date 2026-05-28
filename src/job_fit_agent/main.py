@@ -90,6 +90,74 @@ WEAK_ROLE_TERMS = (
     "customer success",
 )
 STRONG_OVERLAP_TERMS = ("ai workflow", "agentic", "product systems", "workflow automation", "internal tools", "product analytics")
+
+GEOGRAPHY_REVIEW_WARNING = "Geography requires manual review before applying."
+NON_US_GEOGRAPHY_TERMS = (
+    "dach",
+    "emea",
+    "apac",
+    "uk",
+    "london",
+    "germany",
+    "austria",
+    "switzerland",
+    "berlin",
+    "munich",
+    "paris",
+    "amsterdam",
+    "dublin",
+    "singapore",
+    "india",
+    "bengaluru",
+    "canada",
+    "toronto",
+)
+EXPLICIT_US_GEOGRAPHY_TERMS = (
+    "remote us",
+    "remote-us",
+    "us remote",
+    "us-remote",
+    "remote usa",
+    "usa remote",
+    "remote united states",
+    "united states",
+    "las vegas",
+    "henderson",
+    "nevada",
+    "us-based",
+    "us based",
+)
+
+
+def _contains_geography_term(text: str, term: str) -> bool:
+    if len(term) <= 3:
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text))
+    return term in text
+
+
+def _has_explicit_us_geography(text: str) -> bool:
+    return any(term in text for term in EXPLICIT_US_GEOGRAPHY_TERMS)
+
+
+def _has_non_us_geography_signal(job: dict[str, Any]) -> bool:
+    text = " ".join(str(safe_row_value(job, key, "") or "").lower() for key in ("title", "location", "location_raw", "notes", "viability_reasons", "reasons", "red_flags"))
+    if _has_explicit_us_geography(text):
+        return False
+    return any(_contains_geography_term(text, term) for term in NON_US_GEOGRAPHY_TERMS)
+
+
+def _geography_warnings_for_job(job: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    text = " ".join(str(safe_row_value(job, key, "") or "").lower() for key in ("title", "location", "location_raw", "notes", "viability_reasons", "reasons", "red_flags"))
+    geo = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
+    if geo in {"review", "ineligible"}:
+        warnings.append(GEOGRAPHY_REVIEW_WARNING)
+    if _contains_geography_term(text, "dach") and not _has_explicit_us_geography(text):
+        warnings.append("DACH region role may not be US eligible")
+    elif _has_non_us_geography_signal(job):
+        warnings.append("Role has non-US geography signals; confirm US eligibility before applying.")
+    return warnings
+
 STANDARD_APPLICATION_FIELDS = {
     "name",
     "first name",
@@ -326,7 +394,12 @@ def run_pipeline() -> None:
         result = upsert_job(job, fit)
         if result.is_new and fit.classification in {"high_fit", "near_fit"}:
             new_matching.append((job, fit))
-        if result.is_new and fit.classification == "high_fit" and fit.viability_level == "apply_now":
+        if (
+            result.is_new
+            and fit.classification == "high_fit"
+            and fit.viability_level == "apply_now"
+            and job.geographic_eligibility in {"eligible", "remote_us"}
+        ):
             new_high_fit.append((job, fit))
 
     high_fit_jobs, near_fit_jobs, _ = group_jobs_by_classification(new_matching)
@@ -397,13 +470,11 @@ def _is_actionable_digest_row(row: dict) -> bool:
 
     if status in {"archived", "rejected", "applied"}:
         return False
-    if viability_level not in {"apply_now", "review", "stretch"}:
+    if viability_level not in {"apply_now", "strong_review"}:
         return False
-    if viability_level == "skip":
+    if geographic_eligibility not in {"eligible", "remote_us"}:
         return False
-    if geographic_eligibility in {"ineligible"}:
-        return False
-    if geographic_eligibility not in {"eligible", "review"}:
+    if _has_non_us_geography_signal(row):
         return False
     if not _is_actionable_real_job_url(str(safe_row_value(row, "url", ""))):
         return False
@@ -464,9 +535,19 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
     actionable_high_fit_rows = [row for row in high_fit_rows if _is_actionable_digest_row(row)]
     actionable_near_fit_rows = [row for row in near_fit_rows if _is_actionable_digest_row(row)]
     skipped_rows = [row for row in high_fit_rows + near_fit_rows if _is_hard_constraint_skipped_row(row)]
+    geography_review_rows = [
+        row
+        for row in high_fit_rows
+        if str(safe_row_value(row, "geographic_eligibility", "review")).lower() == "review"
+        and str(safe_row_value(row, "status", "")).lower() not in {"archived", "rejected", "applied"}
+        and _is_actionable_real_job_url(str(safe_row_value(row, "url", "")))
+    ]
 
     if not group_by_status:
         _print_digest_rows("Actionable high-fit jobs", actionable_high_fit_rows, "No actionable high-fit jobs.")
+        if geography_review_rows:
+            print()
+            _print_digest_rows("High role fit but geography review", geography_review_rows, "No high-fit geography-review jobs.")
         print()
         _print_digest_rows("Actionable near-fit jobs", actionable_near_fit_rows, "No actionable near-fit jobs.")
         if include_skipped:
@@ -1699,17 +1780,15 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
     geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
     if status not in {"new", "interested"}:
         return False
-    if classification not in {"high_fit", "near_fit"}:
+    if classification not in {"high_fit", "apply_now"}:
         return False
-    if viability_level not in {"apply_now", "review", "stretch"}:
+    if viability_level not in {"apply_now", "strong_review"}:
         return False
-    if geographic_eligibility not in {"eligible", "review"}:
+    if geographic_eligibility not in {"eligible", "remote_us"}:
         return False
     if status in {"applied", "rejected", "archived"}:
         return False
-    if viability_level == "skip":
-        return False
-    if geographic_eligibility == "ineligible":
+    if _has_non_us_geography_signal(job):
         return False
     if not _is_actionable_real_job_url(str(safe_row_value(job, "url", ""))):
         return False
@@ -1737,9 +1816,9 @@ def _is_actionable_real_job_url(url: str) -> bool:
 
 
 def _prep_next_application_rank_key(job: dict[str, Any]) -> tuple[int, int, int, int, int]:
-    classification_rank = {"high_fit": 0, "near_fit": 1}
-    viability_rank = {"apply_now": 0, "review": 1, "stretch": 2}
-    geography_rank = {"eligible": 0, "review": 1}
+    classification_rank = {"high_fit": 0, "apply_now": 0}
+    viability_rank = {"apply_now": 0, "strong_review": 1}
+    geography_rank = {"eligible": 0, "remote_us": 0}
     status_rank = {"new": 0, "interested": 0}
     return (
         classification_rank.get(str(safe_row_value(job, "classification", "")).lower(), 99),
@@ -1763,13 +1842,15 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     classification = str(safe_row_value(job, "classification", "")).lower()
     viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
     geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
-    if classification == "low_fit":
+    if classification not in {"high_fit", "apply_now"}:
         return False
-    if viability_level == "skip":
+    if viability_level not in {"apply_now", "strong_review"}:
         return False
-    if geographic_eligibility == "ineligible":
+    if geographic_eligibility not in {"eligible", "remote_us"}:
         return False
     if status in {"applied", "rejected", "archived"}:
+        return False
+    if _has_non_us_geography_signal(job):
         return False
     if not _is_actionable_real_job_url(str(safe_row_value(job, "url", ""))):
         return False
@@ -1915,12 +1996,13 @@ def prep_next_application(
         summary["application_questions_path"] = str(app_dir / "application_questions.yaml")
     if answers_created:
         summary["application_answers_path"] = str(app_dir / "application_answers.md")
+    warnings.extend(message for message in _geography_warnings_for_job(selected_job) if message not in warnings)
     if warning:
         summary["warning"] = warning
-    if warnings:
-        summary["warnings"] = warnings
     if force and not selected_job_actionable:
         summary["warning"] = "Prepared despite non-actionable status because --force was used."
+    if warnings:
+        summary["warnings"] = warnings
     github_actions_run_url = _build_github_actions_run_url()
     if github_actions_run_url:
         summary["github_actions_run_url"] = github_actions_run_url
@@ -1988,12 +2070,19 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
         warnings.append(f"PDF export {summary.get('pdf_export')}.")
     if summary.get("pdf_skipped") or summary.get("pdf_export") == "failed":
         warnings.append("PDF export failed or skipped. Review submit_resume.md instead.")
+    for warning_message in _as_list(summary.get("warnings")):
+        if warning_message not in warnings:
+            warnings.append(warning_message)
     viability = str(summary.get("viability_level", "")).lower()
     if viability in {"stretch", "review"}:
         warnings.append("Job is stretch/review, not apply_now.")
     geo = str(summary.get("geographic_eligibility", "")).lower()
     if geo == "review":
-        warnings.append("Geographic eligibility is review.")
+        if GEOGRAPHY_REVIEW_WARNING not in warnings:
+            warnings.append(GEOGRAPHY_REVIEW_WARNING)
+    elif geo == "ineligible":
+        if GEOGRAPHY_REVIEW_WARNING not in warnings:
+            warnings.append(GEOGRAPHY_REVIEW_WARNING)
     if warnings:
         lines.extend(["", "Warnings", *warnings])
 
