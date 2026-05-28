@@ -1,0 +1,188 @@
+import json
+
+from job_fit_agent.main import main
+from job_fit_agent.models import FitScore, JobPosting
+from job_fit_agent.repository import get_job_by_id, get_job_by_url, initialize, upsert_job
+from job_fit_agent.telegram_commands import parse_telegram_command
+
+
+def _job(url: str, title: str = "Product Manager") -> JobPosting:
+    return JobPosting(
+        source="ashby",
+        company="linear",
+        title=title,
+        location="Remote US",
+        location_raw="Remote US",
+        geographic_eligibility="eligible",
+        url=url,
+        description="AI workflow automation product systems",
+    )
+
+
+def _fit() -> FitScore:
+    return FitScore(
+        total_score=92,
+        classification="high_fit",
+        role_family="product",
+        viability_score=91,
+        viability_level="apply_now",
+        reasons=["strong product fit"],
+        red_flags=[],
+    )
+
+
+def _insert(url: str, title: str = "Product Manager") -> int:
+    upsert_job(_job(url, title), _fit())
+    row = get_job_by_url(url)
+    assert row is not None
+    return int(row["id"])
+
+
+def test_parser_parses_applied_plain():
+    parsed = parse_telegram_command("applied 19")
+    assert parsed.as_dict() == {"action": "applied", "job_id": 19, "note": ""}
+
+
+def test_parser_parses_applied_slash():
+    parsed = parse_telegram_command("/applied 19")
+    assert parsed.action == "applied"
+    assert parsed.job_id == 19
+
+
+def test_parser_parses_mark_applied():
+    parsed = parse_telegram_command("mark applied 19")
+    assert parsed.action == "applied"
+    assert parsed.job_id == 19
+
+
+def test_parser_parses_skip_with_note():
+    parsed = parse_telegram_command("skip 19 Not US eligible")
+    assert parsed.as_dict() == {"action": "skip", "job_id": 19, "note": "Not US eligible"}
+
+
+def test_parser_parses_slash_skip_with_note():
+    parsed = parse_telegram_command("/skip 19 Not US eligible")
+    assert parsed.action == "skip"
+    assert parsed.note == "Not US eligible"
+
+
+def test_parser_parses_save():
+    parsed = parse_telegram_command("save 19")
+    assert parsed.as_dict() == {"action": "save", "job_id": 19, "note": ""}
+
+
+def test_parser_rejects_missing_job_id():
+    try:
+        parse_telegram_command("applied")
+    except ValueError as exc:
+        assert "Missing job id" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError")
+
+
+def test_parser_rejects_non_numeric_job_id():
+    try:
+        parse_telegram_command("applied abc")
+    except ValueError as exc:
+        assert "numeric" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError")
+
+
+def test_parser_rejects_unsupported_command():
+    try:
+        parse_telegram_command("delete 19")
+    except ValueError as exc:
+        assert "Unsupported" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError")
+
+
+def test_parser_rejects_dangerous_shell_like_input():
+    try:
+        parse_telegram_command("applied 19; rm -rf /")
+    except ValueError as exc:
+        assert "shell-like" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError")
+
+
+def test_telegram_command_applied_updates_job_status(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/applied-command", "Product Manager")
+
+    main(["telegram-command", f"applied {job_id}"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["company"] == "linear"
+    assert result["title"] == "Product Manager"
+    assert result["new_status"] == "applied"
+    assert row is not None
+    assert row["application_status"] == "applied"
+    assert row["applied_at"]
+
+
+def test_telegram_command_skip_updates_skipped_status_and_note(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/skip-command", "Forward Deployed Engineer")
+
+    main(["telegram-command", f"skip {job_id} Not US eligible"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["new_status"] == "skipped"
+    assert result["note"] == "Not US eligible"
+    assert row is not None
+    assert row["application_status"] == "skipped"
+    assert row["skipped_at"]
+    assert row["application_notes"] == "Not US eligible"
+
+
+def test_telegram_command_save_updates_saved_status(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/save-command", "Product Manager")
+
+    main(["telegram-command", f"save {job_id}"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["new_status"] == "saved"
+    assert row is not None
+    assert row["application_status"] == "saved"
+    assert row["saved_at"]
+
+
+def test_invalid_telegram_command_returns_json_failure(capsys):
+    main(["telegram-command", "delete 19"])
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is False
+    assert "Unsupported" in result["message"]
+
+
+def test_short_status_cli_commands_update_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    applied_id = _insert("https://jobs.ashbyhq.com/linear/short-applied", "Applied PM")
+    skipped_id = _insert("https://jobs.ashbyhq.com/linear/short-skip", "Skip PM")
+    saved_id = _insert("https://jobs.ashbyhq.com/linear/short-save", "Save PM")
+
+    main(["applied", str(applied_id)])
+    main(["skip", str(skipped_id), "Not", "US", "eligible"])
+    main(["save", str(saved_id)])
+
+    capsys.readouterr()
+    applied = get_job_by_id(applied_id)
+    skipped = get_job_by_id(skipped_id)
+    saved = get_job_by_id(saved_id)
+    assert applied is not None and applied["application_status"] == "applied"
+    assert skipped is not None and skipped["application_status"] == "skipped"
+    assert skipped["application_notes"] == "Not US eligible"
+    assert saved is not None and saved["application_status"] == "saved"
