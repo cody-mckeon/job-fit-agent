@@ -75,6 +75,23 @@ STRONG_FIT_ROLE_TERMS = (
     "workflow automation",
     "internal tools",
     "product analytics",
+    "ai automation",
+    "ai operations",
+    "ai transformation",
+    "ai solutions consultant",
+    "agentic ai consultant",
+    "workflow automation consultant",
+    "business process automation",
+    "digital automation product manager",
+    "internal tools product manager",
+    "internal tools pm",
+    "ai enablement",
+    "servicenow moveworks consultant",
+    "power platform solution architect",
+    "workato automation engineer",
+    "revenue operations automation",
+    "revops automation",
+    "marketing operations automation",
 )
 ADJACENT_ROLE_TERMS = (
     "technical program manager",
@@ -82,6 +99,12 @@ ADJACENT_ROLE_TERMS = (
     "growth product",
     "developer tools",
     "solutions",
+    "servicenow consultant",
+    "moveworks consultant",
+    "power platform architect",
+    "microsoft power platform consultant",
+    "workato engineer",
+    "workato consultant",
 )
 WEAK_ROLE_TERMS = (
     "technical account manager",
@@ -94,7 +117,37 @@ WEAK_ROLE_TERMS = (
     "finance",
     "customer success",
 )
-STRONG_OVERLAP_TERMS = ("ai workflow", "agentic", "product systems", "workflow automation", "internal tools", "product analytics")
+STRONG_OVERLAP_TERMS = (
+    "ai workflow",
+    "ai workflows",
+    "ai automation",
+    "ai operations",
+    "ai enablement",
+    "ai transformation",
+    "ai agents",
+    "agentic",
+    "product systems",
+    "workflow automation",
+    "process automation",
+    "business process automation",
+    "enterprise automation",
+    "internal tools",
+    "product operations",
+    "operations systems",
+    "product analytics",
+    "integrations",
+    "systems design",
+    "workflow design",
+    "servicenow",
+    "moveworks",
+    "power platform",
+    "workato",
+    "zapier",
+    "n8n",
+    "crm automation",
+    "revops automation",
+    "marketing operations automation",
+)
 
 GEOGRAPHY_REVIEW_WARNING = "Geography requires manual review before applying."
 NON_US_GEOGRAPHY_TERMS = (
@@ -2177,7 +2230,7 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
         return False
     if application_status in {"applied", "skipped"}:
         return False
-    if classification not in {"high_fit", "apply_now"}:
+    if classification not in {"high_fit", "near_fit", "apply_now"}:
         return False
     if viability_level not in {"apply_now", "strong_review"}:
         return False
@@ -2191,7 +2244,27 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
         return False
     if not _is_actionable_real_job_url(str(safe_row_value(job, "url", ""))):
         return False
+    if not _has_prep_eligible_role_overlap(job):
+        return False
     return True
+
+
+def _has_prep_eligible_role_overlap(job: dict[str, Any]) -> bool:
+    classification = str(safe_row_value(job, "classification", "")).lower()
+    if classification in {"high_fit", "apply_now"}:
+        return True
+    title = str(safe_row_value(job, "title", "")).lower()
+    role_text = " ".join(
+        str(safe_row_value(job, key, "") or "").lower()
+        for key in ("title", "notes", "viability_reasons", "reasons", "red_flags", "role_family")
+    )
+    has_strong_overlap = any(term in role_text for term in STRONG_OVERLAP_TERMS)
+    is_strong_role = any(term in title for term in STRONG_FIT_ROLE_TERMS)
+    is_adjacent_role = any(term in title for term in ADJACENT_ROLE_TERMS)
+    is_weak_role = any(term in title for term in WEAK_ROLE_TERMS)
+    if is_weak_role and not has_strong_overlap:
+        return False
+    return is_strong_role or is_adjacent_role or has_strong_overlap
 
 
 def _is_actionable_real_job_url(url: str) -> bool:
@@ -2215,7 +2288,7 @@ def _is_actionable_real_job_url(url: str) -> bool:
 
 
 def _prep_next_application_rank_key(job: dict[str, Any]) -> tuple[int, int, int, int, int]:
-    classification_rank = {"high_fit": 0, "apply_now": 0}
+    classification_rank = {"high_fit": 0, "apply_now": 0, "near_fit": 1}
     viability_rank = {"apply_now": 0, "strong_review": 1}
     geography_rank = {"eligible": 0, "remote_us": 0}
     status_rank = {"new": 0, "interested": 0}
@@ -2242,7 +2315,7 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
     geographic_eligibility = str(safe_row_value(job, "geographic_eligibility", "review")).lower()
     application_status = str(safe_row_value(job, "application_status", "not_applied") or "not_applied").lower()
-    if classification not in {"high_fit", "apply_now"}:
+    if classification not in {"high_fit", "near_fit", "apply_now"}:
         return False
     if application_status in {"applied", "skipped"}:
         return False
@@ -2255,6 +2328,8 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     if _has_non_us_geography_signal(job):
         return False
     if not _is_actionable_real_job_url(str(safe_row_value(job, "url", ""))):
+        return False
+    if not _has_prep_eligible_role_overlap(job):
         return False
     return True
 

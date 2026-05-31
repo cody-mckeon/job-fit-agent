@@ -83,14 +83,20 @@ These are **ranking boosts, not hard filters**. They improve ordering among alre
 
 ## Targeting evolution: AI-native product builder/operator
 
-The scoring profile now targets not only traditional PM roles, but also adjacent AI-native builder/operator paths:
+The scoring profile now targets traditional PM roles plus adjacent AI-native builder/operator paths. Target role families include:
 
-- AI builder
-- Product engineering
-- Workflow automation
-- AI operations
+- Product Management
+- Forward Deployed Engineering
+- AI Operations
+- AI Automation
+- Workflow Automation
+- AI Transformation
+- Internal Tools Product Management
+- AI Enablement
+- Platform Automation: ServiceNow, Moveworks, Power Platform, Workato
+- RevOps/Marketing Ops Automation when automation-heavy
 - Developer tools
-- Forward deployed engineering
+- Product engineering
 
 Primary target role set includes:
 
@@ -100,8 +106,20 @@ Primary target role set includes:
 - Forward Deployed Engineer
 - Forward Deployed Product Engineer
 - Forward Deployed AI Engineer
+- AI Automation Manager
+- AI Operations Manager
+- AI Transformation Consultant
+- AI Solutions Consultant
+- Agentic AI Consultant
+- Workflow Automation Consultant
+- Business Process Automation Consultant
+- Digital Automation Product Manager
+- Internal Tools Product Manager
+- AI Enablement Manager
 
-The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles.
+Platform-specific targets such as ServiceNow Consultant, Moveworks Consultant, Power Platform Solution Architect, and Workato Automation Engineer are boosted when the posting includes AI, workflow automation, business process automation, transformation, implementation, integrations, or systems/workflow design ownership. Revenue Operations Automation and Marketing Operations Automation roles are considered near/high fit when they emphasize automation systems, AI workflows, analytics, and cross-functional process improvement.
+
+The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles and generic consultant, operations, support, account-management, campaign execution, CRM hygiene, reporting, sales admin, or lifecycle marketing roles that lack AI, automation, internal tools, workflow systems, product systems, or enterprise automation ownership.
 
 
 ## Company discovery workflow

@@ -792,3 +792,29 @@ def test_telegram_summary_includes_stable_fallback_command():
 ```
 applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 ```""" in message
+
+
+def test_ai_automation_near_fit_with_valid_geography_can_be_auto_prep_eligible():
+    job = _job(
+        908,
+        title="Revenue Operations Automation",
+        location="Remote US",
+        classification="near_fit",
+        viability_level="apply_now",
+        geographic_eligibility="eligible",
+        reasons='["AI automation or operations role aligns with Cody workflow automation"]',
+    )
+    assert job_main._is_prep_next_application_eligible(job) is True
+
+
+def test_ai_automation_high_fit_geography_review_is_not_auto_prep_eligible():
+    job = _job(
+        909,
+        title="AI Automation Manager, EMEA",
+        location="Remote EMEA",
+        classification="high_fit",
+        viability_level="apply_now",
+        geographic_eligibility="review",
+        reasons='["AI automation or operations role aligns with Cody workflow automation"]',
+    )
+    assert job_main._is_prep_next_application_eligible(job) is False
