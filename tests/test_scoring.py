@@ -998,3 +998,126 @@ def test_forward_deployed_emea_keeps_role_fit_but_requires_geography_review() ->
     assert fit.classification == "high_fit"
     assert job.geographic_eligibility in {"review", "ineligible"}
     assert fit.viability_level != "apply_now"
+
+
+AI_AUTOMATION_CONTEXT = (
+    "Own AI automation, AI operations, agentic AI workflows, internal tools, "
+    "enterprise automation implementation, integrations, systems design, and workflow design."
+)
+
+
+def test_ai_operations_and_automation_priority_titles_are_high_fit() -> None:
+    titles = [
+        "AI Automation Manager",
+        "AI Operations Manager",
+        "AI Transformation Consultant",
+        "AI Solutions Consultant",
+        "Agentic AI Consultant",
+        "Workflow Automation Consultant",
+        "Business Process Automation Consultant",
+        "Digital Automation Product Manager",
+        "Internal Tools Product Manager",
+        "AI Enablement Manager",
+    ]
+    for title in titles:
+        fit = score_job(_job(title, "Remote US", AI_AUTOMATION_CONTEXT), TARGET_PROFILE)
+        assert fit.classification == "high_fit", title
+        assert any("AI automation or operations role aligns" in reason for reason in fit.reasons), title
+        assert fit.viability_level == "apply_now", title
+
+
+def test_platform_specific_automation_titles_with_context_are_high_fit() -> None:
+    cases = [
+        (
+            "Power Platform Solution Architect",
+            "Lead Power Platform workflow automation, low-code automation, integrations, and business process automation implementation.",
+        ),
+        (
+            "Workato Automation Engineer",
+            "Own Workato integrations, workflow automation, enterprise automation, implementation, and systems design.",
+        ),
+        (
+            "ServiceNow Moveworks Consultant",
+            "Implement ServiceNow and Moveworks AI workflow automation, AI agents, enterprise automation, and workflow design.",
+        ),
+    ]
+    for title, description in cases:
+        fit = score_job(_job(title, "Remote US", description), TARGET_PROFILE)
+        assert fit.classification == "high_fit", title
+        assert any("Platform automation role aligns" in reason for reason in fit.reasons), title
+        assert fit.viability_level == "apply_now", title
+
+
+def test_operations_automation_roles_with_ai_workflow_context_are_high_fit() -> None:
+    cases = [
+        (
+            "Revenue Operations Automation",
+            "Build RevOps automation, CRM automation, analytics, AI workflows, integrations, and cross-functional process improvement.",
+        ),
+        (
+            "Marketing Operations Automation",
+            "Own marketing operations automation, AI automation, workflow automation, analytics, and cross-functional process improvement.",
+        ),
+    ]
+    for title, description in cases:
+        fit = score_job(_job(title, "Remote US", description), TARGET_PROFILE)
+        assert fit.classification == "high_fit", title
+        assert any("AI automation or operations role aligns" in reason for reason in fit.reasons), title
+
+
+def test_generic_operations_manager_stays_downranked_without_ai_automation_context() -> None:
+    fit = score_job(
+        _job("Operations Manager", "Remote US", "Manage team operations, reporting, vendor coordination, and weekly business reviews."),
+        TARGET_PROFILE,
+    )
+    assert fit.classification in {"low_fit", "near_fit"}
+    assert fit.classification != "high_fit"
+
+
+def test_generic_consultant_stays_downranked_without_ai_transformation_context() -> None:
+    fit = score_job(_job("Consultant", "Remote US", "Support client presentations, discovery calls, and general recommendations."), TARGET_PROFILE)
+    assert fit.classification in {"low_fit", "near_fit"}
+    assert fit.classification != "high_fit"
+
+
+def test_generic_marketing_operations_manager_downranked_without_automation_ai() -> None:
+    fit = score_job(
+        _job("Marketing Operations Manager", "Remote US", "Own campaign execution, lifecycle marketing, CRM hygiene, reporting, and list uploads."),
+        TARGET_PROFILE,
+    )
+    assert fit.classification in {"low_fit", "near_fit"}
+    assert fit.classification != "high_fit"
+
+
+def test_generic_sales_operations_manager_downranked_without_automation_ai() -> None:
+    fit = score_job(
+        _job("Sales Operations Manager", "Remote US", "Own sales admin, CRM hygiene, territory reporting, and forecast hygiene."),
+        TARGET_PROFILE,
+    )
+    assert fit.classification in {"low_fit", "near_fit"}
+    assert fit.classification != "high_fit"
+
+
+def test_technical_account_manager_requires_strong_ai_implementation_product_context() -> None:
+    generic_fit = score_job(
+        _job("Technical Account Manager", "Remote US", "Manage renewals, support escalation, quarterly business reviews, and account health."),
+        TARGET_PROFILE,
+    )
+    strong_fit = score_job(
+        _job(
+            "Technical Account Manager, AI Implementation",
+            "Remote US",
+            "Own AI implementation, workflow automation, product systems, internal tools, and enterprise automation integrations.",
+        ),
+        TARGET_PROFILE,
+    )
+    assert generic_fit.classification != "high_fit"
+    assert strong_fit.classification in {"near_fit", "high_fit"}
+
+
+def test_high_fit_ai_automation_role_with_ineligible_geography_does_not_auto_prep() -> None:
+    job = _job("AI Automation Manager", "Remote DACH", AI_AUTOMATION_CONTEXT)
+    fit = score_job(job, TARGET_PROFILE)
+    assert fit.classification == "high_fit"
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level == "skip"

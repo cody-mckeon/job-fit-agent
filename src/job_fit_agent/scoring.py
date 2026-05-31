@@ -105,6 +105,125 @@ FORWARD_DEPLOYED_DOWNRANK_GUARDRAILS = {
     "hardware deployment engineer",
     "it support engineer",
 }
+
+AI_AUTOMATION_HIGH_PRIORITY_TITLES = {
+    "ai automation manager",
+    "artificial intelligence automation manager",
+    "ai operations manager",
+    "artificial intelligence operations manager",
+    "ai ops manager",
+    "ai transformation lead",
+    "ai transformation manager",
+    "ai transformation consultant",
+    "ai solutions consultant",
+    "agentic ai consultant",
+    "ai workflow consultant",
+    "workflow automation consultant",
+    "workflow automation manager",
+    "workflow automation specialist",
+    "business process automation consultant",
+    "business process automation manager",
+    "digital automation product manager",
+    "internal tools product manager",
+    "internal tools pm",
+    "ai enablement manager",
+    "ai enablement lead",
+}
+PLATFORM_AUTOMATION_TITLES = {
+    "servicenow moveworks consultant",
+    "servicenow consultant",
+    "moveworks consultant",
+    "servicenow ai consultant",
+    "moveworks ai consultant",
+    "power platform solution architect",
+    "power platform architect",
+    "microsoft power platform consultant",
+    "workato automation engineer",
+    "workato engineer",
+    "workato consultant",
+}
+OPS_AUTOMATION_TITLES = {
+    "revenue operations automation",
+    "revops automation",
+    "marketing operations automation",
+    "marketing automation operations",
+}
+AI_AUTOMATION_CONTEXT_SIGNALS = {
+    "ai automation",
+    "ai operations",
+    "ai enablement",
+    "ai transformation",
+    "agentic ai",
+    "ai agents",
+    "ai workflow",
+    "ai workflows",
+    "workflow automation",
+    "process automation",
+    "business process automation",
+    "internal tools",
+    "product operations",
+    "operations systems",
+    "enterprise automation",
+    "implementation",
+    "integrations",
+    "systems design",
+    "workflow design",
+    "no-code",
+    "low-code",
+    "nocode",
+    "lowcode",
+    "servicenow",
+    "moveworks",
+    "power platform",
+    "workato",
+    "zapier",
+    "make automation",
+    "n8n",
+    "asana automation",
+    "slack automation",
+    "crm automation",
+    "revops automation",
+    "revenue operations automation",
+    "marketing operations automation",
+}
+PLATFORM_AUTOMATION_CONTEXT_SIGNALS = {
+    "ai",
+    "workflow automation",
+    "business transformation",
+    "digital transformation",
+    "enterprise automation",
+    "process automation",
+    "business process automation",
+    "integrations",
+    "implementation",
+    "workflow design",
+    "systems design",
+    "ai workflow",
+    "ai workflows",
+    "ai agents",
+    "agentic",
+}
+GENERIC_GUARDRAIL_TITLES = {
+    "consultant",
+    "operations manager",
+    "sales operations manager",
+    "marketing operations manager",
+    "customer success manager",
+    "implementation specialist",
+    "technical account manager",
+    "support engineer",
+    "business analyst",
+}
+GENERIC_OPS_EXECUTION_SIGNALS = {
+    "campaign execution",
+    "crm hygiene",
+    "reporting",
+    "sales admin",
+    "lifecycle marketing",
+    "customer support",
+    "support escalation",
+}
+
 FORCED_LOW_FIT_TITLES = {
     "software engineer",
     "member of technical staff",
@@ -126,9 +245,30 @@ AI_BUILDER_KEYWORDS = {
     "ai operations",
     "prompt systems",
     "workflow systems",
+    "workflow design",
     "ai platform",
     "ai-native",
     "operational ai",
+    "ai automation",
+    "ai enablement",
+    "ai transformation",
+    "business process automation",
+    "process automation",
+    "enterprise automation",
+    "operations systems",
+    "systems design",
+    "no-code",
+    "low-code",
+    "servicenow",
+    "moveworks",
+    "power platform",
+    "workato",
+    "zapier",
+    "make automation",
+    "n8n",
+    "crm automation",
+    "revops automation",
+    "marketing operations automation",
     "integrations",
     "apis",
     "openai",
@@ -435,9 +575,24 @@ ROLE_FAMILIES = {
 }
 
 
+def _title_contains_any(title_text: str, titles: set[str]) -> bool:
+    return any(title in title_text for title in titles)
+
+
 def classify_role_family(title: str) -> str:
     """Classify a role family based primarily on the title."""
     normalized = title.lower()
+
+    if _title_contains_any(normalized, AI_AUTOMATION_HIGH_PRIORITY_TITLES):
+        if "product manager" in normalized or "internal tools pm" in normalized:
+            return "product_management"
+        if "operations" in normalized or "ops" in normalized or "enablement" in normalized:
+            return "ai_operations"
+        return "workflow_automation"
+    if _title_contains_any(normalized, PLATFORM_AUTOMATION_TITLES):
+        return "workflow_automation"
+    if _title_contains_any(normalized, OPS_AUTOMATION_TITLES):
+        return "workflow_automation"
 
     if "chief of staff" in normalized:
         return "executive"
@@ -453,9 +608,9 @@ def classify_role_family(title: str) -> str:
         return "product_operations"
     if "technical product manager" in normalized:
         return "technical_product"
-    if any(term in normalized for term in ("ai operations", "ml ops", "ai ops")):
+    if any(term in normalized for term in ("ai operations", "ml ops", "ai ops", "ai enablement", "ai transformation")):
         return "ai_operations"
-    if any(term in normalized for term in ("workflow automation", "automation specialist", "automation engineer")):
+    if any(term in normalized for term in ("workflow automation", "process automation", "automation specialist", "automation engineer", "automation consultant", "power platform", "workato", "servicenow", "moveworks")):
         return "workflow_automation"
     if any(term in normalized for term in ("developer tools", "devtools", "platform product")):
         return "developer_tools"
@@ -676,6 +831,15 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         score = min(score, LOCATION_NOT_FIT_CAP)
 
     has_strong_match = title_hits > 0 and keyword_hits > 0
+    has_ai_automation_priority_title = _title_contains_any(title_text, AI_AUTOMATION_HIGH_PRIORITY_TITLES)
+    has_platform_automation_title = _title_contains_any(title_text, PLATFORM_AUTOMATION_TITLES)
+    has_ops_automation_title = _title_contains_any(title_text, OPS_AUTOMATION_TITLES)
+    automation_context_hits = [term for term in AI_AUTOMATION_CONTEXT_SIGNALS if term in text]
+    platform_context_hits = [term for term in PLATFORM_AUTOMATION_CONTEXT_SIGNALS if term in text]
+    has_ai_automation_context = bool(automation_context_hits)
+    has_platform_automation_context = bool(platform_context_hits)
+    has_generic_guardrail_title = any(term == title_text.strip() or term in title_text for term in GENERIC_GUARDRAIL_TITLES)
+    has_generic_ops_execution_focus = any(term in text for term in GENERIC_OPS_EXECUTION_SIGNALS)
     has_forward_deployed_title = any(term in title_text for term in FORWARD_DEPLOYED_HIGH_PRIORITY_TITLES)
     forward_deployed_has_context = any(term in text for term in FORWARD_DEPLOYED_CONTEXT_SIGNALS)
     if has_forward_deployed_title:
@@ -705,6 +869,22 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         reasons.append("Forward deployed engineering role aligns with Cody's AI systems, product implementation, and customer-facing technical delivery experience.")
     if role_family in ai_native_families and capability_boost >= 12:
         is_high_fit_role_match = True
+    if has_ai_automation_priority_title and has_ai_automation_context:
+        is_high_fit_role_match = True
+        reasons.append("AI automation or operations role aligns with Cody's agentic workflow, product operations, and internal systems implementation experience.")
+    if has_platform_automation_title and has_platform_automation_context:
+        is_high_fit_role_match = True
+        reasons.append("Platform automation role aligns with Cody's workflow automation, AI operations, and enterprise systems implementation direction.")
+    if has_ops_automation_title and has_ai_automation_context and not has_generic_ops_execution_focus:
+        is_high_fit_role_match = True
+        reasons.append("AI automation or operations role aligns with Cody's agentic workflow, product operations, and internal systems implementation experience.")
+    if has_generic_guardrail_title and not has_ai_automation_context and not has_platform_automation_context:
+        is_high_fit_role_match = False
+        if title_hits > 0 or keyword_hits > 0:
+            red_flags.append("Generic role lacks clear AI, automation, internal tools, workflow systems, product systems, or enterprise automation ownership")
+    if has_generic_ops_execution_focus and not has_ai_automation_context:
+        is_high_fit_role_match = False
+        red_flags.append("Operations role emphasizes execution/admin work without AI or automation systems ownership")
     if is_high_fit_role_match and not has_location_blocker:
         classification = "high_fit"
     elif (
@@ -740,6 +920,11 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         if not (forward_deployed_has_context and (forward_deployed_signal_boost >= 8 or capability_boost >= 6)):
             classification = "low_fit" if "field service engineer" in title_lower or "it support engineer" in title_lower else "near_fit"
             red_flags.append("Role title matches downrank guardrails without strong AI/product implementation overlap")
+    if has_platform_automation_title and not has_platform_automation_context:
+        classification = "near_fit" if classification == "high_fit" else classification
+        red_flags.append("Platform role lacks clear AI/workflow automation or business transformation ownership")
+    if has_generic_ops_execution_focus and not has_ai_automation_context and any(term in title_lower for term in ("marketing operations", "sales operations", "revops", "revenue operations")):
+        classification = "near_fit" if classification == "high_fit" else classification
 
     viability_score = 0
     viability_reasons: list[str] = []
@@ -778,6 +963,10 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
 
     if role_family in {"ai_builder", "workflow_automation", "ai_operations"} and capability_boost > 0:
         viability_reasons.append("Strong AI workflow alignment")
+    if has_ai_automation_priority_title or has_ops_automation_title:
+        viability_reasons.append("AI automation or operations role aligns with Cody's agentic workflow, product operations, and internal systems implementation experience.")
+    if has_platform_automation_title:
+        viability_reasons.append("Platform automation role aligns with Cody's workflow automation, AI operations, and enterprise systems implementation direction.")
     if "agentic" in text or "agents" in text:
         viability_reasons.append("Agentic systems overlap")
     if "developer tools" in text or role_family == "developer_tools":

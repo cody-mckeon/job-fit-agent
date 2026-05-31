@@ -37,6 +37,24 @@ Use the Docker validation workflow when local Docker is unstable or unavailable.
 
 The Docker image includes PDF export dependencies: `pandoc`, `texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`, `fonts-liberation`, and `ca-certificates`.
 
+
+## Target role families
+
+The operational workflows use the same scoring profile as the main CLI. Current target families are:
+
+- Product Management
+- Forward Deployed Engineering
+- AI Operations
+- AI Automation
+- Workflow Automation
+- AI Transformation
+- Internal Tools Product Management
+- AI Enablement
+- Platform Automation: ServiceNow, Moveworks, Power Platform, Workato
+- RevOps/Marketing Ops Automation when automation-heavy
+
+Automation-specific and platform-specific roles can appear as high-fit, near-fit, or apply-now candidates only when role viability and geography gates also pass. Generic operations, consulting, support, account-management, campaign execution, CRM hygiene, reporting, sales admin, and lifecycle-marketing roles remain downranked unless the posting clearly includes AI, automation, internal tools, workflow systems, product systems, agentic workflows, or enterprise automation ownership.
+
 ## Run specific workflows
 
 Review unapplied high-fit roles and run prep-next-application:

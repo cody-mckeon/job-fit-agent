@@ -1,143 +1,221 @@
 target_titles:
-  - product manager
-  - senior product manager
-  - technical product manager
-  - forward deployed engineer
-  - forward-deployed engineer
-  - forward deployed ai engineer
-  - forward deployed product engineer
-  - forward deployed software engineer
-  - forward deployed solutions engineer
-  - forward deployed ml engineer
-  - forward deployed applied ai engineer
-  - forward deployed ai product engineer
-  - product operations
-  - product analytics manager
-  - growth product manager
-  - AI product manager
-  - analytics product manager
-
+- product manager
+- senior product manager
+- technical product manager
+- forward deployed engineer
+- forward-deployed engineer
+- forward deployed ai engineer
+- forward deployed product engineer
+- forward deployed software engineer
+- forward deployed solutions engineer
+- forward deployed ml engineer
+- forward deployed applied ai engineer
+- forward deployed ai product engineer
+- product operations
+- product analytics manager
+- growth product manager
+- AI product manager
+- analytics product manager
+- AI Automation Manager
+- AI Operations Manager
+- AI Transformation Consultant
+- AI Solutions Consultant
+- Agentic AI Consultant
+- Workflow Automation Consultant
+- Business Process Automation Consultant
+- Digital Automation Product Manager
+- Internal Tools Product Manager
+- AI Enablement Manager
+- ServiceNow Moveworks Consultant
+- Power Platform Solution Architect
+- Workato Automation Engineer
+- Revenue Operations Automation
+- Marketing Operations Automation
+- Artificial Intelligence Automation Manager
+- Artificial Intelligence Operations Manager
+- AI Ops Manager
+- AI Transformation Lead
+- AI Transformation Manager
+- AI Workflow Consultant
+- Workflow Automation Manager
+- Workflow Automation Specialist
+- Business Process Automation Manager
+- Internal Tools PM
+- AI Enablement Lead
+- ServiceNow Consultant
+- Moveworks Consultant
+- ServiceNow AI Consultant
+- Moveworks AI Consultant
+- Power Platform Architect
+- Microsoft Power Platform Consultant
+- Workato Engineer
+- Workato Consultant
+- RevOps Automation
+- Marketing Automation Operations
 target_keywords:
-  - AI
-  - analytics
-  - data
-  - web analytics
-  - experimentation
-  - personalization
-  - marketing technology
-  - customer-facing web
-  - conversion
-  - funnel
-  - dashboard
-  - agentic
-  - automation
-  - hospitality
-  - revenue management
-
+- AI
+- analytics
+- data
+- web analytics
+- experimentation
+- personalization
+- marketing technology
+- customer-facing web
+- conversion
+- funnel
+- dashboard
+- agentic
+- automation
+- hospitality
+- revenue management
+- AI automation
+- AI operations
+- AI enablement
+- AI transformation
+- agentic AI
+- AI agents
+- workflow automation
+- process automation
+- business process automation
+- internal tools
+- product operations
+- operations systems
+- enterprise automation
+- implementation
+- integrations
+- systems design
+- workflow design
+- no-code automation
+- low-code automation
+- ServiceNow
+- Moveworks
+- Power Platform
+- Workato
+- Zapier
+- Make
+- n8n
+- Asana automation
+- Slack automation
+- CRM automation
+- RevOps automation
+- marketing operations automation
 preferred_locations:
-  - Remote US
-  - Remote United States
-  - US Remote
-  - United States Remote
-  - Las Vegas
-  - Henderson
-  - Nevada
-
+- Remote US
+- Remote United States
+- US Remote
+- United States Remote
+- Las Vegas
+- Henderson
+- Nevada
 acceptable_remote_terms:
-  - remote
-  - remote us
-  - remote united states
-  - us remote
-  - united states remote
-
+- remote
+- remote us
+- remote united states
+- us remote
+- united states remote
 local_terms:
-  - las vegas
-  - henderson
-  - nevada
-  - nv
-
+- las vegas
+- henderson
+- nevada
+- nv
 non_remote_us_locations:
-  - New York
-  - Pittsburgh
-  - San Francisco
-  - Los Angeles
-  - Seattle
-  - Austin
-  - Boston
-  - Chicago
-
+- New York
+- Pittsburgh
+- San Francisco
+- Los Angeles
+- Seattle
+- Austin
+- Boston
+- Chicago
 excluded_locations:
-  - London
-  - Luxembourg
-  - Singapore
-  - Bengaluru
-  - Toronto
-
+- London
+- Luxembourg
+- Singapore
+- Bengaluru
+- Toronto
 priority_companies:
-  - cursor
-  - linear
-  - replit
-  - perplexity
-  - langchain
-  - figma
-  - vercel
-  - cloudflare
-  - notion
-
+- cursor
+- linear
+- replit
+- perplexity
+- langchain
+- figma
+- vercel
+- cloudflare
+- notion
 industry_bias:
-  - gaming
-  - casino
-  - hospitality
-  - hotel
-  - resort
-  - travel
-  - consumer web
-  - ecommerce
-  - marketplace
-  - martech
-  - marketing technology
-  - analytics
-  - experimentation
-  - personalization
-  - revenue management
-  - loyalty
-  - payments
-  - fintech
-  - AI tooling
-  - workflow automation
-  - customer experience
-  - digital experience
-
+- gaming
+- casino
+- hospitality
+- hotel
+- resort
+- travel
+- consumer web
+- ecommerce
+- marketplace
+- martech
+- marketing technology
+- analytics
+- experimentation
+- personalization
+- revenue management
+- loyalty
+- payments
+- fintech
+- AI tooling
+- workflow automation
+- customer experience
+- digital experience
+- AI automation
+- AI operations
+- AI enablement
+- AI transformation
+- agentic AI
+- business process automation
+- enterprise automation
+- internal tools
+- product operations
+- operations systems
+- ServiceNow
+- Moveworks
+- Power Platform
+- Workato
+- RevOps automation
+- marketing operations automation
 local_priority_companies:
-  - slickdeals
-  - mgm resorts
-  - caesars
-  - sphere
-  - aristocrat
-  - light & wonder
-  - konami gaming
-  - everi
-  - draftkings
-  - fanduel
-  - playstudios
-  - skillz
-
+- slickdeals
+- mgm resorts
+- caesars
+- sphere
+- aristocrat
+- light & wonder
+- konami gaming
+- everi
+- draftkings
+- fanduel
+- playstudios
+- skillz
 preferred_role_families:
-  - product_management
-  - technical_product
-  - ai_builder
-  - product_engineering
-  - workflow_automation
-  - ai_operations
-  - product_operations
-  - product_analytics
-  - developer_tools
-
+- product_management
+- technical_product
+- ai_builder
+- product_engineering
+- workflow_automation
+- ai_operations
+- product_operations
+- product_analytics
+- developer_tools
+- ai_automation
+- ai_transformation
+- internal_tools_product_management
+- ai_enablement
+- platform_automation
+- revops_marketing_ops_automation
 disliked_role_families:
-  - infrastructure_engineering
-  - sre
-  - security_engineering
-  - recruiter
-  - hr
-  - finance
-  - legal
+- infrastructure_engineering
+- sre
+- security_engineering
+- recruiter
+- hr
+- finance
+- legal
