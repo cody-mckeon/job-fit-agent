@@ -28,6 +28,12 @@ from job_fit_agent.collectors.ashby import (
 )
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
+from job_fit_agent.application_status import (
+    build_url_for_stable_key,
+    load_application_status,
+    parse_stable_job_key,
+    save_application_status,
+)
 from job_fit_agent.discovery.providers import StaticCompanyProvider
 from job_fit_agent.config import (
     AppConfig,
@@ -450,6 +456,12 @@ def run_pipeline() -> None:
 
     for job, fit in all_scored_jobs:
         result = upsert_job(job, fit)
+        try:
+            row = get_job_by_url(job.url)
+        except sqlite3.Error:
+            row = None
+        if row is not None:
+            _enrich_application_status_record_for_job(dict(row))
         if result.is_new and fit.classification in {"high_fit", "near_fit"}:
             new_matching.append((job, fit))
         if (
@@ -515,6 +527,12 @@ def run_rescore() -> None:
     updated_count = 0
     for job, fit in all_scored_jobs:
         result = upsert_job(job, fit)
+        try:
+            row = get_job_by_url(job.url)
+        except sqlite3.Error:
+            row = None
+        if row is not None:
+            _enrich_application_status_record_for_job(dict(row))
         if not result.is_new:
             updated_count += 1
 
@@ -522,6 +540,7 @@ def run_rescore() -> None:
     print(f"updated jobs count: {updated_count}")
 
 def _is_actionable_digest_row(row: dict) -> bool:
+    row = _merge_persistent_status(dict(row))
     status = str(safe_row_value(row, "status", "")).lower()
     viability_level = str(safe_row_value(row, "viability_level", "review")).lower()
     geographic_eligibility = str(safe_row_value(row, "geographic_eligibility", "review")).lower()
@@ -594,6 +613,7 @@ def _application_tracking_status(row: dict[str, Any]) -> str:
 
 
 def _is_unapplied_high_fit_candidate(row: dict[str, Any]) -> bool:
+    row = _merge_persistent_status(dict(row))
     classification = str(safe_row_value(row, "classification", "")).lower()
     if classification not in {"high_fit", "apply_now"}:
         return False
@@ -650,14 +670,23 @@ def _application_tracking_counts(rows: list[dict[str, Any]] | None = None) -> di
             rows = _load_all_jobs()
         except Exception:
             rows = []
+    rows = [_merge_persistent_status(dict(row)) for row in rows]
+    row_keys = set()
+    for row in rows:
+        try:
+            row_keys.add(_stable_job_key_for_job(row))
+        except ValueError:
+            pass
+    status_only = [record for key, record in _application_status_records().items() if key not in row_keys]
     return {
         "unapplied_high_fit_count": sum(1 for row in rows if _is_unapplied_high_fit_candidate(row)),
         "applied_count": sum(
             1
             for row in rows
             if _application_tracking_status(row) == "applied" or str(safe_row_value(row, "status", "")).lower() == "applied"
-        ),
-        "skipped_count": sum(1 for row in rows if _application_tracking_status(row) == "skipped"),
+        ) + sum(1 for row in status_only if str(row.get("application_status", "")).lower() == "applied"),
+        "skipped_count": sum(1 for row in rows if _application_tracking_status(row) == "skipped")
+        + sum(1 for row in status_only if str(row.get("application_status", "")).lower() == "skipped"),
     }
 
 def _load_all_jobs() -> list[dict[str, Any]]:
@@ -665,7 +694,7 @@ def _load_all_jobs() -> list[dict[str, Any]]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM jobs").fetchall()
-    return [dict(row) for row in rows]
+    return [_merge_persistent_status(dict(row)) for row in rows]
 
 
 def get_unapplied_high_fit_rows(
@@ -771,6 +800,150 @@ def _stable_job_key_for_job(job: dict[str, Any]) -> str:
         return f"{source}:{company}:{job_id}"
 
 
+def _looks_like_stable_job_key(identifier: str) -> bool:
+    try:
+        parse_stable_job_key(identifier)
+    except ValueError:
+        return False
+    return True
+
+
+def _application_status_records() -> dict[str, dict[str, Any]]:
+    try:
+        return load_application_status()
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _persistent_status_for_stable_key(stable_job_key: str) -> dict[str, Any] | None:
+    return _application_status_records().get(stable_job_key)
+
+
+def _persistent_status_for_job(job: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return _persistent_status_for_stable_key(_stable_job_key_for_job(job))
+    except ValueError:
+        return None
+
+
+def _merge_persistent_status(row: dict[str, Any]) -> dict[str, Any]:
+    record = _persistent_status_for_job(row)
+    if not record:
+        return row
+    merged = dict(row)
+    status = str(record.get("application_status") or "").lower()
+    if status:
+        merged["application_status"] = status
+    for source_key, target_key in (
+        ("applied_at", "applied_at"),
+        ("skipped_at", "skipped_at"),
+        ("saved_at", "saved_at"),
+        ("note", "application_notes"),
+    ):
+        if record.get(source_key):
+            merged[target_key] = record[source_key]
+    return merged
+
+
+def _row_for_stable_key(stable_job_key: str) -> dict[str, Any] | None:
+    for row in _recent_jobs_for_alias_lookup():
+        if _job_matches_stable_key(row, stable_job_key):
+            return row
+    return None
+
+
+def _stable_key_record_defaults(stable_job_key: str) -> dict[str, Any]:
+    source, company, external_job_id = parse_stable_job_key(stable_job_key)
+    return {
+        "stable_job_key": stable_job_key,
+        "company": company,
+        "title": None,
+        "url": build_url_for_stable_key(source, company, external_job_id),
+        "source": source,
+        "external_job_id": external_job_id,
+        "application_status": None,
+        "applied_at": None,
+        "skipped_at": None,
+        "saved_at": None,
+        "note": "",
+        "updated_at": None,
+        "identifier_used": stable_job_key,
+    }
+
+
+def _record_for_job(job: dict[str, Any], *, stable_job_key: str | None = None) -> dict[str, Any]:
+    key = stable_job_key or _stable_job_key_for_job(job)
+    try:
+        source, company, external_job_id = parse_stable_job_key(key)
+    except ValueError:
+        source = str(safe_row_value(job, "source", "") or "")
+        company = str(safe_row_value(job, "company", "") or "")
+        external_job_id = ""
+    return {
+        "stable_job_key": key,
+        "company": safe_row_value(job, "company", company),
+        "title": safe_row_value(job, "title", None),
+        "url": safe_row_value(job, "url", None),
+        "source": safe_row_value(job, "source", source),
+        "external_job_id": external_job_id,
+        "score": safe_row_value(job, "score", None),
+        "classification": safe_row_value(job, "classification", None),
+        "geographic_eligibility": safe_row_value(job, "geographic_eligibility", None),
+    }
+
+
+def _write_application_status_record(
+    *,
+    stable_job_key: str,
+    application_status: str,
+    timestamp: str,
+    note: str | None,
+    identifier_used: str,
+    job: dict[str, Any] | None,
+) -> dict[str, Any]:
+    records = load_application_status()
+    existing = records.get(stable_job_key, {})
+    record = _stable_key_record_defaults(stable_job_key)
+    record.update(existing)
+    if job is not None:
+        record.update(_record_for_job(job, stable_job_key=stable_job_key))
+    record["stable_job_key"] = stable_job_key
+    record["application_status"] = application_status
+    if application_status == "applied":
+        record["applied_at"] = timestamp
+    elif application_status == "skipped":
+        record["skipped_at"] = timestamp
+    elif application_status == "saved":
+        record["saved_at"] = timestamp
+    record["note"] = note or ""
+    record["updated_at"] = timestamp
+    record["identifier_used"] = identifier_used
+    records[stable_job_key] = record
+    save_application_status(records)
+    return record
+
+
+def _enrich_application_status_record_for_job(job: dict[str, Any]) -> None:
+    try:
+        stable_job_key = _stable_job_key_for_job(job)
+    except ValueError:
+        return
+    records = load_application_status()
+    if stable_job_key not in records:
+        return
+    record = dict(records[stable_job_key])
+    preserved = {
+        key: record.get(key)
+        for key in ("application_status", "applied_at", "skipped_at", "saved_at", "note", "updated_at", "identifier_used")
+    }
+    record.update(_record_for_job(job, stable_job_key=stable_job_key))
+    for key, value in preserved.items():
+        record[key] = value
+    if record != records[stable_job_key]:
+        records[stable_job_key] = record
+        save_application_status(records)
+
+
 def _mobile_slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "job"
 
@@ -859,49 +1032,89 @@ def _resolve_job_for_application_command(job_id: int | None, url: str | None) ->
     return _resolve_job_identifier(identifier)
 
 
-def mark_applied(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
+def _mark_application_status(
+    application_status: str,
+    *,
+    job_id: int | None = None,
+    url: str | None = None,
+    identifier: str | None = None,
+    note: str | None = None,
+    quiet: bool = False,
+) -> dict[str, Any]:
     initialize()
-    job = _resolve_job_for_application_command(job_id, url)
-    applied_at = _utc_timestamp()
-    update_application_tracking(int(job["id"]), "applied", applied_at=applied_at, application_notes=note)
-    try:
-        update_status(int(job["id"]), "applied")
-    except ValueError:
-        pass
-    updated = dict(get_job_by_id(int(job["id"])) or job)
+    identifier_used = identifier or (str(job_id) if job_id is not None else str(url or ""))
+    job: dict[str, Any] | None = None
+    warning: str | None = None
+    if identifier is not None and _looks_like_stable_job_key(identifier):
+        stable_job_key = identifier
+        job = _row_for_stable_key(stable_job_key)
+        if job is None:
+            warning = "Job was not found in local SQLite, but status was recorded by stable key."
+    else:
+        job = _resolve_job_for_application_command(job_id, url or identifier)
+        stable_job_key = _stable_job_key_for_job(job)
+
+    timestamp = _utc_timestamp()
+    if job is not None:
+        kwargs = {f"{application_status}_at": timestamp, "application_notes": note}
+        update_application_tracking(int(job["id"]), application_status, **kwargs)
+        if application_status == "applied":
+            try:
+                update_status(int(job["id"]), "applied")
+            except ValueError:
+                pass
+        job = dict(get_job_by_id(int(job["id"])) or job)
+
+    record = _write_application_status_record(
+        stable_job_key=stable_job_key,
+        application_status=application_status,
+        timestamp=timestamp,
+        note=note,
+        identifier_used=identifier_used,
+        job=job,
+    )
+    updated = dict(job or record)
+    updated["stable_job_key"] = stable_job_key
+    updated["warning"] = warning
     if not quiet:
-        print(f"Marked applied: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
+        if warning:
+            print(f"Marked {application_status} by stable key: {stable_job_key}. Job details will be enriched when rediscovered.")
+            print(f"warning: {warning}")
+        elif application_status == "applied":
+            print(f"Marked applied: {updated.get('company', '')} {updated.get('title', '')}.")
+        elif application_status == "skipped":
+            print(f"Marked skipped: {updated.get('company', '')} {updated.get('title', '')}.")
+        else:
+            print(f"Saved for later: {updated.get('company', '')} {updated.get('title', '')}.")
     return updated
+
+
+def mark_applied(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("applied", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
 
 
 def mark_skipped(job_id: int | None = None, url: str | None = None, reason: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
-    initialize()
-    job = _resolve_job_for_application_command(job_id, url)
-    skipped_at = _utc_timestamp()
-    update_application_tracking(int(job["id"]), "skipped", skipped_at=skipped_at, application_notes=reason)
-    updated = dict(get_job_by_id(int(job["id"])) or job)
-    if not quiet:
-        print(f"Marked skipped: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
-    return updated
+    return _mark_application_status("skipped", job_id=job_id, url=url, identifier=url if url and _looks_like_stable_job_key(url) else None, note=reason, quiet=quiet)
 
 
-def mark_saved(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False) -> dict[str, Any]:
-    initialize()
-    job = _resolve_job_for_application_command(job_id, url)
-    saved_at = _utc_timestamp()
-    update_application_tracking(int(job["id"]), "saved", saved_at=saved_at, application_notes=note)
-    updated = dict(get_job_by_id(int(job["id"])) or job)
-    if not quiet:
-        print(f"Saved for later: {updated.get('company', '')} - {updated.get('title', '')} ({updated.get('url', '')})")
-    return updated
+def mark_saved(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("saved", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
 
 
 def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> str:
+    if job.get("warning"):
+        return f"Marked {job.get('application_status', action)} by stable key: {job.get('stable_job_key')}. Job details will be enriched when rediscovered."
     company = str(job.get("company", "")).strip()
     title = str(job.get("title", "")).strip()
     label = f"{company} {title}".strip()
     if action == "applied":
-        return f"Marked {label} as applied."
+        return f"Marked applied: {label}."
     if action == "skip":
         suffix = f" Reason: {note}" if note else ""
         return f"Marked {label} as skipped.{suffix}"
@@ -911,25 +1124,26 @@ def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> 
 def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
     try:
         parsed = parse_telegram_command(command_text)
-        job = _resolve_job_identifier(parsed.job_identifier)
         if parsed.action == "applied":
-            updated = mark_applied(job_id=int(job["id"]), quiet=True)
+            updated = mark_applied(identifier=parsed.job_identifier, quiet=True)
             new_status = "applied"
         elif parsed.action == "skip":
-            updated = mark_skipped(job_id=int(job["id"]), reason=parsed.note, quiet=True)
+            updated = _mark_application_status("skipped", identifier=parsed.job_identifier, note=parsed.note, quiet=True)
             new_status = "skipped"
         elif parsed.action == "save":
-            updated = mark_saved(job_id=int(job["id"]), quiet=True)
+            updated = mark_saved(identifier=parsed.job_identifier, quiet=True)
             new_status = "saved"
         else:  # pragma: no cover - parser constrains action values
             raise ValueError("Unsupported command.")
         return {
             "success": True,
-            "job_id": int(updated.get("id", job["id"])),
+            "job_id": updated.get("id"),
+            "stable_job_key": updated.get("stable_job_key", ""),
             "company": updated.get("company", ""),
             "title": updated.get("title", ""),
             "new_status": new_status,
             "note": parsed.note,
+            "warning": updated.get("warning"),
             "message": _status_result_message(parsed.action, updated, parsed.note),
         }
     except Exception as exc:
@@ -938,7 +1152,18 @@ def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
 
 def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
     initialize()
-    rows = [dict(row) for row in get_jobs_by_application_status("applied", limit=limit)]
+    sqlite_rows = [_merge_persistent_status(dict(row)) for row in get_jobs_by_application_status("applied", limit=limit)]
+    rows_by_key: dict[str, dict[str, Any]] = {}
+    for row in sqlite_rows:
+        rows_by_key[_stable_job_key_for_job(row)] = row
+    for key, record in _application_status_records().items():
+        if str(record.get("application_status", "")).lower() == "applied" and key not in rows_by_key:
+            rows_by_key[key] = dict(record)
+    rows = sorted(
+        rows_by_key.values(),
+        key=lambda row: str(safe_row_value(row, "applied_at", safe_row_value(row, "updated_at", "")) or ""),
+        reverse=True,
+    )[:limit]
     if as_json:
         print(json.dumps(rows, indent=2))
         return
@@ -952,13 +1177,14 @@ def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
         print(f"applied_at: {safe_row_value(row, 'applied_at', '')}")
         print(f"score: {safe_row_value(row, 'score', '')}")
         print(f"url: {safe_row_value(row, 'url', '')}")
-        print(f"notes: {safe_row_value(row, 'application_notes', '') or 'none'}")
+        print(f"stable_job_key: {safe_row_value(row, 'stable_job_key', '') or _stable_job_key_for_job(row)}")
+        print(f"notes: {safe_row_value(row, 'application_notes', safe_row_value(row, 'note', '')) or 'none'}")
         print("-")
 
 def print_digest(group_by_status: bool = False, include_skipped: bool = False) -> None:
     initialize()
-    high_fit_rows = get_top_jobs_by_classification("high_fit", limit=50)
-    near_fit_rows = get_top_jobs_by_classification("near_fit", limit=50)
+    high_fit_rows = [_merge_persistent_status(dict(row)) for row in get_top_jobs_by_classification("high_fit", limit=50)]
+    near_fit_rows = [_merge_persistent_status(dict(row)) for row in get_top_jobs_by_classification("near_fit", limit=50)]
 
     actionable_high_fit_rows = [row for row in high_fit_rows if _is_actionable_digest_row(row)]
     actionable_near_fit_rows = [row for row in near_fit_rows if _is_actionable_digest_row(row)]
@@ -2221,6 +2447,7 @@ def export_resume_pdf(job_id: int) -> None:
 
 
 def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
+    job = _merge_persistent_status(dict(job))
     status = str(safe_row_value(job, "status", "")).lower()
     classification = str(safe_row_value(job, "classification", "")).lower()
     viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
@@ -2306,10 +2533,11 @@ def _get_prep_next_application_candidates() -> list[dict[str, Any]]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM jobs").fetchall()
-    return [dict(row) for row in rows if _is_prep_next_application_eligible(dict(row))]
+    return [_merge_persistent_status(dict(row)) for row in rows if _is_prep_next_application_eligible(dict(row))]
 
 
 def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
+    job = _merge_persistent_status(dict(job))
     status = str(safe_row_value(job, "status", "")).lower()
     classification = str(safe_row_value(job, "classification", "")).lower()
     viability_level = str(safe_row_value(job, "viability_level", "review")).lower()
@@ -2560,10 +2788,19 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
     stable_job_key = str(summary.get("stable_job_key", "")).strip()
     if mobile_alias or stable_job_key:
         lines.extend(["", "Telegram status commands"])
-    if mobile_alias:
+    if stable_job_key:
         lines.extend(
             [
                 "After applying:",
+                "```",
+                f"applied {stable_job_key}",
+                "```",
+            ]
+        )
+    if mobile_alias:
+        lines.extend(
+            [
+                "Mobile shortcut:",
                 "```",
                 f"applied {mobile_alias}",
                 "```",
@@ -2574,15 +2811,6 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
                 "To save:",
                 "```",
                 f"save {mobile_alias}",
-                "```",
-            ]
-        )
-    if stable_job_key:
-        lines.extend(
-            [
-                "Stable fallback:",
-                "```",
-                f"applied {stable_job_key}",
                 "```",
             ]
         )
@@ -2682,6 +2910,12 @@ def main(argv: list[str] | None = None) -> None:
         if len(args) == 2 and args[1].isdigit():
             try:
                 mark_applied(job_id=int(args[1]))
+            except ValueError as exc:
+                print(str(exc))
+            return
+        if len(args) == 2 and not args[1].startswith("--"):
+            try:
+                mark_applied(identifier=args[1])
             except ValueError as exc:
                 print(str(exc))
             return
