@@ -765,7 +765,7 @@ def test_telegram_summary_includes_mobile_alias_command():
         }
     )
 
-    assert """After applying:
+    assert """Mobile shortcut:
 ```
 applied linear-product-manager
 ```""" in message
@@ -788,7 +788,7 @@ def test_telegram_summary_includes_stable_fallback_command():
         }
     )
 
-    assert """Stable fallback:
+    assert """After applying:
 ```
 applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 ```""" in message

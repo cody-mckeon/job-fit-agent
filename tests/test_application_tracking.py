@@ -187,3 +187,126 @@ def test_applied_command_lists_applied_jobs(tmp_path, monkeypatch, capsys):
     assert "Listed Applied PM" in output
     assert "2026-05-28T00:00:00+00:00" in output
     assert "Submitted." in output
+
+
+def test_mark_applied_by_stable_key_updates_sqlite_and_status_store(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/stable-exists", "Stable Exists PM")
+
+    main(["telegram-command", "applied ashby:acme:stable-exists"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    store = json.loads((tmp_path / "data/application_status.json").read_text())
+    assert result["success"] is True
+    assert result["warning"] is None
+    assert result["message"] == "Marked applied: acme Stable Exists PM."
+    assert row is not None
+    assert row["application_status"] == "applied"
+    assert store["ashby:acme:stable-exists"]["title"] == "Stable Exists PM"
+    assert store["ashby:acme:stable-exists"]["score"] == 90
+
+
+def test_mark_applied_by_stable_key_without_sqlite_job_creates_status_store(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["telegram-command", "applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7"])
+
+    result = json.loads(capsys.readouterr().out)
+    store = json.loads((tmp_path / "data/application_status.json").read_text())
+    record = store["ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7"]
+    assert result["success"] is True
+    assert result["warning"] == "Job was not found in local SQLite, but status was recorded by stable key."
+    assert result["message"] == "Marked applied by stable key: ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7. Job details will be enriched when rediscovered."
+    assert record["application_status"] == "applied"
+    assert record["company"] == "elevenlabs"
+    assert record["source"] == "ashby"
+    assert record["external_job_id"] == "a3097257-a07a-4a7e-b9fe-b8555c1a0fa7"
+    assert record["url"] == "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7"
+
+
+def test_application_status_json_is_created_if_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    assert not (tmp_path / "data/application_status.json").exists()
+
+    main(["telegram-command", "applied ashby:acme:missing-store"])
+
+    assert json.loads(capsys.readouterr().out)["success"] is True
+    assert (tmp_path / "data/application_status.json").exists()
+
+
+def test_applied_report_includes_status_only_records(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data/application_status.json").write_text(json.dumps({
+        "ashby:elevenlabs:status-only": {
+            "stable_job_key": "ashby:elevenlabs:status-only",
+            "company": "elevenlabs",
+            "title": "Unknown",
+            "url": "https://jobs.ashbyhq.com/elevenlabs/status-only",
+            "source": "ashby",
+            "external_job_id": "status-only",
+            "application_status": "applied",
+            "applied_at": "2026-05-28T00:00:00+00:00",
+            "skipped_at": None,
+            "saved_at": None,
+            "note": "Submitted remotely.",
+            "updated_at": "2026-05-28T00:00:00+00:00",
+            "identifier_used": "ashby:elevenlabs:status-only",
+        }
+    }))
+
+    main(["applied"])
+
+    output = capsys.readouterr().out
+    assert "elevenlabs" in output
+    assert "status-only" in output
+    assert "Submitted remotely." in output
+
+
+def test_digest_excludes_jobs_applied_in_application_status_json(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert("https://jobs.ashbyhq.com/acme/durable-applied", "Durable Applied PM")
+    (tmp_path / "data/application_status.json").write_text(json.dumps({
+        "ashby:acme:durable-applied": {"application_status": "applied", "stable_job_key": "ashby:acme:durable-applied"}
+    }))
+
+    main(["digest"])
+
+    output = capsys.readouterr().out
+    actionable = output.split("Actionable near-fit jobs")[0]
+    assert "Durable Applied PM" not in actionable
+    assert "applied_count: 1" in output
+
+
+def test_prep_next_application_excludes_jobs_applied_in_application_status_json(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert("https://jobs.ashbyhq.com/acme/durable-applied-prep", "Applied Prep PM")
+    open_id = _insert("https://jobs.ashbyhq.com/acme/durable-open-prep", "Open Prep PM")
+    (tmp_path / "data/application_status.json").write_text(json.dumps({
+        "ashby:acme:durable-applied-prep": {"application_status": "applied", "stable_job_key": "ashby:acme:durable-applied-prep"}
+    }))
+
+    prep_next_application(dry_run=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == open_id
+
+
+def test_unknown_stable_key_status_returns_success_with_warning(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["telegram-command", "applied greenhouse:unknown:12345"])
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is True
+    assert result["warning"] == "Job was not found in local SQLite, but status was recorded by stable key."
+    store = json.loads((tmp_path / "data/application_status.json").read_text())
+    assert store["greenhouse:unknown:12345"]["url"] is None

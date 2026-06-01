@@ -49,3 +49,15 @@ def test_worker_allows_mobile_alias_and_stable_identifiers():
     text = Path("ops/telegram-worker/worker.js").read_text()
     assert "JOB_IDENTIFIER" in text
     assert ":._~/?#@!%&+=,-" in text
+
+
+def test_workflow_commits_application_status_after_successful_command():
+    text = Path(".github/workflows/job-status-command.yml").read_text()
+    assert "git add data/application_status.json" in text
+    assert "git commit -m \"Update application status\"" in text
+
+
+def test_workflow_does_not_require_jobs_sqlite_to_change():
+    text = Path(".github/workflows/job-status-command.yml").read_text()
+    assert "git add data/jobs.sqlite" not in text
+    assert "data/jobs.sqlite is not tracked" not in text

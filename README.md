@@ -187,7 +187,7 @@ Setup steps:
 
 ## Application workflow lifecycle
 
-Each job in SQLite has a workflow status to track progress from discovery to close-out.
+Each job in SQLite has a workflow status to track progress from discovery to close-out. Application decisions (`applied`, `skipped`, and `saved`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Treat `data/application_status.json` as the durable, shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
 
 Valid statuses:
 - `new`
@@ -297,9 +297,11 @@ Recommended application prep workflow:
 6. Mark the role as applied so it does not appear in future recommendations:
    `python -m job_fit_agent.main mark-applied --job-id <job_id> --note "Applied through Ashby using generated package."`
    - You can also mark by URL: `python -m job_fit_agent.main mark-applied --url <job_url>`
+   - From Telegram or GitHub Actions, prefer stable job keys such as `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; they remain safe even when the local SQLite database does not contain that job row.
    - Review submitted roles with `python -m job_fit_agent.main applied` or `python -m job_fit_agent.main applied --json`.
    - If Cody intentionally passes on a role, run `python -m job_fit_agent.main mark-skipped --job-id <job_id> --reason "Not US eligible"` or `python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"`.
-   - `applied` and `skipped` application statuses are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations.
+   - `applied` and `skipped` application statuses from both SQLite and `data/application_status.json` are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations.
+   - After Telegram status updates, run `git pull` locally before triage so your Mac has the latest `data/application_status.json` state.
 
 Telegram handoff requires:
 - `TELEGRAM_BOT_TOKEN`
@@ -351,7 +353,7 @@ Mobile flow: **Telegram → download zip → review files → submit manually**.
 GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked `application_status=applied` or `application_status=skipped`, geography-review, and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section. Use `unapplied-high-fit` any time to see valid high-fit roles that still need an application decision.
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked `application_status=applied` or `application_status=skipped` in SQLite or `data/application_status.json`, geography-review, and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section. Use `unapplied-high-fit` any time to see valid high-fit roles that still need an application decision.
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`
@@ -392,7 +394,7 @@ applied https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 applied 19
 ```
 
-The mobile command alias is the easiest identifier to copy from Telegram. It uses a short `<company_slug>-<role_slug>` format such as `linear-product-manager`; collisions are disambiguated with a job id or short source hash such as `linear-product-manager-19` or `linear-product-manager-b7669c`. The stable job key, such as `ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2`, is the safest fallback because it is derived from the backend job source and job id. Numeric ids are local SQLite row ids only and may fail across separate GitHub Actions runs if the database state differs.
+The stable job key, such as `ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2`, is the safest identifier because it is derived from the backend job source and external job id. It records status successfully even if the current local `data/jobs.sqlite` does not contain the row. The mobile command alias is secondary: it uses a short `<company_slug>-<role_slug>` format such as `linear-product-manager`; collisions are disambiguated with a job id or short source hash such as `linear-product-manager-19` or `linear-product-manager-b7669c`. Numeric ids are local SQLite row ids only and may fail across separate GitHub Actions runs or local machines if database state differs.
 
 Equivalent local short commands are also available for numeric local ids:
 
@@ -403,15 +405,20 @@ python -m job_fit_agent.main save <job_id>
 python -m job_fit_agent.main telegram-command "applied linear-product-manager"
 ```
 
-The Telegram package summary now includes mobile-friendly copy/paste status commands first, followed by the stable fallback command:
+The Telegram package summary now shows the stable key as the safest copy/paste command, followed by the mobile alias shortcut:
 
 ````text
 After applying:
 ```
+applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+```
+
+Mobile shortcut:
+```
 applied linear-product-manager
 ```
 
-To skip:
+To skip with the shortcut:
 ```
 skip linear-product-manager Not a fit
 ```
@@ -421,10 +428,6 @@ To save:
 save linear-product-manager
 ```
 
-Stable fallback:
-```
-applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
-```
 ````
 
 ### GitHub Actions workflow
@@ -434,7 +437,7 @@ applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 - `repository_dispatch` with type `job_status_command` from the Cloudflare Worker.
 - Manual `workflow_dispatch` with `command_text` for testing.
 
-The workflow installs the package, runs targeted tests, executes the parsed status command, sends a Telegram confirmation through the existing Telegram notifier, and commits `data/jobs.sqlite` if the repository is using a committed SQLite database as state.
+The workflow installs the package, runs targeted tests, executes the parsed status command, sends a Telegram confirmation through the existing Telegram notifier, and commits `data/application_status.json` with the commit message `Update application status` when the command changed durable status. It does not require `data/jobs.sqlite` to change or be committed.
 
 GitHub Actions secrets required for confirmations:
 
@@ -475,4 +478,5 @@ Limitations:
 
 - GitHub Actions may take some time to start and run.
 - Confirmation is not instant.
-- Status updates depend on the repository's current database persistence model. If `data/jobs.sqlite` is not persisted between scheduled runs and command runs, the workflow cannot update jobs that are absent from that database.
+- Status updates are durable in `data/application_status.json` by stable job key. If a job is absent from local SQLite, the command still succeeds with a warning and enriches job details when the job is rediscovered.
+- Run `git pull` locally after Telegram status updates so local digest and prep use the committed status store.

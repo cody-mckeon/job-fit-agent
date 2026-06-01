@@ -69,13 +69,16 @@ jobs:
               company = result.get("company", "")
               title = result.get("title", "")
               job_id = result.get("job_id", "")
+              stable_job_key = result.get("stable_job_key", "")
               note = result.get("note", "")
-              if status == "applied":
-                  text = f"Marked applied: {company} {title}, job {job_id}."
+              if result.get("warning") and stable_job_key:
+                  text = result.get("message")
+              elif status == "applied":
+                  text = f"Marked applied: {company} {title}."
               elif status == "skipped":
-                  text = f"Marked skipped: {company} {title}, job {job_id}. Reason: {note}"
+                  text = f"Marked skipped: {company} {title}. Reason: {note}"
               elif status == "saved":
-                  text = f"Saved for later: {company} {title}, job {job_id}."
+                  text = f"Saved for later: {company} {title}."
               else:
                   text = result.get("message", "Job status command completed.")
           else:
@@ -89,23 +92,19 @@ jobs:
               print(text)
           PY
 
-      - name: Commit updated job database
+      - name: Commit updated application status
         if: success()
         run: |
           if python -c 'import json; raise SystemExit(0 if json.load(open("command_result.json")).get("success") else 1)'; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            if git ls-files --error-unmatch data/jobs.sqlite >/dev/null 2>&1; then
-              git add data/jobs.sqlite
-              if git diff --cached --quiet; then
-                echo "No job database changes to commit."
-              else
-                git commit -m "Update job status from Telegram command"
-                git push
-              fi
+            git add data/application_status.json
+            if git diff --cached --quiet; then
+              echo "No application status changes to commit."
             else
-              echo "data/jobs.sqlite is not tracked; leaving persistence to the existing runtime pattern."
+              git commit -m "Update application status"
+              git push
             fi
           else
-            echo "Skipping database commit because command failed."
+            echo "Skipping application status commit because command failed."
           fi

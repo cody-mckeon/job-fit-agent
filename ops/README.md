@@ -75,6 +75,8 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-applied 
 docker compose run --rm job-fit-agent python -m job_fit_agent.main applied
 ```
 
+Application decisions are durable in the tracked `data/application_status.json` file keyed by stable job key. The local `data/jobs.sqlite` row id is runtime/local state and may differ across Cody's Mac, Telegram, and GitHub Actions. For Telegram/GitHub Actions, use the stable command from the package whenever possible, for example `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; mobile aliases are convenient shortcuts, but stable keys are safest across machines. After a Telegram status update commits back to GitHub, run `git pull` locally before triage so digest and prep use the latest durable status store.
+
 If Cody decides not to apply, mark it skipped with a reason:
 
 ```bash
@@ -83,7 +85,7 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped 
 docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"
 ```
 
-Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. Jobs marked `application_status=applied` or `application_status=skipped` are also excluded from default digest actionable sections, prep-next auto-selection, and daily Telegram recommendations. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
+Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. Jobs marked `application_status=applied` or `application_status=skipped` in SQLite or `data/application_status.json` are also excluded from default digest actionable sections, prep-next auto-selection, and daily Telegram recommendations. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
 
 Telegram handoff env vars:
 - `TELEGRAM_BOT_TOKEN`
@@ -182,6 +184,8 @@ Daily scheduled flow includes Telegram package summary handoff:
 - `python -m job_fit_agent.main digest`
 - `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
 - Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
+
+The separate **Job Status Command** workflow persists Telegram status commands by committing `data/application_status.json` back to `main` with `Update application status` after a successful command. It intentionally does not require `data/jobs.sqlite` changes; the SQLite database remains local/runtime job cache state.
 
 Scheduled GitHub Actions now installs `pandoc` plus LaTeX dependencies (`texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`) and attempts resume PDF export before packaging. `setspace.sty` is provided by `texlive-latex-recommended`. When export succeeds, the PDF is included in both the Telegram zip and the GitHub artifact; when export fails, the workflow continues and `submit_resume.md` remains the manual fallback.
 
