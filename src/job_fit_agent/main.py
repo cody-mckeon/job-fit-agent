@@ -92,6 +92,30 @@ STRONG_FIT_ROLE_TERMS = (
     "revenue operations automation",
     "revops automation",
     "marketing operations automation",
+    "ai solutions engineer",
+    "ai solutions architect",
+    "ai implementation",
+    "ai program manager",
+    "automation consultant",
+    "automation engineer",
+    "business systems",
+    "gtm systems",
+    "revenue systems",
+    "marketing systems",
+    "marketing automation",
+    "enterprise solutions",
+    "technical solutions consultant",
+    "solutions engineer, ai",
+    "solutions architect, ai",
+    "workflow consultant",
+    "process automation manager",
+    "digital transformation",
+    "low-code automation",
+    "no-code automation",
+    "power platform consultant",
+    "power platform developer",
+    "servicenow architect",
+    "moveworks consultant",
 )
 ADJACENT_ROLE_TERMS = (
     "technical program manager",
@@ -105,6 +129,24 @@ ADJACENT_ROLE_TERMS = (
     "microsoft power platform consultant",
     "workato engineer",
     "workato consultant",
+    "business systems manager",
+    "revenue systems manager",
+    "revenue operations systems manager",
+    "marketing systems manager",
+    "marketing automation manager",
+    "product operations manager",
+    "product operations lead",
+    "internal tools engineer",
+    "enterprise solutions architect",
+    "enterprise solutions consultant",
+    "technical solutions consultant",
+    "solutions engineer, ai",
+    "solutions architect, ai",
+    "digital transformation manager",
+    "digital transformation consultant",
+    "power platform consultant",
+    "power platform developer",
+    "servicenow architect",
 )
 WEAK_ROLE_TERMS = (
     "technical account manager",
@@ -116,6 +158,15 @@ WEAK_ROLE_TERMS = (
     "grc",
     "finance",
     "customer success",
+    "project manager",
+    "program manager",
+    "public sector",
+    "security program",
+    "sales enablement",
+    "support specialist",
+    "sales operations manager",
+    "recruiter",
+    "designer",
 )
 STRONG_OVERLAP_TERMS = (
     "ai workflow",
@@ -124,16 +175,29 @@ STRONG_OVERLAP_TERMS = (
     "ai operations",
     "ai enablement",
     "ai transformation",
+    "ai implementation",
+    "ai adoption",
+    "generative ai",
+    "llm",
+    "copilots",
     "ai agents",
     "agentic",
     "product systems",
     "workflow automation",
     "process automation",
     "business process automation",
+    "process improvement",
+    "internal automation",
+    "systems automation",
     "enterprise automation",
     "internal tools",
     "product operations",
     "operations systems",
+    "business systems",
+    "gtm systems",
+    "revops systems",
+    "revenue systems",
+    "marketing systems",
     "product analytics",
     "integrations",
     "systems design",
@@ -145,6 +209,8 @@ STRONG_OVERLAP_TERMS = (
     "zapier",
     "n8n",
     "crm automation",
+    "sales operations automation",
+    "lifecycle automation",
     "revops automation",
     "marketing operations automation",
 )
@@ -955,6 +1021,31 @@ def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
         print(f"notes: {safe_row_value(row, 'application_notes', '') or 'none'}")
         print("-")
 
+def _is_automation_ai_operations_review_row(row: dict) -> bool:
+    title = str(safe_row_value(row, "title", "")).lower()
+    if "product manager" in title and "internal tools product manager" not in title and "digital automation product manager" not in title:
+        return False
+    role_text = " ".join(
+        str(safe_row_value(row, key, "") or "").lower()
+        for key in ("title", "notes", "viability_reasons", "reasons", "red_flags", "role_family")
+    )
+    role_family = str(safe_row_value(row, "role_family", "")).lower()
+    automation_families = {
+        "ai_operations",
+        "ai_automation",
+        "ai_transformation",
+        "workflow_automation",
+        "business_systems",
+        "internal_tools",
+        "solutions_architecture",
+        "ai_implementation",
+        "revops_automation",
+        "marketing_ops_automation",
+        "product_operations",
+    }
+    return role_family in automation_families or any(term in role_text for term in STRONG_OVERLAP_TERMS)
+
+
 def print_digest(group_by_status: bool = False, include_skipped: bool = False) -> None:
     initialize()
     high_fit_rows = get_top_jobs_by_classification("high_fit", limit=50)
@@ -962,6 +1053,11 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
 
     actionable_high_fit_rows = [row for row in high_fit_rows if _is_actionable_digest_row(row)]
     actionable_near_fit_rows = [row for row in near_fit_rows if _is_actionable_digest_row(row)]
+    automation_review_rows = [
+        row
+        for row in actionable_high_fit_rows + actionable_near_fit_rows
+        if _is_automation_ai_operations_review_row(row)
+    ]
     skipped_rows = [row for row in high_fit_rows + near_fit_rows if _is_hard_constraint_skipped_row(row)]
     geography_review_rows = [
         row
@@ -984,6 +1080,8 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         if geography_review_rows:
             print()
             _print_digest_rows("High role fit but geography review", geography_review_rows, "No high-fit geography-review jobs.")
+        print()
+        _print_digest_rows("Automation / AI operations roles worth reviewing", automation_review_rows, "No automation / AI operations roles worth reviewing.")
         print()
         _print_digest_rows("Actionable near-fit jobs", actionable_near_fit_rows, "No actionable near-fit jobs.")
         if include_skipped:

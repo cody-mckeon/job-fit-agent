@@ -52,6 +52,39 @@ target_titles:
 - Workato Consultant
 - RevOps Automation
 - Marketing Automation Operations
+- AI Solutions Engineer
+- AI Solutions Architect
+- AI Implementation Consultant
+- AI Implementation Manager
+- AI Program Manager
+- Automation Consultant
+- Automation Engineer
+- Business Systems Manager
+- Business Systems Analyst
+- Business Systems Lead
+- GTM Systems Manager
+- GTM Systems Engineer
+- Revenue Systems Manager
+- Revenue Operations Systems Manager
+- Marketing Systems Manager
+- Marketing Automation Manager
+- Product Operations Manager
+- Product Operations Lead
+- Internal Tools Engineer
+- Enterprise Solutions Consultant
+- Enterprise Solutions Architect
+- Technical Solutions Consultant
+- Solutions Engineer, AI
+- Solutions Architect, AI
+- Workflow Consultant
+- Process Automation Manager
+- Digital Transformation Consultant
+- Digital Transformation Manager
+- Low-Code Automation Consultant
+- No-Code Automation Consultant
+- Power Platform Consultant
+- Power Platform Developer
+- ServiceNow Architect
 target_keywords:
 - AI
 - analytics
@@ -99,6 +132,23 @@ target_keywords:
 - CRM automation
 - RevOps automation
 - marketing operations automation
+- generative AI
+- LLM
+- copilots
+- AI workflows
+- AI adoption
+- AI implementation
+- process improvement
+- internal automation
+- systems automation
+- no-code
+- low-code
+- business systems
+- GTM systems
+- RevOps systems
+- marketing systems
+- sales operations automation
+- lifecycle automation
 preferred_locations:
 - Remote US
 - Remote United States
@@ -182,6 +232,15 @@ industry_bias:
 - Workato
 - RevOps automation
 - marketing operations automation
+- AI implementation
+- AI adoption
+- business systems
+- GTM systems
+- RevOps systems
+- marketing systems
+- internal automation
+- systems automation
+- lifecycle automation
 local_priority_companies:
 - slickdeals
 - mgm resorts
@@ -211,6 +270,12 @@ preferred_role_families:
 - ai_enablement
 - platform_automation
 - revops_marketing_ops_automation
+- business_systems
+- internal_tools
+- solutions_architecture
+- ai_implementation
+- revops_automation
+- marketing_ops_automation
 disliked_role_families:
 - infrastructure_engineering
 - sre

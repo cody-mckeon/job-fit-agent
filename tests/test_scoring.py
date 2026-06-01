@@ -177,7 +177,7 @@ def test_remote_member_of_technical_staff_is_low_fit() -> None:
     assert fit.classification == "low_fit"
 
 
-def test_remote_technical_account_manager_is_near_fit() -> None:
+def test_remote_technical_account_manager_without_ai_implementation_context_is_low_fit() -> None:
     job = _job(
         title="Technical Account Manager",
         location="Remote US",
@@ -185,7 +185,7 @@ def test_remote_technical_account_manager_is_near_fit() -> None:
     )
 
     fit = score_job(job, TARGET_PROFILE)
-    assert fit.classification == "near_fit"
+    assert fit.classification == "low_fit"
 
 
 def test_forward_deployed_engineer_ai_ranks_high() -> None:
@@ -237,7 +237,7 @@ def test_technical_account_manager_stays_downranked() -> None:
         description="Manage renewals and customer support escalation.",
     )
     fit = score_job(job, TARGET_PROFILE)
-    assert fit.classification == "near_fit"
+    assert fit.classification == "low_fit"
 
 
 def test_solutions_consultant_stays_downranked_without_context() -> None:
@@ -1085,8 +1085,7 @@ def test_generic_marketing_operations_manager_downranked_without_automation_ai()
         _job("Marketing Operations Manager", "Remote US", "Own campaign execution, lifecycle marketing, CRM hygiene, reporting, and list uploads."),
         TARGET_PROFILE,
     )
-    assert fit.classification in {"low_fit", "near_fit"}
-    assert fit.classification != "high_fit"
+    assert fit.classification == "low_fit"
 
 
 def test_generic_sales_operations_manager_downranked_without_automation_ai() -> None:
@@ -1121,3 +1120,62 @@ def test_high_fit_ai_automation_role_with_ineligible_geography_does_not_auto_pre
     assert fit.classification == "high_fit"
     assert job.geographic_eligibility == "ineligible"
     assert fit.viability_level == "skip"
+
+
+def test_ai_automation_market_title_context_pairs_are_high_or_near_fit() -> None:
+    cases = [
+        ("AI Solutions Architect", "Design LLM workflow automation, AI agents, integrations, and enterprise implementation."),
+        ("Business Systems Manager", "Own workflow automation, internal tools, business systems, and systems automation for operations teams."),
+        ("Product Operations Manager", "Lead AI enablement, internal tools, product systems, and AI adoption across product teams."),
+        ("Revenue Systems Manager", "Own CRM automation, RevOps systems, Workato integrations, and lifecycle automation."),
+        ("Power Platform Consultant", "Deliver Power Platform process automation, low-code workflows, and business process automation."),
+        ("ServiceNow Architect", "Implement ServiceNow AI workflow automation, AI agents, and enterprise workflow design."),
+        ("Digital Transformation Manager", "Lead AI adoption, AI transformation, workflow systems, and process improvement."),
+    ]
+    for title, description in cases:
+        fit = score_job(_job(title, "Remote US", description), TARGET_PROFILE)
+        assert fit.classification in {"near_fit", "high_fit"}, title
+        assert any("Role-family match pairs" in reason for reason in fit.reasons) or fit.classification == "near_fit", title
+
+
+def test_priority_company_alone_does_not_make_public_sector_project_manager_near_fit() -> None:
+    fit = score_job(
+        _job(
+            "Project Manager, Public Sector",
+            "Remote US",
+            "Coordinate public sector delivery, stakeholder meetings, timelines, and project status reporting.",
+            company="linear",
+        ),
+        TARGET_PROFILE,
+    )
+    assert fit.classification == "low_fit"
+    assert "Priority company match (+10)" in fit.reasons
+
+
+def test_security_program_manager_without_ai_product_automation_context_is_low_fit() -> None:
+    fit = score_job(
+        _job("Program Manager, Security Business Enablement", "Remote US", "Coordinate security reviews, enablement planning, and compliance stakeholder updates."),
+        TARGET_PROFILE,
+    )
+    assert fit.classification == "low_fit"
+
+
+def test_sales_enablement_manager_without_automation_systems_ownership_is_low_fit() -> None:
+    fit = score_job(
+        _job("Sales Enablement Manager", "Remote US", "Create sales training, enablement content, playbooks, and onboarding programs."),
+        TARGET_PROFILE,
+    )
+    assert fit.classification == "low_fit"
+
+
+def test_business_systems_manager_title_alone_is_not_high_fit() -> None:
+    fit = score_job(_job("Business Systems Manager", "Remote US", "Manage business applications roadmap and stakeholder requests."), TARGET_PROFILE)
+    assert fit.classification != "high_fit"
+
+
+def test_marketing_operations_manager_with_workflow_automation_is_near_or_high_fit() -> None:
+    fit = score_job(
+        _job("Marketing Operations Manager", "Remote US", "Own workflow automation, marketing systems, lifecycle automation, and CRM automation."),
+        TARGET_PROFILE,
+    )
+    assert fit.classification in {"near_fit", "high_fit"}
