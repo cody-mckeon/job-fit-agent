@@ -81,20 +81,26 @@ python -m job_fit_agent.main
 
 These are **ranking boosts, not hard filters**. They improve ordering among already-relevant roles and do not replace role-family and location guardrails.
 
-## Targeting evolution: AI-native product builder/operator
+## Targeting evolution: AI automation role-family matching
 
-The scoring profile now targets traditional PM roles plus adjacent AI-native builder/operator paths. Target role families include:
+Live market titles for AI automation and operator work are inconsistent: many relevant jobs are posted as systems, implementation, solutions, transformation, RevOps, Marketing Ops, or internal-tools roles instead of exact titles like `AI Automation Manager` or `Agentic AI Consultant`. The agent keeps exact target-title matches, but scoring now depends on a strong title/context pair across AI, automation, workflow, internal systems, or product-systems overlap rather than title alone.
+
+Target role families include:
 
 - Product Management
 - Forward Deployed Engineering
 - AI Operations
 - AI Automation
-- Workflow Automation
 - AI Transformation
-- Internal Tools Product Management
-- AI Enablement
+- Workflow Automation
+- Business Systems
+- Internal Tools
+- Solutions Architecture / Solutions Engineering
+- AI Implementation
+- RevOps Automation / Revenue Systems
+- Marketing Ops Automation / Marketing Systems
+- Product Operations
 - Platform Automation: ServiceNow, Moveworks, Power Platform, Workato
-- RevOps/Marketing Ops Automation when automation-heavy
 - Developer tools
 - Product engineering
 
@@ -117,9 +123,9 @@ Primary target role set includes:
 - Internal Tools Product Manager
 - AI Enablement Manager
 
-Platform-specific targets such as ServiceNow Consultant, Moveworks Consultant, Power Platform Solution Architect, and Workato Automation Engineer are boosted when the posting includes AI, workflow automation, business process automation, transformation, implementation, integrations, or systems/workflow design ownership. Revenue Operations Automation and Marketing Operations Automation roles are considered near/high fit when they emphasize automation systems, AI workflows, analytics, and cross-functional process improvement.
+Platform-specific targets such as ServiceNow Consultant, Moveworks Consultant, Power Platform Solution Architect, and Workato Automation Engineer are boosted when the posting includes AI, workflow automation, business process automation, transformation, implementation, integrations, or systems/workflow design ownership. Broader market titles such as Business Systems Manager, AI Solutions Architect, AI Implementation Consultant, Product Operations Manager, Revenue Systems Manager, Marketing Automation Manager, Digital Transformation Manager, and Enterprise Solutions Architect are treated as relevant only when the description also shows AI implementation, automation, workflow systems, internal tools, or product systems context.
 
-The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles and generic consultant, operations, support, account-management, campaign execution, CRM hygiene, reporting, sales admin, or lifecycle marketing roles that lack AI, automation, internal tools, workflow systems, product systems, or enterprise automation ownership.
+The system boosts jobs with strong agentic/workflow/orchestration/tooling capability signals while still keeping hard guardrails against pure infrastructure/backend-heavy engineering roles and generic project/program management, public-sector project management, security program management, sales enablement, support, customer success, account-management, campaign execution, CRM hygiene, reporting, sales admin, or lifecycle marketing roles that lack AI, automation, internal tools, workflow systems, product systems, or enterprise automation ownership. Priority-company matches remain ranking boosts only; a priority company without a role-family/context match should stay low or manual-review rather than becoming near-fit.
 
 
 ## Company discovery workflow

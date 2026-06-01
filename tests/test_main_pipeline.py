@@ -2019,3 +2019,33 @@ def test_generate_application_answers_creates_markdown_file_for_sqlite_row(monke
     main(["generate-application-answers", "203"])
     assert (app_dir / "application_answers.md").exists() is True
     conn.close()
+
+
+def test_digest_adds_automation_ai_operations_review_section(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+
+    def _rows(classification, limit=10):
+        if classification == "near_fit":
+            return [{
+                "id": 44,
+                "score": 72,
+                "status": "new",
+                "classification": "near_fit",
+                "viability_level": "apply_now",
+                "geographic_eligibility": "eligible",
+                "title": "Business Systems Manager",
+                "company": "acme",
+                "source": "lever",
+                "url": "https://jobs.lever.co/acme/44",
+                "role_family": "business_systems",
+                "reasons": '["Role-family match pairs a realistic market title with AI, automation, workflow, or internal systems context."]',
+                "viability_reasons": "[]",
+                "red_flags": "[]",
+            }]
+        return []
+
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", _rows)
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "Automation / AI operations roles worth reviewing" in output
+    assert "Business Systems Manager" in output

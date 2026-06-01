@@ -40,6 +40,12 @@ NEGATIVE_KEYWORDS = {
     "treasury": -35,
     "customer support only": -30,
     "onsite outside us": -25,
+    "public sector project manager": -35,
+    "security program manager": -35,
+    "sales enablement": -30,
+    "support specialist": -35,
+    "recruiter": -45,
+    "designer": -30,
 }
 
 NEAR_FIT_TERMS = {
@@ -48,7 +54,6 @@ NEAR_FIT_TERMS = {
     "engineering program manager",
     "growth marketing",
     "demand generation",
-    "technical account manager",
     "customer success analytics",
 }
 
@@ -148,11 +153,111 @@ OPS_AUTOMATION_TITLES = {
     "marketing operations automation",
     "marketing automation operations",
 }
+
+MARKET_ROLE_TITLE_FAMILIES = {
+    "ai solutions engineer": "solutions_architecture",
+    "ai solutions architect": "solutions_architecture",
+    "ai implementation consultant": "ai_implementation",
+    "ai implementation manager": "ai_implementation",
+    "ai program manager": "ai_operations",
+    "ai transformation manager": "ai_transformation",
+    "ai transformation lead": "ai_transformation",
+    "automation consultant": "ai_automation",
+    "automation engineer": "ai_automation",
+    "business systems manager": "business_systems",
+    "business systems analyst": "business_systems",
+    "business systems lead": "business_systems",
+    "gtm systems manager": "business_systems",
+    "gtm systems engineer": "business_systems",
+    "revenue systems manager": "revops_automation",
+    "revenue operations systems manager": "revops_automation",
+    "revenue operations manager": "revops_automation",
+    "marketing systems manager": "marketing_ops_automation",
+    "marketing automation manager": "marketing_ops_automation",
+    "marketing operations manager": "marketing_ops_automation",
+    "product operations manager": "product_operations",
+    "product operations lead": "product_operations",
+    "internal tools engineer": "internal_tools",
+    "internal tools product manager": "internal_tools",
+    "enterprise solutions consultant": "solutions_architecture",
+    "enterprise solutions architect": "solutions_architecture",
+    "technical solutions consultant": "solutions_architecture",
+    "solutions engineer, ai": "solutions_architecture",
+    "solutions architect, ai": "solutions_architecture",
+    "workflow consultant": "workflow_automation",
+    "process automation manager": "workflow_automation",
+    "digital transformation consultant": "ai_transformation",
+    "digital transformation manager": "ai_transformation",
+    "low-code automation consultant": "workflow_automation",
+    "no-code automation consultant": "workflow_automation",
+    "power platform consultant": "workflow_automation",
+    "power platform developer": "workflow_automation",
+    "servicenow consultant": "workflow_automation",
+    "servicenow architect": "workflow_automation",
+    "workato consultant": "workflow_automation",
+    "workato engineer": "workflow_automation",
+    "moveworks consultant": "workflow_automation",
+}
+MARKET_ROLE_TITLES = set(MARKET_ROLE_TITLE_FAMILIES)
+
+AI_AGENTIC_CONTEXT_SIGNALS = {
+    "ai agents",
+    "agentic ai",
+    "generative ai",
+    "llm",
+    "copilots",
+    "ai workflows",
+    "ai workflow",
+    "ai enablement",
+    "ai adoption",
+    "ai implementation",
+    "ai transformation",
+}
+AUTOMATION_CONTEXT_SIGNALS = {
+    "workflow automation",
+    "business process automation",
+    "process improvement",
+    "process automation",
+    "internal automation",
+    "systems automation",
+    "integrations",
+    "no-code",
+    "low-code",
+    "zapier",
+    "make automation",
+    " n8n",
+    "n8n",
+    "workato",
+    "power platform",
+    "servicenow",
+    "moveworks",
+}
+INTERNAL_TOOLS_CONTEXT_SIGNALS = {
+    "internal tools",
+    "business systems",
+    "product operations",
+    "gtm systems",
+    "revops systems",
+    "revenue systems",
+    "marketing systems",
+    "crm automation",
+    "sales operations automation",
+    "lifecycle automation",
+    "asana automation",
+    "slack automation",
+    "product systems",
+}
+ROLE_FAMILY_CONTEXT_SIGNALS = AI_AGENTIC_CONTEXT_SIGNALS | AUTOMATION_CONTEXT_SIGNALS | INTERNAL_TOOLS_CONTEXT_SIGNALS
 AI_AUTOMATION_CONTEXT_SIGNALS = {
     "ai automation",
     "ai operations",
     "ai enablement",
     "ai transformation",
+    "ai implementation",
+    "ai adoption",
+    "generative ai",
+    "llm",
+    "copilots",
     "agentic ai",
     "ai agents",
     "ai workflow",
@@ -160,9 +265,17 @@ AI_AUTOMATION_CONTEXT_SIGNALS = {
     "workflow automation",
     "process automation",
     "business process automation",
+    "process improvement",
+    "internal automation",
+    "systems automation",
     "internal tools",
     "product operations",
     "operations systems",
+    "business systems",
+    "gtm systems",
+    "revops systems",
+    "revenue systems",
+    "marketing systems",
     "enterprise automation",
     "implementation",
     "integrations",
@@ -205,14 +318,23 @@ PLATFORM_AUTOMATION_CONTEXT_SIGNALS = {
 }
 GENERIC_GUARDRAIL_TITLES = {
     "consultant",
+    "project manager",
+    "program manager",
+    "public sector project manager",
+    "security program manager",
     "operations manager",
     "sales operations manager",
     "marketing operations manager",
+    "sales enablement",
+    "sales enablement manager",
     "customer success manager",
     "implementation specialist",
     "technical account manager",
     "support engineer",
+    "support specialist",
     "business analyst",
+    "recruiter",
+    "designer",
 }
 GENERIC_OPS_EXECUTION_SIGNALS = {
     "campaign execution",
@@ -559,6 +681,14 @@ ROLE_FAMILIES = {
     "product_engineering",
     "workflow_automation",
     "ai_operations",
+    "ai_automation",
+    "ai_transformation",
+    "business_systems",
+    "internal_tools",
+    "solutions_architecture",
+    "ai_implementation",
+    "revops_automation",
+    "marketing_ops_automation",
     "developer_tools",
     "product_operations",
     "product_analytics",
@@ -593,6 +723,9 @@ def classify_role_family(title: str) -> str:
         return "workflow_automation"
     if _title_contains_any(normalized, OPS_AUTOMATION_TITLES):
         return "workflow_automation"
+    for title_pattern, family in MARKET_ROLE_TITLE_FAMILIES.items():
+        if title_pattern in normalized:
+            return family
 
     if "chief of staff" in normalized:
         return "executive"
@@ -610,8 +743,16 @@ def classify_role_family(title: str) -> str:
         return "technical_product"
     if any(term in normalized for term in ("ai operations", "ml ops", "ai ops", "ai enablement", "ai transformation")):
         return "ai_operations"
+    if any(term in normalized for term in ("ai implementation", "implementation manager")):
+        return "ai_implementation"
+    if any(term in normalized for term in ("solutions architect", "solutions engineer", "solutions consultant")):
+        return "solutions_architecture"
     if any(term in normalized for term in ("workflow automation", "process automation", "automation specialist", "automation engineer", "automation consultant", "power platform", "workato", "servicenow", "moveworks")):
         return "workflow_automation"
+    if any(term in normalized for term in ("business systems", "gtm systems", "revenue systems")):
+        return "business_systems"
+    if "internal tools" in normalized:
+        return "internal_tools"
     if any(term in normalized for term in ("developer tools", "devtools", "platform product")):
         return "developer_tools"
     if "product engineer" in normalized:
@@ -862,13 +1003,36 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     has_location_blocker = location_score <= EXCLUDED_LOCATION_PENALTY
     preferred_families = set(target_profile.preferred_role_families) if target_profile.preferred_role_families else set()
     disliked_families = set(target_profile.disliked_role_families) if target_profile.disliked_role_families else set()
-    ai_native_families = {"ai_builder", "product_engineering", "workflow_automation", "ai_operations", "developer_tools", "technical_product"}
+    ai_native_families = {
+        "ai_builder",
+        "product_engineering",
+        "workflow_automation",
+        "ai_operations",
+        "ai_automation",
+        "ai_transformation",
+        "business_systems",
+        "internal_tools",
+        "solutions_architecture",
+        "ai_implementation",
+        "revops_automation",
+        "marketing_ops_automation",
+        "product_operations",
+        "developer_tools",
+        "technical_product",
+    }
+    market_title_hits = [title for title in MARKET_ROLE_TITLES if title in title_text]
+    role_context_text = f"{job.description} {job.department} {job.team}".lower()
+    role_family_context_hits = [term for term in ROLE_FAMILY_CONTEXT_SIGNALS if term in role_context_text]
+    has_market_title_context_pair = bool(market_title_hits and role_family_context_hits)
     is_high_fit_role_match = has_strong_match and role_family in {"product_management", "product_operations", "technical_product"}
     if has_forward_deployed_title and forward_deployed_has_context:
         is_high_fit_role_match = True
         reasons.append("Forward deployed engineering role aligns with Cody's AI systems, product implementation, and customer-facing technical delivery experience.")
-    if role_family in ai_native_families and capability_boost >= 12:
+    if role_family in ai_native_families and capability_boost >= 12 and (has_market_title_context_pair or role_family not in {"business_systems", "revops_automation", "marketing_ops_automation", "product_operations", "solutions_architecture"}):
         is_high_fit_role_match = True
+    if has_market_title_context_pair and role_family in ai_native_families:
+        is_high_fit_role_match = True
+        reasons.append("Role-family match pairs a realistic market title with AI, automation, workflow, or internal systems context.")
     if has_ai_automation_priority_title and has_ai_automation_context:
         is_high_fit_role_match = True
         reasons.append("AI automation or operations role aligns with Cody's agentic workflow, product operations, and internal systems implementation experience.")
@@ -878,11 +1042,11 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if has_ops_automation_title and has_ai_automation_context and not has_generic_ops_execution_focus:
         is_high_fit_role_match = True
         reasons.append("AI automation or operations role aligns with Cody's agentic workflow, product operations, and internal systems implementation experience.")
-    if has_generic_guardrail_title and not has_ai_automation_context and not has_platform_automation_context:
+    if has_generic_guardrail_title and not has_ai_automation_context and not has_platform_automation_context and not role_family_context_hits:
         is_high_fit_role_match = False
         if title_hits > 0 or keyword_hits > 0:
             red_flags.append("Generic role lacks clear AI, automation, internal tools, workflow systems, product systems, or enterprise automation ownership")
-    if has_generic_ops_execution_focus and not has_ai_automation_context:
+    if has_generic_ops_execution_focus and not has_ai_automation_context and not role_family_context_hits:
         is_high_fit_role_match = False
         red_flags.append("Operations role emphasizes execution/admin work without AI or automation systems ownership")
     if is_high_fit_role_match and not has_location_blocker:
@@ -890,8 +1054,8 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     elif (
         any(term in text for term in NEAR_FIT_TERMS)
         or role_family in {"marketing", "customer_success", "research", "executive"}
-        or (role_family in ai_native_families and capability_boost > 0)
-        or (role_family in preferred_families and role_family not in disliked_families)
+        or (role_family in ai_native_families and capability_boost > 0 and (role_family_context_hits or role_family not in {"business_systems", "revops_automation", "marketing_ops_automation", "product_operations", "solutions_architecture"}))
+        or (role_family in preferred_families and role_family not in disliked_families and not (has_generic_guardrail_title and not role_family_context_hits) and not (role_family in {"product_operations", "business_systems", "revops_automation", "marketing_ops_automation", "solutions_architecture"} and not role_family_context_hits and not any(term in title_text for term in ("technical program manager", "engineering program manager"))))
     ):
         classification = "near_fit"
     else:
@@ -911,6 +1075,11 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         classification = "low_fit"
 
     title_lower = job.title.lower()
+    if has_generic_guardrail_title and not role_family_context_hits and not has_ai_automation_context and not has_platform_automation_context:
+        if any(term in title_lower for term in ("technical program manager", "engineering program manager")):
+            classification = classification
+        else:
+            classification = "low_fit" if any(term in title_lower for term in ("project manager", "program manager", "sales enablement", "technical account manager", "marketing operations manager", "sales operations manager", "customer success manager", "support specialist", "recruiter", "designer")) else classification
     weak_fit_title_terms = ("technical account manager", "product marketing", "marketing operations", "demand generation", "lifecycle marketing", "risk", "grc", "finance", "customer success")
     if any(term in title_lower for term in weak_fit_title_terms):
         red_flags.append("Role is geographically viable but weak functional fit")
@@ -918,7 +1087,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         red_flags.append("Account management role is outside target product path")
     if any(term in title_lower for term in FORWARD_DEPLOYED_DOWNRANK_GUARDRAILS):
         if not (forward_deployed_has_context and (forward_deployed_signal_boost >= 8 or capability_boost >= 6)):
-            classification = "low_fit" if "field service engineer" in title_lower or "it support engineer" in title_lower else "near_fit"
+            classification = "low_fit" if any(term in title_lower for term in ("field service engineer", "it support engineer", "technical account manager")) else "near_fit"
             red_flags.append("Role title matches downrank guardrails without strong AI/product implementation overlap")
     if has_platform_automation_title and not has_platform_automation_context:
         classification = "near_fit" if classification == "high_fit" else classification

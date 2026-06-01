@@ -40,20 +40,24 @@ The Docker image includes PDF export dependencies: `pandoc`, `texlive-latex-base
 
 ## Target role families
 
-The operational workflows use the same scoring profile as the main CLI. Current target families are:
+The operational workflows use the same scoring profile as the main CLI. Because the market uses inconsistent titles for AI automation and implementation work, exact target titles are retained but the scorer now favors broader role-family plus context matches. Current target families are:
 
 - Product Management
 - Forward Deployed Engineering
 - AI Operations
 - AI Automation
-- Workflow Automation
 - AI Transformation
-- Internal Tools Product Management
-- AI Enablement
+- Workflow Automation
+- Business Systems
+- Internal Tools
+- Solutions Architecture / Solutions Engineering
+- AI Implementation
+- RevOps Automation / Revenue Systems
+- Marketing Ops Automation / Marketing Systems
+- Product Operations
 - Platform Automation: ServiceNow, Moveworks, Power Platform, Workato
-- RevOps/Marketing Ops Automation when automation-heavy
 
-Automation-specific and platform-specific roles can appear as high-fit, near-fit, or apply-now candidates only when role viability and geography gates also pass. Generic operations, consulting, support, account-management, campaign execution, CRM hygiene, reporting, sales admin, and lifecycle-marketing roles remain downranked unless the posting clearly includes AI, automation, internal tools, workflow systems, product systems, agentic workflows, or enterprise automation ownership.
+Automation-specific, platform-specific, business-systems, internal-tools, solutions, implementation, RevOps, Marketing Ops, and product-operations roles can appear as high-fit, near-fit, or apply-now candidates only when role viability and geography gates also pass and the posting pairs the title with AI, automation, workflow systems, internal tools, or product-systems context. Generic project/program management, public-sector project management, security program management, operations, consulting, support, account-management, sales enablement, campaign execution, CRM hygiene, reporting, sales admin, and lifecycle-marketing roles remain downranked unless the posting clearly includes AI implementation, automation systems, workflow systems, internal tools, product systems, agentic workflows, or enterprise automation ownership. Priority-company matches are ranking boosts only and do not replace role-family/context or geography guardrails.
 
 ## Run specific workflows
 
