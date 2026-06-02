@@ -137,7 +137,8 @@ def test_prep_next_application_does_not_select_applied_jobs(monkeypatch, capsys)
     assert payload["job_id"] == 2
 
 
-def test_digest_excludes_applied_jobs_from_actionable_sections(monkeypatch, capsys):
+def test_digest_excludes_applied_jobs_from_actionable_sections(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
     monkeypatch.setattr(
         "job_fit_agent.main.get_top_jobs_by_classification",
@@ -310,3 +311,98 @@ def test_unknown_stable_key_status_returns_success_with_warning(tmp_path, monkey
     assert result["warning"] == "Job was not found in local SQLite, but status was recorded by stable key."
     store = json.loads((tmp_path / "data/application_status.json").read_text())
     assert store["greenhouse:unknown:12345"]["url"] is None
+
+
+def test_rejected_stable_key_updates_sqlite_status_store_and_history(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/rejected-exists", "Rejected Exists PM")
+
+    main(["telegram-command", "rejected ashby:acme:rejected-exists Rejected after application, no interview"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    store = json.loads((tmp_path / "data/application_status.json").read_text())
+    record = store["ashby:acme:rejected-exists"]
+    assert result["success"] is True
+    assert result["new_status"] == "rejected"
+    assert result["note"] == "Rejected after application, no interview"
+    assert row is not None
+    assert row["application_status"] == "rejected"
+    assert row["rejected_at"]
+    assert row["application_notes"] == "Rejected after application, no interview"
+    assert record["application_status"] == "rejected"
+    assert record["rejected_at"]
+    assert record["note"] == "Rejected after application, no interview"
+    assert record["status_history"][-1] == {
+        "status": "rejected",
+        "timestamp": record["rejected_at"],
+        "note": "Rejected after application, no interview",
+        "identifier_used": "ashby:acme:rejected-exists",
+    }
+
+
+def test_rejected_stable_key_without_sqlite_job_creates_status_store(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["telegram-command", "reject ashby:elevenlabs:no-sqlite Not moving forward"])
+
+    result = json.loads(capsys.readouterr().out)
+    store = json.loads((tmp_path / "data/application_status.json").read_text())
+    record = store["ashby:elevenlabs:no-sqlite"]
+    assert result["success"] is True
+    assert result["warning"] == "Job was not found in local SQLite, but status was recorded by stable key."
+    assert record["application_status"] == "rejected"
+    assert record["rejected_at"]
+    assert record["company"] == "elevenlabs"
+    assert record["note"] == "Not moving forward"
+    assert record["status_history"][-1]["identifier_used"] == "ashby:elevenlabs:no-sqlite"
+
+
+def test_prep_next_application_excludes_rejected_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    rejected_id = _insert("https://jobs.ashbyhq.com/acme/rejected-prep", "Rejected Prep PM")
+    open_id = _insert("https://jobs.ashbyhq.com/acme/open-after-rejected", "Open After Rejected PM")
+    update_application_tracking(rejected_id, "rejected", rejected_at="2026-05-28T00:00:00+00:00")
+
+    prep_next_application(dry_run=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == open_id
+
+
+def test_rejected_command_lists_rejected_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/list-rejected", "Listed Rejected PM")
+    update_application_tracking(job_id, "rejected", rejected_at="2026-05-28T00:00:00+00:00", application_notes="Not selected.")
+
+    main(["rejected"])
+
+    output = capsys.readouterr().out
+    assert "Listed Rejected PM" in output
+    assert "2026-05-28T00:00:00+00:00" in output
+    assert "Not selected." in output
+
+
+def test_pipeline_command_groups_applied_interviewing_offer(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    applied_id = _insert("https://jobs.ashbyhq.com/acme/pipeline-applied", "Pipeline Applied PM")
+    interviewing_id = _insert("https://jobs.ashbyhq.com/acme/pipeline-interviewing", "Pipeline Interviewing PM")
+    offer_id = _insert("https://jobs.ashbyhq.com/acme/pipeline-offer", "Pipeline Offer PM")
+    update_application_tracking(applied_id, "applied", applied_at="2026-05-28T00:00:00+00:00")
+    update_application_tracking(interviewing_id, "interviewing", interviewing_at="2026-05-29T00:00:00+00:00")
+    update_application_tracking(offer_id, "offer", offer_at="2026-05-30T00:00:00+00:00")
+
+    main(["pipeline"])
+
+    output = capsys.readouterr().out
+    assert "Status: applied" in output
+    assert "Pipeline Applied PM" in output
+    assert "Status: interviewing" in output
+    assert "Pipeline Interviewing PM" in output
+    assert "Status: offer" in output
+    assert "Pipeline Offer PM" in output

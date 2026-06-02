@@ -77,9 +77,21 @@ After Cody submits an application, mark it immediately so it is not recommended 
 ```bash
 docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-applied --job-id <id> --note "Applied through Ashby using generated package."
 docker compose run --rm job-fit-agent python -m job_fit_agent.main applied
+docker compose run --rm job-fit-agent python -m job_fit_agent.main pipeline
 ```
 
-Application decisions are durable in the tracked `data/application_status.json` file keyed by stable job key. The local `data/jobs.sqlite` row id is runtime/local state and may differ across Cody's Mac, Telegram, and GitHub Actions. For Telegram/GitHub Actions, use the stable command from the package whenever possible, for example `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; mobile aliases are convenient shortcuts, but stable keys are safest across machines. After a Telegram status update commits back to GitHub, run `git pull` locally before triage so digest and prep use the latest durable status store.
+Application lifecycle decisions are durable in the tracked `data/application_status.json` file keyed by stable job key. Supported lifecycle statuses are `not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, and `skipped`; each status change appends `status_history` and writes lifecycle timestamps such as `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, and `updated_at`. The local `data/jobs.sqlite` row id is runtime/local state and may differ across Cody's Mac, Telegram, and GitHub Actions. For Telegram/GitHub Actions, use the stable command from the package whenever possible, for example `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; mobile aliases are convenient shortcuts, but stable keys are safest across machines. After a Telegram status update commits back to GitHub, run `git pull` locally before triage so digest and prep use the latest durable status store. Rejected jobs remain tracked for learning and analytics, but are excluded from active application work.
+
+Post-application lifecycle examples:
+
+```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "interviewing ashby:company:external-id Recruiter screen scheduled"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "rejected ashby:company:external-id Rejected after application"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "offer ashby:company:external-id"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "withdrawn ashby:company:external-id Accepted another role"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main rejected
+docker compose run --rm job-fit-agent python -m job_fit_agent.main outcomes
+```
 
 If Cody decides not to apply, mark it skipped with a reason:
 
@@ -89,7 +101,7 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped 
 docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"
 ```
 
-Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. Jobs marked `application_status=applied` or `application_status=skipped` in SQLite or `data/application_status.json` are also excluded from default digest actionable sections, prep-next auto-selection, and daily Telegram recommendations. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
+Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. Jobs marked `application_status=applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, or `saved` in SQLite or `data/application_status.json` are also excluded from default digest actionable sections, prep-next auto-selection, and daily Telegram recommendations. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
 
 Telegram handoff env vars:
 - `TELEGRAM_BOT_TOKEN`
@@ -222,7 +234,15 @@ skip linear-product-manager Not US eligible
 /skip linear-product-manager Not US eligible
 save linear-product-manager
 /save linear-product-manager
+rejected linear-product-manager Rejected after application
+reject linear-product-manager
+interviewing linear-product-manager Recruiter screen scheduled
+interview linear-product-manager
+offer linear-product-manager
+withdrawn linear-product-manager
+withdraw linear-product-manager
 applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+rejected ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2 Rejected after application
 applied https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 applied 19
 ```

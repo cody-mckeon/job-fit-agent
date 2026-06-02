@@ -69,6 +69,30 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
         action = "save"
         job_id_token = parts[1]
         note_parts = parts[2:]
+    elif verb in {"rejected", "/rejected", "reject", "/reject"}:
+        if len(parts) < 2:
+            raise ValueError("Missing job id.")
+        action = "rejected"
+        job_id_token = parts[1]
+        note_parts = parts[2:]
+    elif verb in {"interviewing", "/interviewing", "interview", "/interview"}:
+        if len(parts) < 2:
+            raise ValueError("Missing job id.")
+        action = "interviewing"
+        job_id_token = parts[1]
+        note_parts = parts[2:]
+    elif verb in {"offer", "/offer"}:
+        if len(parts) < 2:
+            raise ValueError("Missing job id.")
+        action = "offer"
+        job_id_token = parts[1]
+        note_parts = parts[2:]
+    elif verb in {"withdrawn", "/withdrawn", "withdraw", "/withdraw"}:
+        if len(parts) < 2:
+            raise ValueError("Missing job id.")
+        action = "withdrawn"
+        job_id_token = parts[1]
+        note_parts = parts[2:]
     else:
         raise ValueError("Unsupported command.")
 

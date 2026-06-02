@@ -268,3 +268,21 @@ def test_job_url_identifier_resolves_job(tmp_path, monkeypatch, capsys):
     row = get_job_by_id(job_id)
     assert result["success"] is True
     assert row is not None and row["application_status"] == "saved"
+
+
+def test_parser_accepts_application_lifecycle_commands():
+    cases = {
+        "rejected 19 Not selected": ("rejected", "Not selected"),
+        "/rejected 19": ("rejected", ""),
+        "reject 19 No fit": ("rejected", "No fit"),
+        "interviewing 19 Recruiter screen": ("interviewing", "Recruiter screen"),
+        "interview 19": ("interviewing", ""),
+        "offer 19 Verbal offer": ("offer", "Verbal offer"),
+        "withdrawn 19 Accepted another role": ("withdrawn", "Accepted another role"),
+        "withdraw 19": ("withdrawn", ""),
+    }
+    for text, (action, note) in cases.items():
+        parsed = parse_telegram_command(text)
+        assert parsed.action == action
+        assert parsed.job_id == 19
+        assert parsed.note == note
