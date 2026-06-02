@@ -5,13 +5,13 @@ Las Vegas / Henderson Metro
 mckeonc0827@gmail.com  
 https://github.com/cody-mckeon  
 
-## Technical Product Manager | AI Workflows | Product Systems | Agentic Operations
+## Technical Product Builder | AI Workflow Systems | Product Analytics | Internal Tools
 
 ## Professional Summary
 
-AI-native product builder focused on designing and shipping digital products powered by analytics instrumentation, API-connected systems, workflow automation, and agentic operations. Blends product strategy with hands-on technical execution to turn ambiguous operational needs into usable, measurable product workflows.
+Technical product builder focused on AI-enabled workflow systems, internal tools, product analytics, and agentic operations. Blends product strategy with hands-on technical execution to turn ambiguous business needs into usable internal tools, customer-facing solution workflows, and measurable product systems.
 
-Experienced building and orchestrating AI-heavy product systems across Python, OpenClaw, GPT-5.5, GitHub Actions, Telegram, and analytics platforms, with a strong emphasis on practical delivery, iteration speed, and cross-functional execution.
+Experienced building and orchestrating AI-assisted product systems across Python, OpenClaw, GPT-5.5, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
 
 ## Core Skills
 
@@ -51,10 +51,11 @@ Experienced building and orchestrating AI-heavy product systems across Python, O
 **Resorts World Las Vegas**  
 Feb 2026 – Present
 
-- Drive measurement strategy using analytics and behavioral tooling including Pendo, GA4, and GTM, defining event tracking, KPI frameworks, and instrumentation requirements to support product decisions.
-- Manage privacy and consent platform configuration using OneTrust, Google Consent Mode, and GTM as part of digital product governance, balancing compliance requirements, data collection, and business needs.
-- Prototype AI-enabled workflow automation and agentic request-routing concepts to improve scalability, reduce manual friction, and explore operational AI use cases.
-- Contributed to performance optimization initiatives, including diagnosing third-party script impact on booking flow performance and improving technical conditions affecting conversion.
+- Built and tested AI-assisted product/design workflow concepts to improve digital experience planning, component reuse, and recommendation quality.
+- Created structured workflows for current-state analysis, component inventory, recommendation generation, concept exploration, and concept evaluation.
+- Partnered across marketing, web, analytics, and vendor teams to translate ambiguous business requests into trackable requirements and implementation-ready digital work.
+- Defined analytics instrumentation and event tracking frameworks using Pendo, GA4, and GTM to connect product decisions to user behavior.
+- Managed privacy and consent platform configuration using OneTrust, Google Consent Mode, and GTM as part of digital product governance without letting governance work overpower product workflow outcomes.
 
 ### Technical Business Analyst / Project Manager  
 **Lake Havasu City**  
@@ -78,6 +79,14 @@ Dec 2018 – Jul 2023
 2014 – 2018
 
 ## Projects
+
+### AI Product Design Operating System  
+**Python, Markdown Agents, Figma, Product Analytics, Design Systems, Workflow Automation, Evaluation Frameworks**
+
+- Built a modular AI workflow system that decomposes ambiguous product and design problems into current-state analysis, component inventory, recommendations, concept generation, and concept evaluation.
+- Designed specialized agents — Current State Agent, Component Inventory Agent, Recommendation Agent, Concept Generation Agent, and Concept Evaluation Agent — to translate business goals, product constraints, reusable components, and analytics context into actionable product recommendations.
+- Created a repeatable operating model for evaluating multiple solution paths before implementation, improving stakeholder clarity and reducing design/product rework.
+- Structured the system to support better handoff between strategy, UX, analytics, and implementation.
 
 ### Job Fit Agent  
 **Python, SQLite, GitHub Actions, Telegram Bot API, Ashby, Greenhouse, pytest**

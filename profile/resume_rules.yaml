@@ -11,8 +11,9 @@ rules:
   - It is acceptable to change the resume headline for a specific role.
   - It is acceptable to rewrite the professional summary for a specific role.
   - It is acceptable to reorder skills and tools based on job relevance.
-  - It is acceptable to swap project emphasis between Job Fit Agent and RWLV Priority Governor Agent.
+  - It is acceptable to swap project emphasis among AI Product Design Operating System, Job Fit Agent, and RWLV Priority Governor Agent.
   - Do not overclaim software engineering depth.
   - Do not imply the RWLV Priority Governor Agent has full organizational adoption unless stated by Cody.
   - Do not imply the Job Fit Agent is a commercial product unless stated by Cody.
+  - Prefer AI-enabled workflow systems language over buzzword-heavy AI-native phrasing.
   - Keep the tailored resume concise and recruiter-readable.

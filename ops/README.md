@@ -201,6 +201,8 @@ Daily scheduled flow includes Telegram package summary handoff:
 - `python -m job_fit_agent.main prep-next-application --skip-browser --notify-telegram`
 - Uploads generated `applications/` package as a GitHub Actions artifact (`job-fit-application-package-<run_id>`, retained 14 days)
 
+Application prep uses role-family project selection for generated resume strategy, draft, cover letter, and recruiter note. Enterprise solutions, forward deployed, AI transformation, workflow automation, and internal tools roles prioritize AI Product Design Operating System, Job Fit Agent, and RWLV Priority Governor Agent; product manager roles prioritize AI Product Design Operating System, RWLV Priority Governor Agent, and Job Fit Agent; analytics/product systems roles prioritize RWLV Priority Governor Agent, AI Product Design Operating System, and Job Fit Agent. Summary copy should use concrete AI-enabled workflow systems language rather than buzzword-heavy AI-native defaults.
+
 The separate **Job Status Command** workflow persists Telegram status commands by committing `data/application_status.json` back to `main` with `Update application status` after a successful command. It intentionally does not require `data/jobs.sqlite` changes; the SQLite database remains local/runtime job cache state.
 
 Scheduled GitHub Actions now installs `pandoc` plus LaTeX dependencies (`texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`) and attempts resume PDF export before packaging. `setspace.sty` is provided by `texlive-latex-recommended`. When export succeeds, the PDF is included in both the Telegram zip and the GitHub artifact; when export fails, the workflow continues and `submit_resume.md` remains the manual fallback.

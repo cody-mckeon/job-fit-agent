@@ -1781,7 +1781,7 @@ PROFILE_CONTEXT_PATH = Path("profile/profile_context.yaml")
 PROFILE_BASE_RESUME_PATH = Path("profile/base_resume.md")
 PROFILE_RESUME_RULES_PATH = Path("profile/resume_rules.yaml")
 PROFILE_DEFAULT_CONTEXT = {
-    "target_positioning": "AI-native product builder/operator",
+    "target_positioning": "technical product builder focused on AI-enabled workflow systems",
     "strengths": [
         "workflow automation",
         "product analytics",
@@ -1855,41 +1855,160 @@ def _load_resume_rules() -> list[str]:
 
 
 
+def _role_text(job_title: str, role_family: str, description: str) -> str:
+    return f"{job_title} {role_family} {description}".lower()
+
+
+def _matches_any(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term in text for term in terms)
+
+
+SOLUTIONS_TRANSFORMATION_TERMS = (
+    "enterprise solutions engineer",
+    "solutions engineer",
+    "solution engineer",
+    "enterprise solutions consultant",
+    "ai solutions consultant",
+    "ai solutions engineer",
+    "forward deployed engineer",
+    "forward-deployed engineer",
+    "forward deployed",
+    "ai transformation",
+    "ai operations",
+    "workflow automation",
+    "internal tools",
+    "implementation",
+    "technical discovery",
+    "customer-facing",
+)
+
+
+def _is_solutions_or_transformation_role(job_title: str, role_family: str, description: str) -> bool:
+    text = _role_text(job_title, role_family, description)
+    return _matches_any(text, SOLUTIONS_TRANSFORMATION_TERMS)
+
+
+def _is_product_management_role(job_title: str, role_family: str, description: str) -> bool:
+    text = _role_text(job_title, role_family, description)
+    return _matches_any(text, ("technical product manager", "product manager", "ai product manager", "product management", "product lead"))
+
+
+def _is_analytics_product_systems_role(job_title: str, role_family: str, description: str) -> bool:
+    text = _role_text(job_title, role_family, description)
+    return _matches_any(
+        text,
+        (
+            "analytics",
+            "product systems",
+            "measurement",
+            "instrumentation",
+            "experimentation",
+            "insights",
+            "event tracking",
+            "product operations",
+        ),
+    )
+
+
 def _select_projects_for_role(job_title: str, role_family: str, description: str) -> list[str]:
-    text = f"{job_title} {role_family} {description}".lower()
-    ai_terms = ("ai", "agent", "llm", "workflow", "automation", "builder")
-    analytics_terms = ("analytics", "measurement", "instrumentation", "experimentation", "insights")
+    text = _role_text(job_title, role_family, description)
+    title_family_text = _role_text(job_title, role_family, "")
     hospitality_terms = ("hospitality", "resort", "digital experience", "guest", "api", "integration")
 
-    if any(term in text for term in ai_terms):
+    if _matches_any(title_family_text, SOLUTIONS_TRANSFORMATION_TERMS):
         return [
+            "AI Product Design Operating System",
             "Job Fit Agent",
             "RWLV Priority Governor Agent",
-            "Web Product Measurement Framework",
         ]
-    if any(term in text for term in analytics_terms):
+    if _is_analytics_product_systems_role(job_title, role_family, ""):
         return [
-            "Web Product Measurement Framework",
-            "Resorts World analytics/instrumentation work",
+            "RWLV Priority Governor Agent",
+            "AI Product Design Operating System",
             "Job Fit Agent",
+        ]
+    if _is_product_management_role(job_title, role_family, ""):
+        return [
+            "AI Product Design Operating System",
+            "RWLV Priority Governor Agent",
+            "Job Fit Agent",
+        ]
+    if _is_solutions_or_transformation_role(job_title, role_family, description):
+        return [
+            "AI Product Design Operating System",
+            "Job Fit Agent",
+            "RWLV Priority Governor Agent",
+        ]
+    if _is_analytics_product_systems_role(job_title, role_family, description):
+        return [
+            "RWLV Priority Governor Agent",
+            "AI Product Design Operating System",
+            "Job Fit Agent",
+        ]
+    if _matches_any(text, ("ai", "agent", "llm", "workflow", "automation", "builder")):
+        return [
+            "AI Product Design Operating System",
+            "Job Fit Agent",
+            "RWLV Priority Governor Agent",
         ]
     if any(term in text for term in hospitality_terms):
         return [
+            "AI Product Design Operating System",
             "Resorts World digital experience work",
             "Hospitality API Integration Exploration",
-            "Web Product Measurement Framework",
         ]
     return [
+        "AI Product Design Operating System",
         "Job Fit Agent",
         "RWLV Priority Governor Agent",
-        "Web Product Measurement Framework",
+    ]
+
+
+def _headline_for_role(job_title: str, role_family: str, description: str) -> str:
+    if _is_solutions_or_transformation_role(job_title, role_family, description):
+        return "Technical Product Builder | AI Workflow Systems | Product Analytics | Solutions Engineering"
+    if _is_analytics_product_systems_role(job_title, role_family, description):
+        return "Product Systems Builder | Product Analytics | AI Workflow Systems | Internal Tools"
+    return "Technical Product Manager | AI Workflows | Product Systems | Agentic Operations"
+
+
+def _summary_positioning_for_role(job_title: str, role_family: str, description: str) -> str:
+    if _is_solutions_or_transformation_role(job_title, role_family, description):
+        return (
+            "Technical product and AI workflow builder focused on translating ambiguous business needs "
+            "into usable internal tools, customer-facing solution workflows, and measurable product systems."
+        )
+    return (
+        "Technical product builder focused on AI-enabled workflow systems, internal tools, "
+        "product analytics, and agentic operations."
+    )
+
+
+def _role_strategy_emphasis(job_title: str, role_family: str, description: str) -> list[str]:
+    if _is_solutions_or_transformation_role(job_title, role_family, description):
+        return [
+            "customer-facing technical problem solving",
+            "AI workflow implementation",
+            "product analytics and instrumentation",
+            "translating ambiguous requirements into usable workflows",
+            "API-connected systems and internal tools",
+            "stakeholder communication and technical discovery",
+            "implementation readiness and measurable product outcomes",
+        ]
+    return [
+        "workflow automation",
+        "product analytics",
+        "product systems",
+        "AI agents",
+        "cross-functional execution",
     ]
 
 
 def _project_bullet(project_name: str) -> str:
     bullets = {
-        "Job Fit Agent": "Job Fit Agent: role discovery, scoring, and prep workflows that support repeatable application operations.",
-        "RWLV Priority Governor Agent": "RWLV Priority Governor Agent: workflow automation for intake prioritization and execution rhythm management.",
+        "AI Product Design Operating System": "AI Product Design Operating System: modular AI-assisted product design workflow using Current State, Component Inventory, Recommendation, Concept Generation, and Concept Evaluation agents to turn product context into structured recommendations and evaluable concept directions.",
+        "Job Fit Agent": "Job Fit Agent: role discovery, scoring, status tracking, GitHub Actions scheduling, and Telegram notifications that support repeatable application operations.",
+        "RWLV Priority Governor Agent": "RWLV Priority Governor Agent: internal operational AI enablement for intake triage, prioritization, and execution rhythm management.",
         "Web Product Measurement Framework": "Web Product Measurement Framework: event taxonomy, instrumentation standards, and analytics QA for decision-ready reporting.",
         "Hospitality API Integration Exploration": "Hospitality API Integration Exploration: scoped integration discovery for digital experience improvements across hospitality touchpoints.",
         "Resorts World analytics/instrumentation work": "Resorts World analytics/instrumentation work: analytics implementation and instrumentation quality improvements for product measurement.",
@@ -1903,11 +2022,35 @@ def _build_cover_letter(job: dict[str, Any], description: str) -> str:
     company_display_names = {
         "turgon-ai": "Turgon AI",
         "gohighlevel": "GoHighLevel",
+        "elevenlabs": "ElevenLabs",
     }
     company = company_display_names.get(raw_company.lower(), raw_company.title())
     title = (safe_row_value(job, "title", "Role") or "Role").strip()
+    role_family = (safe_row_value(job, "role_family", "") or "").strip()
     jd_line = "Based on the role description, the responsibilities appear to value clear ownership, strong delivery habits, and measurable product outcomes."
     jd_context = "Based on the role description," if description else "Based on the available role details,"
+    if _is_solutions_or_transformation_role(title, role_family, description):
+        fit_paragraph = (
+            "I fit this role through hands-on work translating ambiguous business needs into usable AI workflow systems, internal tools, "
+            "API-connected operating workflows, and analytics-backed implementation plans. I am comfortable with customer-facing technical discovery, "
+            "stakeholder communication, implementation readiness, and keeping solution design grounded in measurable product outcomes."
+        )
+        project_paragraph = (
+            "Relevant project work includes AI Product Design Operating System as evidence of building agentic product workflows across current-state analysis, "
+            "component inventory, recommendation, concept generation, and concept evaluation; Job Fit Agent as evidence of practical automation with GitHub Actions, "
+            "Telegram, scoring, and status tracking; and RWLV Priority Governor Agent as evidence of internal operational AI enablement and triage."
+        )
+    else:
+        fit_paragraph = (
+            "I fit this role through hands-on work across product systems, workflow automation, analytics instrumentation, AI workflows, digital experience, "
+            "and cross-functional execution. I work closely with partners across product, engineering, operations, and analytics to define scope, ship improvements, "
+            "and keep execution grounded in clear signals from users and internal teams."
+        )
+        project_paragraph = (
+            "Relevant project work includes AI Product Design Operating System for agentic product/design workflows, Job Fit Agent for practical workflow automation, "
+            "and RWLV Priority Governor Agent for internal operational AI enablement and prioritization. These projects show how I approach repeatable execution, "
+            "instrumentation quality, and practical AI-assisted workflows without over-claiming scope."
+        )
     return f"""Cody McKeon
 Las Vegas / Henderson Metro
 760-669-9343
@@ -1917,9 +2060,9 @@ Dear {company} Hiring Team,
 
 I am applying for the {title} role at {company}. I am interested in the opportunity because it aligns with the way I like to work: building practical systems that improve execution quality and speed. {jd_context} this role appears to value clear ownership, strong delivery habits, and measurable product outcomes. {jd_line}
 
-I fit this role through hands-on work across product systems, workflow automation, analytics instrumentation, AI workflows, digital experience, and cross-functional execution. I work closely with partners across product, engineering, operations, and analytics to define scope, ship improvements, and keep execution grounded in clear signals from users and internal teams.
+{fit_paragraph}
 
-Relevant project work includes Job Fit Agent for AI, product, and workflow-focused roles, RWLV Priority Governor Agent for agentic operations and workflow automation use cases, and the Web Product Measurement Framework for analytics and product measurement programs. These projects show how I approach repeatable execution, instrumentation quality, and practical AI-assisted workflows without over-claiming scope.
+{project_paragraph}
 
 Thank you for your consideration. I would welcome the chance to discuss how my background can support your team in this role.
 
@@ -1990,22 +2133,21 @@ def prep_application(job_id: int) -> None:
 """
 
     prioritized_projects = _select_projects_for_role(job["title"], role_family, description)
-    top_projects = prioritized_projects[:2]
+    top_projects = prioritized_projects[:3]
+    recommended_headline = _headline_for_role(job["title"], role_family, description)
+    summary_positioning = _summary_positioning_for_role(job["title"], role_family, description)
+    strategy_emphasis = _role_strategy_emphasis(job["title"], role_family, description)
 
     resume_strategy = f"""# Resume Strategy
 
 ## Recommended headline
-- {job['title']} | AI-native Product Builder and Workflow Automation Operator
+- {recommended_headline}
 
 ## Recommended summary angle
-- Position Cody as a product-focused builder/operator who uses AI-assisted workflows, product systems, and analytics discipline to execute.
+- {summary_positioning}
 
 ## Top skills to emphasize
-- workflow automation
-- product analytics
-- product systems
-- AI agents
-- cross-functional execution
+{chr(10).join(f'- {skill}' for skill in strategy_emphasis)}
 
 ## Top projects to include
 {chr(10).join(f'- {p}' for p in prioritized_projects)}
@@ -2030,10 +2172,10 @@ def prep_application(job_id: int) -> None:
     tailored_resume = f"""# Tailored Resume Draft
 
 ## Positioning
-AI-native product builder/operator focused on {top_strengths}.
+{summary_positioning}
 
 ## Tailored Summary
-Aligned to {job['company']}'s {job['title']} role by emphasizing directly relevant work from the base resume only.
+Aligned to {job['company']}'s {job['title']} role by emphasizing {top_strengths}, role-relevant project work, and verified experience from the base resume only.
 
 ## Experience Highlights
 {base_resume}
@@ -2042,9 +2184,9 @@ Aligned to {job['company']}'s {job['title']} role by emphasizing directly releva
 {project_lines}
 
 ## Targeted Value for {job['company']} - {job['title']}
-- Build repeatable AI-assisted operating workflows for product and operations teams.
-- Improve product instrumentation and analytics quality to support roadmap decisions.
-- Create practical agentic workflows that reduce manual process overhead.
+- Translate ambiguous requirements into usable AI-enabled workflows, internal tools, and implementation-ready plans.
+- Improve product instrumentation and analytics quality to connect decisions to user behavior.
+- Create practical agentic workflows that reduce manual process overhead and clarify stakeholder tradeoffs.
 
 ## Notes
 - Do not add metrics unless validated from source records.
@@ -2055,9 +2197,9 @@ Aligned to {job['company']}'s {job['title']} role by emphasizing directly releva
 """
 
     recruiter_note = f"""Hi, I am interested in the {job['title']} role at {job['company']}.
-I focus on AI-native product building with workflow automation, product systems, and product analytics.
-In my current work, I lead web analytics and product systems initiatives and build agentic workflows for operational execution.
-I also developed projects like job-fit-agent and OpenClaw automation that align with practical product operations outcomes.
+I focus on AI-enabled workflow systems, internal tools, product systems, and product analytics.
+Relevant projects include AI Product Design Operating System for agentic product workflows, Job Fit Agent for GitHub Actions/Telegram automation with scoring and status tracking, and RWLV Priority Governor Agent for internal operational AI enablement and triage.
+In my current work, I translate ambiguous requests into trackable requirements, analytics instrumentation, and implementation-ready digital work with marketing, web, analytics, and vendor partners.
 If helpful, I can share a concise summary of relevant work and why it maps to this role.
 """
 
@@ -2100,7 +2242,7 @@ Apply now only if key requirements and location constraints are confirmed; other
     (app_dir / "fit_summary.md").write_text(fit_summary, encoding="utf-8")
     (app_dir / "resume_strategy.md").write_text(resume_strategy, encoding="utf-8")
     (app_dir / "resume_draft.md").write_text(tailored_resume, encoding="utf-8")
-    (app_dir / "submit_resume.md").write_text(_normalize_submit_resume(base_resume), encoding="utf-8")
+    (app_dir / "submit_resume.md").write_text(_normalize_submit_resume(base_resume, headline=recommended_headline), encoding="utf-8")
     (app_dir / "recruiter_note.md").write_text(recruiter_note, encoding="utf-8")
     (app_dir / "answer_bank.md").write_text(answer_bank, encoding="utf-8")
     (app_dir / "risk_flags.md").write_text(risk_flags, encoding="utf-8")
@@ -2521,8 +2663,8 @@ def _build_application_answer(question: str, company: str) -> tuple[str, str]:
         )
         return answer, notes
     answer = (
-        f"For this question at {_display_company_name(company)}, I would use concrete examples from three projects: Job Fit Agent (AI-assisted role discovery and application drafting), "
-        "RWLV Priority Governor Agent (agentic prioritization workflow), and a Web Product Measurement Framework (instrumentation and product health evaluation). I would tailor the example to the prompt, "
+        f"For this question at {_display_company_name(company)}, I would use concrete examples from three projects: AI Product Design Operating System (agentic product/design workflow), "
+        "Job Fit Agent (AI-assisted role discovery and application drafting), and RWLV Priority Governor Agent (internal operational AI enablement and prioritization). I would tailor the example to the prompt, "
         "explain the user/problem context, the implementation approach, and how outcomes were reviewed with a human-in-the-loop before any external use."
     )
     notes = (
@@ -2532,23 +2674,28 @@ def _build_application_answer(question: str, company: str) -> tuple[str, str]:
 
 
 
-RESUME_SUBMIT_HEADER = """# Cody McKeon
+DEFAULT_RESUME_HEADLINE = "Technical Product Manager | AI Workflows | Product Systems | Agentic Operations"
+
+
+def _resume_submit_header(headline: str = DEFAULT_RESUME_HEADLINE) -> str:
+    return f"""# Cody McKeon
 
 Las Vegas / Henderson Metro  
 760-669-9343 | mckeonc0827@gmail.com | https://github.com/cody-mckeon  
 
-**Technical Product Manager | AI Workflows | Product Systems | Agentic Operations**
+**{headline}**
 """
 
 
-def _ensure_submit_resume_header(markdown_text: str) -> str:
+def _ensure_submit_resume_header(markdown_text: str, headline: str = DEFAULT_RESUME_HEADLINE) -> str:
     body = markdown_text.replace("\r\n", "\n")
     body_without_h1 = re.sub(r"^\s*#\s+.+\n+", "", body, count=1, flags=re.MULTILINE)
     body_without_contact = re.sub(r"^\s*Las Vegas / Henderson Metro\s*\n?", "", body_without_h1, count=1, flags=re.MULTILINE)
     body_without_contact = re.sub(r"^\s*760-669-9343\s*\|\s*mckeonc0827@gmail\.com\s*\|\s*https://github\.com/cody-mckeon\s*\n?", "", body_without_contact, count=1, flags=re.MULTILINE)
-    body_without_headline = re.sub(r"^\s*\*\*Technical Product Manager \| AI Workflows \| Product Systems \| Agentic Operations\*\*\s*\n?", "", body_without_contact, count=1, flags=re.MULTILINE)
+    body_without_headline = re.sub(r"^\s*\*\*.*?\|.*?\*\*\s*\n?", "", body_without_contact, count=1, flags=re.MULTILINE)
     body_without_headline = body_without_headline.lstrip("\n")
-    return f"{RESUME_SUBMIT_HEADER}\n{body_without_headline.lstrip()}" if body_without_headline.strip() else f"{RESUME_SUBMIT_HEADER}\n"
+    header = _resume_submit_header(headline)
+    return f"{header}\n{body_without_headline.lstrip()}" if body_without_headline.strip() else f"{header}\n"
 
 
 def _sanitize_resume_name_component(value: str) -> str:
@@ -2567,7 +2714,7 @@ def section(title: str, body: str) -> str:
     return f"\n## {title}\n\n{body.strip()}\n"
 
 
-def _normalize_submit_resume(markdown_text: str) -> str:
+def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_HEADLINE) -> str:
     normalized = markdown_text.replace("\r\n", "\n")
     section_order = [
         "Professional Summary",
@@ -2660,7 +2807,7 @@ def _normalize_submit_resume(markdown_text: str) -> str:
 
     if normalized_sections:
         return _ensure_submit_resume_header("".join(normalized_sections).lstrip("\n"))
-    return _ensure_submit_resume_header(normalized_text)
+    return _ensure_submit_resume_header(normalized_text, headline=headline)
 
 
 def export_resume_pdf(job_id: int) -> None:

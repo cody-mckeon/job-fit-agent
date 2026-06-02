@@ -256,6 +256,8 @@ This creates `applications/<company>_<role_slug>_<job_id>/` with:
 - `answer_bank.md`
 - `risk_flags.md`
 
+Resume strategy prioritizes three projects when space allows: AI Product Design Operating System, Job Fit Agent, and RWLV Priority Governor Agent. Enterprise Solutions Engineer, Solutions Engineer, Forward Deployed Engineer, AI Transformation, workflow automation, and internal tools roles lead with AI Product Design Operating System, then Job Fit Agent, then RWLV Priority Governor Agent. Product Manager roles lead with AI Product Design Operating System, then RWLV Priority Governor Agent, then Job Fit Agent. Analytics/product systems roles lead with RWLV Priority Governor Agent, then AI Product Design Operating System, then Job Fit Agent. Generated summaries prefer specific "AI-enabled workflow systems" language instead of defaulting to "AI-native" phrasing.
+
 Extract application questions from the job URL:
 
 ```bash
