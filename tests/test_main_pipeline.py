@@ -7,7 +7,7 @@ import yaml
 
 from job_fit_agent.repository import UpsertResult
 from job_fit_agent.config import AppConfig, load_target_profile
-from job_fit_agent.main import _is_actionable_real_job_url, _normalize_submit_resume, collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
+from job_fit_agent.main import _is_actionable_real_job_url, _normalize_submit_resume, _select_projects_for_role, collect_ranked_jobs, collect_scored_jobs, group_jobs_by_classification, main, location_audit
 from job_fit_agent.repository import initialize
 from job_fit_agent.models import JobPosting
 
@@ -812,7 +812,8 @@ def test_prep_application_tailored_resume_uses_base_resume_and_preserves_entitie
     assert "Walmart — Product Ops — 2021-2023" in resume_text
     assert "Placeholder Company" not in resume_text
     assert "## Positioning" in resume_text
-    assert "AI-native product builder/operator" in resume_text
+    assert "Technical product builder focused on AI-enabled workflow systems" in resume_text
+    assert "AI-native" not in resume_text
     assert "[insert metric if available]" not in resume_text
 
 
@@ -858,6 +859,110 @@ def test_prep_application_changes_headline_and_prioritizes_ai_projects(monkeypat
     assert "Job Fit Agent" in resume_text
     assert "RWLV Priority Governor Agent" in resume_text
 
+
+
+def _prep_job(title: str, company: str = "ElevenLabs", role_family: str = "", notes: str = "") -> dict:
+    return {
+        "id": 88,
+        "title": title,
+        "company": company,
+        "source": "ashby",
+        "url": "https://example.com/job/88",
+        "score": 92,
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "location_raw": "Remote US",
+        "location": "Remote US",
+        "geographic_eligibility": "eligible",
+        "reasons": '["Strong alignment"]',
+        "red_flags": "[]",
+        "viability_reasons": '["role aligned"]',
+        "role_family": role_family,
+        "status": "new",
+        "notes": notes,
+    }
+
+
+def test_role_family_project_ordering_rules():
+    assert _select_projects_for_role(
+        "Enterprise Solutions Engineer - North America",
+        "solutions_engineering",
+        "customer-facing AI workflow implementation and internal tools",
+    )[:3] == ["AI Product Design Operating System", "Job Fit Agent", "RWLV Priority Governor Agent"]
+    assert _select_projects_for_role("Forward Deployed Engineer", "", "AI implementation")[:3] == [
+        "AI Product Design Operating System",
+        "Job Fit Agent",
+        "RWLV Priority Governor Agent",
+    ]
+    assert _select_projects_for_role("AI Transformation Lead", "", "workflow automation")[:3] == [
+        "AI Product Design Operating System",
+        "Job Fit Agent",
+        "RWLV Priority Governor Agent",
+    ]
+    assert _select_projects_for_role("Product Manager", "", "roadmap and agentic workflows")[:3] == [
+        "AI Product Design Operating System",
+        "RWLV Priority Governor Agent",
+        "Job Fit Agent",
+    ]
+    assert _select_projects_for_role("Product Systems Analytics Manager", "", "instrumentation and product systems")[:3] == [
+        "RWLV Priority Governor Agent",
+        "AI Product Design Operating System",
+        "Job Fit Agent",
+    ]
+
+
+def test_enterprise_solutions_engineer_resume_includes_ai_product_design_and_avoids_ai_native(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "profile_context.yaml").write_text("strengths:\n  - workflow automation\n  - product analytics\n", encoding="utf-8")
+    (profile_dir / "resume_rules.yaml").write_text("rules:\n  - Preserve company names\n", encoding="utf-8")
+    (profile_dir / "base_resume.md").write_text("# Cody McKeon\n\n## Professional Summary\nBuilder summary.\n", encoding="utf-8")
+    job = _prep_job(
+        "Enterprise Solutions Engineer - North America",
+        role_family="solutions_engineering",
+        notes="customer-facing technical discovery, AI workflow implementation, APIs, internal tools, and product analytics",
+    )
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "88"])
+
+    app_dir = tmp_path / "applications" / "elevenlabs_enterprise_solutions_engineer_north_america_88"
+    resume_text = (app_dir / "resume_draft.md").read_text(encoding="utf-8")
+    strategy_text = (app_dir / "resume_strategy.md").read_text(encoding="utf-8")
+    cover_text = (app_dir / "cover_letter.md").read_text(encoding="utf-8")
+    recruiter_text = (app_dir / "recruiter_note.md").read_text(encoding="utf-8")
+    assert "AI Product Design Operating System" in resume_text
+    assert "Current State" in resume_text
+    assert "Job Fit Agent" in resume_text
+    assert "RWLV Priority Governor Agent" in resume_text
+    assert "AI-native" not in resume_text
+    assert "Technical product and AI workflow builder" in resume_text
+    assert "Technical Product Builder | AI Workflow Systems | Product Analytics | Solutions Engineering" in strategy_text
+    assert "customer-facing technical problem solving" in strategy_text
+    assert "AI Product Design Operating System" in cover_text
+    assert "GitHub Actions" in cover_text
+    assert "AI Product Design Operating System" in recruiter_text
+
+
+def test_generated_summary_avoids_buzzword_heavy_phrasing_for_product_manager(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "base_resume.md").write_text("- Acme — PM — 2020-2024\n", encoding="utf-8")
+    job = _prep_job("Product Manager", company="Acme", notes="automation and agentic workflows")
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "88"])
+
+    resume_text = (tmp_path / "applications" / "acme_product_manager_88" / "resume_draft.md").read_text(encoding="utf-8")
+    assert "AI Product Design Operating System" in resume_text
+    assert "Job Fit Agent" in resume_text
+    assert "RWLV Priority Governor Agent" in resume_text
+    assert "Technical product builder focused on AI-enabled workflow systems" in resume_text
+    assert "AI-native" not in resume_text
 
 def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)

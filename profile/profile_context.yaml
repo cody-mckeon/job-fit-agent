@@ -1,8 +1,8 @@
-target_positioning: AI-native product builder/operator
+target_positioning: technical product builder focused on AI-enabled workflow systems
 
 positioning_variants:
   ai_product_builder:
-    headline: "AI-Native Product Builder | Workflow Automation, Product Systems & Agentic Operations"
+    headline: "Technical Product Builder | AI Workflow Systems, Product Analytics & Internal Tools"
   technical_product_manager:
     headline: "Technical Product Manager | AI Workflows, Product Analytics & Digital Experience"
   product_systems_operator:
@@ -25,6 +25,32 @@ preferred_themes:
   - experimentation and measurement
 
 current_projects:
+  ai_product_design_operating_system:
+    name: "AI Product Design Operating System"
+    description: "Modular AI-assisted product design workflow that turns product context into structured design recommendations and evaluable concept directions."
+    technologies:
+      - Python
+      - Markdown Agents
+      - Figma
+      - Product Analytics
+      - Design Systems
+      - Workflow Automation
+      - Evaluation Frameworks
+    agents:
+      - Current State Agent
+      - Component Inventory Agent
+      - Recommendation Agent
+      - Concept Generation Agent
+      - Concept Evaluation Agent
+    themes:
+      - AI-enabled product design
+      - current-state analysis
+      - component inventory
+      - recommendation systems
+      - concept generation
+      - concept evaluation
+      - stakeholder handoff
+
   job_fit_agent:
     name: "Job Fit Agent"
     description: "Python-based job discovery and career intelligence agent that collects roles from Ashby and Greenhouse, scores role fit, evaluates geographic/seniority viability, stores results in SQLite, and sends Telegram notifications through GitHub Actions."
@@ -93,3 +119,4 @@ resume_tailoring_permissions:
     - specific
     - product-oriented
     - AI-forward but not hype-driven
+    - avoid defaulting to AI-native phrasing
