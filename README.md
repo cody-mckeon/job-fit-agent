@@ -51,6 +51,15 @@ python -m job_fit_agent.main learn-url "https://jobs.lever.co/ramp/abc123"
 This command parses the source/company from the URL, fetches that company board, scores all jobs, persists them to SQLite, and adds the company to `config/discovery_queue.yaml`.
 `discovery_queue.yaml` is for discovered companies not yet promoted to the permanent `config/company_watchlist.yaml`.
 
+When a specific job exists online but is missing locally, use `prep-url` to fetch that direct job page, insert/update the SQLite record, score it, and generate an application package in one step. This is especially useful for Ashby boards where the public API collector returns `403` but the direct job page is available:
+
+```bash
+python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa"
+python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa" --force --skip-browser --skip-pdf --notify-telegram --debug
+```
+
+`prep-url` currently supports Ashby direct job URLs (`https://jobs.ashbyhq.com/<company>/<job_id>`). It does not prepare ineligible or review jobs by default; add `--force` only when Cody intentionally wants to prepare anyway after reviewing the warnings.
+
 Promote a discovered company to the daily monitored watchlist:
 
 ```bash
@@ -245,6 +254,12 @@ Prepare an application package for a specific saved job:
 python -m job_fit_agent.main prep-application <job_id>
 # example
 python -m job_fit_agent.main prep-application 8
+```
+
+If the job has not been collected into `data/jobs.sqlite` yet, prepare from the direct Ashby job URL instead:
+
+```bash
+python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa"
 ```
 
 This creates `applications/<company>_<role_slug>_<job_id>/` with:

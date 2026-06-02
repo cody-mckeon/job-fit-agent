@@ -72,6 +72,14 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-app
 
 `unapplied-high-fit` shows eligible high-fit roles first and geography-review roles in a separate section. Add `--eligible-only`, `--include-ineligible`, `--limit <n>`, or `--json` when triaging from automation.
 
+If a job exists online but is missing from local SQLite, prepare directly from the Ashby job page with `prep-url`. This path is useful when an Ashby board API collector returns `403` but the direct posting still renders:
+
+```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa" --notify-telegram
+```
+
+`prep-url` inserts or updates the job, scores it, generates the application package, exports the resume PDF unless `--skip-pdf` is passed, and zips the package when the normal package flow succeeds. By default it blocks geography-review, geography-ineligible, and otherwise non-actionable jobs; use `--force` only when Cody intentionally wants the package despite warnings.
+
 After Cody submits an application, mark it immediately so it is not recommended again:
 
 ```bash
