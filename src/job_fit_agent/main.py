@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import contextlib
+import io
 import json
 import logging
 import os
@@ -25,6 +27,7 @@ from job_fit_agent.collectors.ashby import (
     extract_ashby_app_data_metadata,
     extract_ashby_hydration_data,
     extract_ashby_json_ld_metadata,
+    parse_ashby_sidebar_metadata,
 )
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
@@ -325,6 +328,12 @@ class ParsedJobUrl:
     original_url: str
 
 
+@dataclass
+class DirectJobPage:
+    html: str
+    fetched_with_browser: bool = False
+
+
 def parse_job_url(job_url: str) -> ParsedJobUrl:
     patterns = [
         ("ashby", r"^https://jobs\.ashbyhq\.com/([^/]+)/([^/?#]+)"),
@@ -337,6 +346,208 @@ def parse_job_url(job_url: str) -> ParsedJobUrl:
             return ParsedJobUrl(source=source, company=match.group(1), job_id=match.group(2), original_url=job_url)
     raise ValueError(
         "Unsupported job URL. Expected Ashby, Greenhouse, or Lever URL patterns."
+    )
+
+
+def parse_prep_url(job_url: str) -> ParsedJobUrl:
+    parsed = parse_job_url(job_url)
+    if parsed.source != "ashby":
+        raise ValueError("Unsupported job URL for prep-url. Expected Ashby URL pattern: https://jobs.ashbyhq.com/<company>/<job_id>.")
+    return parsed
+
+
+def _fetch_direct_job_page_http(job_url: str) -> DirectJobPage | None:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; JobFitAgent/1.0)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    try:
+        response = requests.get(job_url, headers=headers, timeout=20)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        LOGGER.debug("Direct job URL HTTP fetch failed for %s: %s", job_url, exc)
+        return None
+    html = response.text or ""
+    if _direct_job_page_has_extractable_content(html):
+        return DirectJobPage(html=html, fetched_with_browser=False)
+    LOGGER.debug("Direct job URL HTTP fetch returned insufficient extractable content for %s", job_url)
+    return None
+
+
+def _fetch_direct_job_page_browser(job_url: str, debug: bool = False) -> DirectJobPage | None:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        LOGGER.debug("Playwright is not installed; cannot browser-fetch direct job URL")
+        return None
+
+    browser = None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                LOGGER.debug("Direct job URL browser fetch did not reach networkidle for %s", job_url)
+            html = page.content()
+            if debug:
+                debug_path = Path("debug/prep_url_browser_debug.html")
+                debug_path.parent.mkdir(parents=True, exist_ok=True)
+                debug_path.write_text(html, encoding="utf-8")
+            if _direct_job_page_has_extractable_content(html):
+                return DirectJobPage(html=html, fetched_with_browser=True)
+    except Exception as exc:
+        LOGGER.debug("Direct job URL browser fetch failed for %s: %s", job_url, exc)
+        return None
+    finally:
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass
+    return None
+
+
+def _direct_job_page_has_extractable_content(html: str) -> bool:
+    soup = BeautifulSoup(html or "", "html.parser")
+    visible_text = soup.get_text(" ", strip=True)
+    title = _extract_direct_job_title(soup)
+    return bool(title and len(visible_text) >= 80)
+
+
+def _fetch_direct_job_page(job_url: str, *, skip_browser: bool = False, debug: bool = False) -> DirectJobPage | None:
+    page = _fetch_direct_job_page_http(job_url)
+    if page is not None:
+        if debug:
+            debug_path = Path("debug/prep_url_http_debug.html")
+            debug_path.parent.mkdir(parents=True, exist_ok=True)
+            debug_path.write_text(page.html, encoding="utf-8")
+        return page
+    if skip_browser:
+        return None
+    return _fetch_direct_job_page_browser(job_url, debug=debug)
+
+
+def _extract_json_ld_job_fields(html: str) -> dict[str, str]:
+    soup = BeautifulSoup(html, "html.parser")
+    scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
+    for script in scripts:
+        raw = script.string or script.get_text(strip=True)
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        nodes = payload if isinstance(payload, list) else [payload]
+        for node in nodes:
+            if not isinstance(node, dict) or str(node.get("@type", "")).lower() != "jobposting":
+                continue
+            return {
+                "title": str(node.get("title") or "").strip(),
+                "description": BeautifulSoup(str(node.get("description") or ""), "html.parser").get_text(" ", strip=True),
+            }
+    return {}
+
+
+def _extract_app_data_job_fields(html: str) -> dict[str, str]:
+    match = re.search(r"window\.__appData\s*=\s*(\{.*?\})\s*;", html, flags=re.DOTALL)
+    if not match:
+        return {}
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return {}
+    posting = payload.get("posting") if isinstance(payload, dict) else None
+    if not isinstance(posting, dict):
+        return {}
+    return {
+        "title": str(posting.get("title") or "").strip(),
+        "description": BeautifulSoup(str(posting.get("descriptionPlain") or posting.get("description") or ""), "html.parser").get_text(" ", strip=True),
+    }
+
+
+def _extract_direct_job_title(soup: BeautifulSoup) -> str:
+    for selector in ('meta[property="og:title"]', 'meta[name="twitter:title"]'):
+        node = soup.select_one(selector)
+        content = str(node.get("content") or "").strip() if node else ""
+        if content:
+            return re.sub(r"\s+-\s+Ashby\s*$", "", content).strip()
+    h1 = soup.find("h1")
+    if h1:
+        title = h1.get_text(" ", strip=True)
+        if title:
+            return title
+    if soup.title:
+        return re.sub(r"\s+-\s+Ashby\s*$", "", soup.title.get_text(" ", strip=True)).strip()
+    return ""
+
+
+def _extract_direct_job_description(soup: BeautifulSoup, html: str) -> str:
+    for fields in (_extract_json_ld_job_fields(html), _extract_app_data_job_fields(html)):
+        description = fields.get("description", "").strip()
+        if description:
+            return description
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup.find_all(["script", "style", "noscript", "nav", "form"]):
+        tag.decompose()
+    container = soup.find("main") or soup.find("article") or soup.body or soup
+    text = container.get_text("\n", strip=True)
+    lines: list[str] = []
+    seen: set[str] = set()
+    for line in text.splitlines():
+        cleaned = re.sub(r"\s+", " ", line).strip()
+        if not cleaned or cleaned.lower() in {"department", "location", "location type", "employment type", "apply for this job"}:
+            continue
+        if cleaned in seen:
+            continue
+        seen.add(cleaned)
+        lines.append(cleaned)
+    return "\n".join(lines).strip()
+
+
+def extract_ashby_job_from_direct_page(job_url: str, html: str) -> JobPosting:
+    parsed = parse_prep_url(job_url)
+    soup = BeautifulSoup(html, "html.parser")
+    json_ld_fields = _extract_json_ld_job_fields(html)
+    app_data_fields = _extract_app_data_job_fields(html)
+
+    metadata: dict[str, str] = {}
+    for source in (
+        parse_ashby_sidebar_metadata(html),
+        extract_ashby_json_ld_metadata(html),
+        extract_ashby_hydration_data(html),
+        extract_ashby_app_data_metadata(html),
+    ):
+        metadata.update({k: v for k, v in source.items() if v})
+
+    title = json_ld_fields.get("title") or app_data_fields.get("title") or _extract_direct_job_title(soup)
+    description = _extract_direct_job_description(soup, html)
+    location = metadata.get("Location") or ""
+    if not location:
+        location_parts = [metadata.get("city", ""), metadata.get("state", ""), metadata.get("country", "")]
+        location = ", ".join(part for part in location_parts if part)
+    workplace_type = metadata.get("Location Type") or ""
+    if not workplace_type and "remote" in location.lower():
+        workplace_type = "Remote"
+
+    if not title or not description:
+        raise ValueError("Could not extract title and description from direct job page.")
+
+    return JobPosting(
+        source="ashby",
+        company=parsed.company,
+        title=title,
+        location=location,
+        workplace_type=workplace_type,
+        department=metadata.get("Department", ""),
+        team=metadata.get("Team", "") or metadata.get("Employment Type", ""),
+        url=job_url,
+        description=description,
+        date_found=datetime.now(UTC),
     )
 
 
@@ -865,6 +1076,13 @@ def _stable_job_key_for_job(job: dict[str, Any]) -> str:
         company = _mobile_slug(str(safe_row_value(job, "company", "company") or "company"))
         job_id = str(safe_row_value(job, "id", "") or _mobile_alias_suffix_for_job(job))
         return f"{source}:{company}:{job_id}"
+
+
+def _external_job_id_for_job(job: dict[str, Any]) -> str:
+    try:
+        return parse_job_url(str(safe_row_value(job, "url", ""))).job_id
+    except ValueError:
+        return str(safe_row_value(job, "id", "") or "")
 
 
 def _looks_like_stable_job_key(identifier: str) -> bool:
@@ -1558,6 +1776,99 @@ def debug_ashby_url(job_url: str) -> None:
         print(f"extracted city: {merged.get('city', '')}")
         print(f"extracted state: {merged.get('state', '')}")
         print(f"extracted country: {merged.get('country', '')}")
+
+
+def prep_url(
+    job_url: str,
+    *,
+    force: bool = False,
+    skip_browser: bool = False,
+    skip_pdf: bool = False,
+    notify_telegram: bool = False,
+    debug: bool = False,
+) -> dict[str, Any] | None:
+    parsed = parse_prep_url(job_url)
+    initialize()
+    page = _fetch_direct_job_page(job_url, skip_browser=skip_browser, debug=debug)
+    if page is None:
+        print(json.dumps({"error": "Could not fetch direct job page. Try --debug or run from GitHub Actions."}))
+        return None
+
+    try:
+        job = extract_ashby_job_from_direct_page(job_url, page.html)
+    except ValueError as exc:
+        if debug:
+            debug_path = Path("debug/prep_url_extract_failed.html")
+            debug_path.parent.mkdir(parents=True, exist_ok=True)
+            debug_path.write_text(page.html, encoding="utf-8")
+        print(json.dumps({"error": f"Could not fetch direct job page. Try --debug or run from GitHub Actions. {exc}"}))
+        return None
+
+    target_profile = load_target_profile()
+    fit = score_job(job, target_profile)
+    upsert_job(job, fit)
+    row = get_job_by_url(job_url)
+    if row is None:
+        print(json.dumps({"error": "Direct job was fetched but could not be loaded from SQLite."}))
+        return None
+    job_id = int(row["id"])
+    if job.description.strip():
+        update_notes(job_id, job.description.strip())
+        refreshed = get_job_by_url(job_url)
+        if refreshed is not None:
+            row = refreshed
+
+    row_dict = dict(row)
+    if not _is_actionable_selected_job(row_dict) and not force:
+        print("Job is not actionable. Use --force to prepare anyway.")
+        print(json.dumps({"error": "Job is not actionable. Use --force to prepare anyway."}))
+        return None
+
+    prep_output = io.StringIO()
+    with contextlib.redirect_stdout(prep_output):
+        summary = prep_next_application(
+            job_id=job_id,
+            skip_browser=skip_browser,
+            force=force,
+            skip_pdf=skip_pdf,
+        )
+    if summary is None:
+        captured = prep_output.getvalue().strip()
+        if captured:
+            print(captured)
+        return None
+    summary["source"] = parsed.source
+    summary["external_job_id"] = parsed.job_id
+    summary["stable_job_key"] = f"{parsed.source}:{parsed.company}:{parsed.job_id}"
+    summary["fetched_with_browser"] = page.fetched_with_browser
+
+    if notify_telegram:
+        config = load_notification_config().telegram
+        if not config.bot_token or not config.chat_id:
+            print("Telegram notification skipped: missing credentials")
+        else:
+            send_message_with_credentials(
+                text=_format_prep_next_application_telegram_message(summary),
+                bot_token=config.bot_token,
+                chat_id=config.chat_id,
+            )
+            package_zip_path = str(summary.get("package_zip_path", "")).strip()
+            if package_zip_path and bool(summary.get("package_zip_created")):
+                try:
+                    send_document_with_credentials(
+                        file_path=package_zip_path,
+                        caption=(
+                            f"Application package for {summary.get('title', '')}. "
+                            "Review manually before submitting."
+                        ),
+                        bot_token=config.bot_token,
+                        chat_id=config.chat_id,
+                    )
+                except Exception:
+                    print("Telegram package upload failed")
+
+    print(json.dumps(summary, indent=2))
+    return summary
 
 
 def promote_discovery(source: str, company: str) -> None:
@@ -3091,6 +3402,8 @@ def prep_next_application(
         "mobile_command_alias": mobile_command_alias,
         "company": selected_job.get("company"),
         "title": selected_job.get("title"),
+        "source": selected_job.get("source"),
+        "external_job_id": _external_job_id_for_job(selected_job),
         "url": selected_job.get("url"),
         "score": selected_job.get("score"),
         "classification": selected_job.get("classification"),
@@ -3474,6 +3787,23 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "prep-url":
+        if len(args) < 2 or args[1].startswith("--"):
+            print("Usage: python -m job_fit_agent.main prep-url <job_url> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
+            return
+        try:
+            prep_url(
+                args[1],
+                force="--force" in args[2:],
+                skip_browser="--skip-browser" in args[2:],
+                skip_pdf="--skip-pdf" in args[2:],
+                notify_telegram="--notify-telegram" in args[2:],
+                debug="--debug" in args[2:],
+            )
+        except ValueError as exc:
+            print(str(exc))
+        return
+
     if command == "debug-ashby-url":
         if len(args) != 2:
             print("Usage: python -m job_fit_agent.main debug-ashby-url <job_url>")
@@ -3653,6 +3983,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main list-status <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
     print("python -m job_fit_agent.main learn-url <job_url>")
+    print("python -m job_fit_agent.main prep-url <job_url> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
     print("python -m job_fit_agent.main discover-companies")
     print("python -m job_fit_agent.main add-discovered-company <company> --source <source> --url <careers_url> --reason <reason>")
