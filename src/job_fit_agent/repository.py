@@ -13,7 +13,7 @@ from job_fit_agent.models import FitScore, JobPosting
 DB_PATH = Path("data/jobs.sqlite")
 
 VALID_STATUSES = {"new", "interested", "applying", "applied", "interviewing", "rejected", "archived"}
-VALID_APPLICATION_STATUSES = {"not_applied", "applied", "skipped", "saved"}
+VALID_APPLICATION_STATUSES = {"not_applied", "saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"}
 
 
 @dataclass
@@ -68,8 +68,13 @@ def initialize(db_path: Path = DB_PATH) -> None:
                 notes TEXT DEFAULT "",
                 application_status TEXT DEFAULT "not_applied",
                 applied_at TEXT,
+                interviewing_at TEXT,
+                rejected_at TEXT,
+                offer_at TEXT,
+                withdrawn_at TEXT,
                 skipped_at TEXT,
                 saved_at TEXT,
+                updated_at TEXT,
                 application_notes TEXT DEFAULT ""
             )
             """
@@ -106,12 +111,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if "application_status" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN application_status TEXT DEFAULT "not_applied"')
         conn.execute('UPDATE jobs SET application_status = "not_applied" WHERE application_status IS NULL')
-    if "applied_at" not in columns:
-        conn.execute('ALTER TABLE jobs ADD COLUMN applied_at TEXT')
-    if "skipped_at" not in columns:
-        conn.execute('ALTER TABLE jobs ADD COLUMN skipped_at TEXT')
-    if "saved_at" not in columns:
-        conn.execute('ALTER TABLE jobs ADD COLUMN saved_at TEXT')
+
+    for timestamp_column in ("applied_at", "interviewing_at", "rejected_at", "offer_at", "withdrawn_at", "skipped_at", "saved_at", "updated_at"):
+        if timestamp_column not in columns:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {timestamp_column} TEXT")
     if "application_notes" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN application_notes TEXT DEFAULT ""')
         conn.execute('UPDATE jobs SET application_notes = "" WHERE application_notes IS NULL')
@@ -317,8 +320,13 @@ def update_application_tracking(
     application_status: str,
     *,
     applied_at: str | None = None,
+    interviewing_at: str | None = None,
+    rejected_at: str | None = None,
+    offer_at: str | None = None,
+    withdrawn_at: str | None = None,
     skipped_at: str | None = None,
     saved_at: str | None = None,
+    updated_at: str | None = None,
     application_notes: str | None = None,
     db_path: Path = DB_PATH,
 ) -> None:
@@ -328,12 +336,27 @@ def update_application_tracking(
     if applied_at is not None:
         assignments.append("applied_at = ?")
         values.append(applied_at)
+    if interviewing_at is not None:
+        assignments.append("interviewing_at = ?")
+        values.append(interviewing_at)
+    if rejected_at is not None:
+        assignments.append("rejected_at = ?")
+        values.append(rejected_at)
+    if offer_at is not None:
+        assignments.append("offer_at = ?")
+        values.append(offer_at)
+    if withdrawn_at is not None:
+        assignments.append("withdrawn_at = ?")
+        values.append(withdrawn_at)
     if skipped_at is not None:
         assignments.append("skipped_at = ?")
         values.append(skipped_at)
     if saved_at is not None:
         assignments.append("saved_at = ?")
         values.append(saved_at)
+    if updated_at is not None:
+        assignments.append("updated_at = ?")
+        values.append(updated_at)
     if application_notes is not None:
         assignments.append("application_notes = ?")
         values.append(application_notes)
@@ -353,7 +376,7 @@ def get_jobs_by_application_status(application_status: str, limit: int = 50, db_
             """
             SELECT * FROM jobs
             WHERE application_status = ?
-            ORDER BY COALESCE(applied_at, skipped_at, saved_at, last_seen_at) DESC, score DESC
+            ORDER BY COALESCE(updated_at, applied_at, interviewing_at, rejected_at, offer_at, withdrawn_at, skipped_at, saved_at, last_seen_at) DESC, score DESC
             LIMIT ?
             """,
             (application_status, limit),

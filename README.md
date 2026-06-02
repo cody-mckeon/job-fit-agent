@@ -193,7 +193,7 @@ Setup steps:
 
 ## Application workflow lifecycle
 
-Each job in SQLite has a workflow status to track progress from discovery to close-out. Application decisions (`applied`, `skipped`, and `saved`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Treat `data/application_status.json` as the durable, shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
+Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, and `skipped`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Treat `data/application_status.json` as the durable, shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
 
 Valid statuses:
 - `new`
@@ -204,7 +204,20 @@ Valid statuses:
 - `rejected`
 - `archived`
 
-New jobs default to `new`. Re-scores update scoring fields but preserve your existing workflow status.
+New jobs default to `new`. Re-scores update scoring fields but preserve your existing workflow status. Application lifecycle records keep `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, `updated_at`, `note`, and `status_history` in `data/application_status.json`. Rejected jobs remain tracked for learning and analytics, but they are no longer active pipeline work.
+
+Mark lifecycle outcomes with stable keys when possible:
+
+```bash
+python -m job_fit_agent.main telegram-command "applied ashby:company:external-id"
+python -m job_fit_agent.main telegram-command "interviewing ashby:company:external-id Recruiter screen scheduled"
+python -m job_fit_agent.main telegram-command "rejected ashby:company:external-id Rejected after application"
+python -m job_fit_agent.main telegram-command "offer ashby:company:external-id Verbal offer"
+python -m job_fit_agent.main telegram-command "withdrawn ashby:company:external-id Accepted another role"
+python -m job_fit_agent.main rejected
+python -m job_fit_agent.main pipeline
+python -m job_fit_agent.main outcomes
+```
 
 Set a status:
 
@@ -305,8 +318,9 @@ Recommended application prep workflow:
    - You can also mark by URL: `python -m job_fit_agent.main mark-applied --url <job_url>`
    - From Telegram or GitHub Actions, prefer stable job keys such as `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; they remain safe even when the local SQLite database does not contain that job row.
    - Review submitted roles with `python -m job_fit_agent.main applied` or `python -m job_fit_agent.main applied --json`.
+   - Review rejected roles with `python -m job_fit_agent.main rejected`; review active applications with `python -m job_fit_agent.main pipeline` grouped by `applied`, `interviewing`, and `offer`; review outcomes with `python -m job_fit_agent.main outcomes`.
    - If Cody intentionally passes on a role, run `python -m job_fit_agent.main mark-skipped --job-id <job_id> --reason "Not US eligible"` or `python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"`.
-   - `applied` and `skipped` application statuses from both SQLite and `data/application_status.json` are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations.
+   - `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `saved` application statuses from both SQLite and `data/application_status.json` are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations. Saved jobs stay tracked for later review but are not auto-prepped unless explicitly selected.
    - After Telegram status updates, run `git pull` locally before triage so your Mac has the latest `data/application_status.json` state.
 
 Telegram handoff requires:
@@ -359,7 +373,7 @@ Mobile flow: **Telegram → download zip → review files → submit manually**.
 GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked `application_status=applied` or `application_status=skipped` in SQLite or `data/application_status.json`, geography-review, and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section. Use `unapplied-high-fit` any time to see valid high-fit roles that still need an application decision.
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked with active/closed lifecycle statuses (`applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`) or `saved` in SQLite or `data/application_status.json`, geography-review, and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section. Use `unapplied-high-fit` any time to see valid high-fit roles that still need an application decision.
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`
@@ -394,8 +408,16 @@ skip linear-product-manager Not US eligible
 /skip linear-product-manager Not US eligible
 save linear-product-manager
 /save linear-product-manager
+rejected linear-product-manager Rejected after application
+reject linear-product-manager
+interviewing linear-product-manager Recruiter screen scheduled
+interview linear-product-manager
+offer linear-product-manager
+withdrawn linear-product-manager
+withdraw linear-product-manager
 
 applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+rejected ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2 Rejected after application
 applied https://jobs.ashbyhq.com/linear/b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 applied 19
 ```
@@ -408,6 +430,10 @@ Equivalent local short commands are also available for numeric local ids:
 python -m job_fit_agent.main applied <job_id>
 python -m job_fit_agent.main skip <job_id> "<reason>"
 python -m job_fit_agent.main save <job_id>
+python -m job_fit_agent.main rejected <identifier> "reason"
+python -m job_fit_agent.main interviewing <identifier> "next step"
+python -m job_fit_agent.main offer <identifier>
+python -m job_fit_agent.main withdrawn <identifier> "reason"
 python -m job_fit_agent.main telegram-command "applied linear-product-manager"
 ```
 
@@ -417,6 +443,16 @@ The Telegram package summary now shows the stable key as the safest copy/paste c
 After applying:
 ```
 applied ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+```
+
+If rejected:
+```
+rejected ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
+```
+
+If interviewing:
+```
+interviewing ashby:linear:b7669c4b-eeca-421d-ba9a-d90203f6fcb2
 ```
 
 Mobile shortcut:

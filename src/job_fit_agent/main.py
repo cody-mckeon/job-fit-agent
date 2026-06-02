@@ -29,6 +29,8 @@ from job_fit_agent.collectors.ashby import (
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.application_status import (
+    APPLICATION_STATUS_TIMESTAMP_FIELDS,
+    EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES,
     build_url_for_stable_key,
     load_application_status,
     parse_stable_job_key,
@@ -614,7 +616,7 @@ def _is_actionable_digest_row(row: dict) -> bool:
     application_status = str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower()
     if status in {"archived", "rejected", "applied"}:
         return False
-    if application_status in {"applied", "skipped"}:
+    if application_status in EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES:
         return False
     if viability_level not in {"apply_now", "strong_review"}:
         return False
@@ -744,16 +746,15 @@ def _application_tracking_counts(rows: list[dict[str, Any]] | None = None) -> di
         except ValueError:
             pass
     status_only = [record for key, record in _application_status_records().items() if key not in row_keys]
-    return {
-        "unapplied_high_fit_count": sum(1 for row in rows if _is_unapplied_high_fit_candidate(row)),
-        "applied_count": sum(
+    counts = {"unapplied_high_fit_count": sum(1 for row in rows if _is_unapplied_high_fit_candidate(row))}
+    for application_status in ("saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"):
+        counts[f"{application_status}_count"] = sum(
             1
             for row in rows
-            if _application_tracking_status(row) == "applied" or str(safe_row_value(row, "status", "")).lower() == "applied"
-        ) + sum(1 for row in status_only if str(row.get("application_status", "")).lower() == "applied"),
-        "skipped_count": sum(1 for row in rows if _application_tracking_status(row) == "skipped")
-        + sum(1 for row in status_only if str(row.get("application_status", "")).lower() == "skipped"),
-    }
+            if _application_tracking_status(row) == application_status
+            or (application_status == "applied" and str(safe_row_value(row, "status", "")).lower() == "applied")
+        ) + sum(1 for row in status_only if str(row.get("application_status", "")).lower() == application_status)
+    return counts
 
 def _load_all_jobs() -> list[dict[str, Any]]:
     initialize()
@@ -902,8 +903,13 @@ def _merge_persistent_status(row: dict[str, Any]) -> dict[str, Any]:
         merged["application_status"] = status
     for source_key, target_key in (
         ("applied_at", "applied_at"),
+        ("interviewing_at", "interviewing_at"),
+        ("rejected_at", "rejected_at"),
+        ("offer_at", "offer_at"),
+        ("withdrawn_at", "withdrawn_at"),
         ("skipped_at", "skipped_at"),
         ("saved_at", "saved_at"),
+        ("updated_at", "updated_at"),
         ("note", "application_notes"),
     ):
         if record.get(source_key):
@@ -927,12 +933,17 @@ def _stable_key_record_defaults(stable_job_key: str) -> dict[str, Any]:
         "url": build_url_for_stable_key(source, company, external_job_id),
         "source": source,
         "external_job_id": external_job_id,
-        "application_status": None,
+        "application_status": "not_applied",
         "applied_at": None,
+        "interviewing_at": None,
+        "rejected_at": None,
+        "offer_at": None,
+        "withdrawn_at": None,
         "skipped_at": None,
         "saved_at": None,
-        "note": "",
         "updated_at": None,
+        "note": "",
+        "status_history": [],
         "identifier_used": stable_job_key,
     }
 
@@ -975,15 +986,24 @@ def _write_application_status_record(
         record.update(_record_for_job(job, stable_job_key=stable_job_key))
     record["stable_job_key"] = stable_job_key
     record["application_status"] = application_status
-    if application_status == "applied":
-        record["applied_at"] = timestamp
-    elif application_status == "skipped":
-        record["skipped_at"] = timestamp
-    elif application_status == "saved":
-        record["saved_at"] = timestamp
+    timestamp_field = APPLICATION_STATUS_TIMESTAMP_FIELDS.get(application_status)
+    if timestamp_field:
+        record[timestamp_field] = timestamp
     record["note"] = note or ""
     record["updated_at"] = timestamp
     record["identifier_used"] = identifier_used
+    history = record.get("status_history")
+    if not isinstance(history, list):
+        history = []
+    history.append(
+        {
+            "status": application_status,
+            "timestamp": timestamp,
+            "note": note or "",
+            "identifier_used": identifier_used,
+        }
+    )
+    record["status_history"] = history
     records[stable_job_key] = record
     save_application_status(records)
     return record
@@ -1000,7 +1020,20 @@ def _enrich_application_status_record_for_job(job: dict[str, Any]) -> None:
     record = dict(records[stable_job_key])
     preserved = {
         key: record.get(key)
-        for key in ("application_status", "applied_at", "skipped_at", "saved_at", "note", "updated_at", "identifier_used")
+        for key in (
+            "application_status",
+            "applied_at",
+            "interviewing_at",
+            "rejected_at",
+            "offer_at",
+            "withdrawn_at",
+            "skipped_at",
+            "saved_at",
+            "updated_at",
+            "note",
+            "status_history",
+            "identifier_used",
+        )
     }
     record.update(_record_for_job(job, stable_job_key=stable_job_key))
     for key, value in preserved.items():
@@ -1122,11 +1155,14 @@ def _mark_application_status(
 
     timestamp = _utc_timestamp()
     if job is not None:
-        kwargs = {f"{application_status}_at": timestamp, "application_notes": note}
+        kwargs = {"updated_at": timestamp, "application_notes": note}
+        timestamp_field = APPLICATION_STATUS_TIMESTAMP_FIELDS.get(application_status)
+        if timestamp_field:
+            kwargs[timestamp_field] = timestamp
         update_application_tracking(int(job["id"]), application_status, **kwargs)
-        if application_status == "applied":
+        if application_status in {"applied", "interviewing", "rejected"}:
             try:
-                update_status(int(job["id"]), "applied")
+                update_status(int(job["id"]), application_status)
             except ValueError:
                 pass
         job = dict(get_job_by_id(int(job["id"])) or job)
@@ -1150,8 +1186,10 @@ def _mark_application_status(
             print(f"Marked applied: {updated.get('company', '')} {updated.get('title', '')}.")
         elif application_status == "skipped":
             print(f"Marked skipped: {updated.get('company', '')} {updated.get('title', '')}.")
-        else:
+        elif application_status == "saved":
             print(f"Saved for later: {updated.get('company', '')} {updated.get('title', '')}.")
+        else:
+            print(f"Marked {application_status}: {updated.get('company', '')} {updated.get('title', '')}.")
     return updated
 
 
@@ -1173,6 +1211,35 @@ def mark_saved(job_id: int | None = None, url: str | None = None, note: str | No
     return _mark_application_status("saved", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
 
 
+
+
+def mark_rejected(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("rejected", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
+
+
+def mark_interviewing(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("interviewing", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
+
+
+def mark_offer(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("offer", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
+
+
+def mark_withdrawn(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("withdrawn", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
+
 def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> str:
     if job.get("warning"):
         return f"Marked {job.get('application_status', action)} by stable key: {job.get('stable_job_key')}. Job details will be enriched when rediscovered."
@@ -1184,7 +1251,10 @@ def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> 
     if action == "skip":
         suffix = f" Reason: {note}" if note else ""
         return f"Marked {label} as skipped.{suffix}"
-    return f"Saved {label} for later."
+    if action == "save":
+        return f"Saved {label} for later."
+    suffix = f" Note: {note}" if note else ""
+    return f"Marked {label} as {job.get('application_status', action)}.{suffix}"
 
 
 def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
@@ -1199,6 +1269,9 @@ def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
         elif parsed.action == "save":
             updated = mark_saved(identifier=parsed.job_identifier, quiet=True)
             new_status = "saved"
+        elif parsed.action in {"rejected", "interviewing", "offer", "withdrawn"}:
+            updated = _mark_application_status(parsed.action, identifier=parsed.job_identifier, note=parsed.note, quiet=True)
+            new_status = parsed.action
         else:  # pragma: no cover - parser constrains action values
             raise ValueError("Unsupported command.")
         return {
@@ -1247,6 +1320,94 @@ def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
         print(f"notes: {safe_row_value(row, 'application_notes', safe_row_value(row, 'note', '')) or 'none'}")
         print("-")
 
+def _rows_for_application_status(application_status: str, *, limit: int = 50) -> list[dict[str, Any]]:
+    initialize()
+    sqlite_rows = [_merge_persistent_status(dict(row)) for row in get_jobs_by_application_status(application_status, limit=limit)]
+    rows_by_key: dict[str, dict[str, Any]] = {}
+    for row in sqlite_rows:
+        rows_by_key[_stable_job_key_for_job(row)] = row
+    for key, record in _application_status_records().items():
+        if str(record.get("application_status", "")).lower() == application_status and key not in rows_by_key:
+            rows_by_key[key] = dict(record)
+    timestamp_field = APPLICATION_STATUS_TIMESTAMP_FIELDS.get(application_status, "updated_at")
+    return sorted(
+        rows_by_key.values(),
+        key=lambda row: str(safe_row_value(row, timestamp_field, safe_row_value(row, "updated_at", "")) or ""),
+        reverse=True,
+    )[:limit]
+
+
+def _print_application_status_jobs(application_status: str, *, limit: int = 50, as_json: bool = False) -> None:
+    rows = _rows_for_application_status(application_status, limit=limit)
+    if as_json:
+        print(json.dumps(rows, indent=2))
+        return
+    print(f"{application_status.title()} jobs")
+    if not rows:
+        print(f"No {application_status} jobs.")
+        return
+    timestamp_field = APPLICATION_STATUS_TIMESTAMP_FIELDS.get(application_status, "updated_at")
+    for row in rows:
+        print(f"company: {safe_row_value(row, 'company', '')}")
+        print(f"title: {safe_row_value(row, 'title', '')}")
+        print(f"application_status: {safe_row_value(row, 'application_status', application_status)}")
+        print(f"{timestamp_field}: {safe_row_value(row, timestamp_field, '')}")
+        print(f"updated_at: {safe_row_value(row, 'updated_at', '')}")
+        print(f"score: {safe_row_value(row, 'score', '')}")
+        print(f"url: {safe_row_value(row, 'url', '')}")
+        print(f"stable_job_key: {safe_row_value(row, 'stable_job_key', '') or _stable_job_key_for_job(row)}")
+        print(f"notes: {safe_row_value(row, 'application_notes', safe_row_value(row, 'note', '')) or 'none'}")
+        print("-")
+
+
+def print_rejected_jobs(*, limit: int = 50, as_json: bool = False) -> None:
+    _print_application_status_jobs("rejected", limit=limit, as_json=as_json)
+
+
+def print_pipeline_report(*, limit: int = 50, as_json: bool = False) -> None:
+    grouped = {status: _rows_for_application_status(status, limit=limit) for status in ("applied", "interviewing", "offer")}
+    if as_json:
+        print(json.dumps(grouped, indent=2))
+        return
+    print("Application pipeline")
+    for status in ("applied", "interviewing", "offer"):
+        print(f"Status: {status}")
+        rows = grouped[status]
+        if not rows:
+            print(f"No {status} jobs.")
+        else:
+            for row in rows:
+                print(f"company: {safe_row_value(row, 'company', '')}")
+                print(f"title: {safe_row_value(row, 'title', '')}")
+                print(f"stable_job_key: {safe_row_value(row, 'stable_job_key', '') or _stable_job_key_for_job(row)}")
+                print(f"updated_at: {safe_row_value(row, 'updated_at', '')}")
+                print(f"notes: {safe_row_value(row, 'application_notes', safe_row_value(row, 'note', '')) or 'none'}")
+                print("-")
+        print()
+
+
+def print_outcomes_report(*, limit: int = 50, as_json: bool = False) -> None:
+    grouped = {status: _rows_for_application_status(status, limit=limit) for status in ("rejected", "offer", "withdrawn")}
+    summary = {status: len(rows) for status, rows in grouped.items()}
+    if as_json:
+        print(json.dumps({"summary": summary, "jobs": grouped}, indent=2))
+        return
+    print("Application outcomes")
+    for status, count in summary.items():
+        print(f"{status}_count: {count}")
+    for status in ("rejected", "offer", "withdrawn"):
+        print(f"\nStatus: {status}")
+        rows = grouped[status]
+        if not rows:
+            print(f"No {status} jobs.")
+        for row in rows:
+            print(f"company: {safe_row_value(row, 'company', '')}")
+            print(f"title: {safe_row_value(row, 'title', '')}")
+            print(f"stable_job_key: {safe_row_value(row, 'stable_job_key', '') or _stable_job_key_for_job(row)}")
+            print(f"updated_at: {safe_row_value(row, 'updated_at', '')}")
+            print(f"notes: {safe_row_value(row, 'application_notes', safe_row_value(row, 'note', '')) or 'none'}")
+            print("-")
+
 def _is_automation_ai_operations_review_row(row: dict) -> bool:
     title = str(safe_row_value(row, "title", "")).lower()
     if "product manager" in title and "internal tools product manager" not in title and "digital automation product manager" not in title:
@@ -1290,7 +1451,7 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         for row in high_fit_rows
         if str(safe_row_value(row, "geographic_eligibility", "review")).lower() == "review"
         and str(safe_row_value(row, "status", "")).lower() not in {"archived", "rejected", "applied"}
-        and str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower() not in {"applied", "skipped"}
+        and str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower() not in EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES
         and _is_actionable_real_job_url(str(safe_row_value(row, "url", "")))
     ]
     tracking_counts = _application_tracking_counts(list(high_fit_rows) + list(near_fit_rows))
@@ -1298,6 +1459,11 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
     print("Application tracking summary")
     print(f"unapplied_high_fit_count: {tracking_counts['unapplied_high_fit_count']}")
     print(f"applied_count: {tracking_counts['applied_count']}")
+    print(f"interviewing_count: {tracking_counts['interviewing_count']}")
+    print(f"rejected_count: {tracking_counts['rejected_count']}")
+    print(f"offer_count: {tracking_counts['offer_count']}")
+    print(f"withdrawn_count: {tracking_counts['withdrawn_count']}")
+    print(f"saved_count: {tracking_counts['saved_count']}")
     print(f"skipped_count: {tracking_counts['skipped_count']}")
     print()
 
@@ -2553,7 +2719,7 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
     application_status = str(safe_row_value(job, "application_status", "not_applied") or "not_applied").lower()
     if status not in {"new", "interested"}:
         return False
-    if application_status in {"applied", "skipped"}:
+    if application_status in EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES:
         return False
     if classification not in {"high_fit", "near_fit", "apply_now"}:
         return False
@@ -2563,7 +2729,7 @@ def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
         return False
     if status in {"applied", "rejected", "archived"}:
         return False
-    if application_status in {"applied", "skipped"}:
+    if application_status in EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES:
         return False
     if _has_non_us_geography_signal(job):
         return False
@@ -2643,7 +2809,7 @@ def _is_actionable_selected_job(job: dict[str, Any]) -> bool:
     application_status = str(safe_row_value(job, "application_status", "not_applied") or "not_applied").lower()
     if classification not in {"high_fit", "near_fit", "apply_now"}:
         return False
-    if application_status in {"applied", "skipped"}:
+    if application_status in {"applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"}:
         return False
     if viability_level not in {"apply_now", "strong_review"}:
         return False
@@ -2878,6 +3044,11 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
                 "Application tracking",
                 f"Unapplied high-fit: {tracking.get('unapplied_high_fit_count', 0)}",
                 f"Applied: {tracking.get('applied_count', 0)}",
+                f"Interviewing: {tracking.get('interviewing_count', 0)}",
+                f"Rejected: {tracking.get('rejected_count', 0)}",
+                f"Offer: {tracking.get('offer_count', 0)}",
+                f"Withdrawn: {tracking.get('withdrawn_count', 0)}",
+                f"Saved: {tracking.get('saved_count', 0)}",
                 f"Skipped: {tracking.get('skipped_count', 0)}",
             ]
         )
@@ -2892,6 +3063,14 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
                 "After applying:",
                 "```",
                 f"applied {stable_job_key}",
+                "```",
+                "If rejected:",
+                "```",
+                f"rejected {stable_job_key}",
+                "```",
+                "If interviewing:",
+                "```",
+                f"interviewing {stable_job_key}",
                 "```",
             ]
         )
@@ -3002,6 +3181,44 @@ def main(argv: list[str] | None = None) -> None:
             mark_skipped(job_id=selected_job_id, url=selected_url, reason=reason)
         except (ValueError, IndexError) as exc:
             print(str(exc) if str(exc) else "Usage: python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
+        return
+
+
+    if command == "pipeline":
+        try:
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else 50
+        except (ValueError, IndexError):
+            print("Usage: python -m job_fit_agent.main pipeline [--limit <n>] [--json]")
+            return
+        print_pipeline_report(limit=limit, as_json="--json" in args[1:])
+        return
+
+    if command == "outcomes":
+        try:
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else 50
+        except (ValueError, IndexError):
+            print("Usage: python -m job_fit_agent.main outcomes [--limit <n>] [--json]")
+            return
+        print_outcomes_report(limit=limit, as_json="--json" in args[1:])
+        return
+
+    if command in {"rejected", "reject", "interviewing", "interview", "offer", "withdrawn", "withdraw"}:
+        action = {"reject": "rejected", "interview": "interviewing", "withdraw": "withdrawn"}.get(command, command)
+        if len(args) >= 2 and not args[1].startswith("--"):
+            try:
+                _mark_application_status(action, identifier=args[1], note=" ".join(args[2:]) or None)
+            except ValueError as exc:
+                print(str(exc))
+            return
+        if action == "rejected":
+            try:
+                limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else 50
+            except (ValueError, IndexError):
+                print("Usage: python -m job_fit_agent.main rejected <identifier> [note] OR rejected [--limit <n>] [--json]")
+                return
+            print_rejected_jobs(limit=limit, as_json="--json" in args[1:])
+            return
+        print(f"Usage: python -m job_fit_agent.main {command} <identifier> [note]")
         return
 
     if command == "applied":

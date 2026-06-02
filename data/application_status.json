@@ -5,13 +5,25 @@
     "company": "elevenlabs",
     "external_job_id": "a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
+    "interviewing_at": null,
     "note": "",
+    "offer_at": null,
+    "rejected_at": null,
     "saved_at": null,
     "skipped_at": null,
     "source": "ashby",
     "stable_job_key": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
+    "status_history": [
+      {
+        "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
+        "note": "",
+        "status": "applied",
+        "timestamp": "2026-06-01T00:47:59.873529+00:00"
+      }
+    ],
     "title": null,
     "updated_at": "2026-06-01T00:47:59.873529+00:00",
-    "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7"
+    "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
+    "withdrawn_at": null
   }
 }
