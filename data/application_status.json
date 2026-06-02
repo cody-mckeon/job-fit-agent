@@ -1,14 +1,14 @@
 {
   "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7": {
-    "application_status": "applied",
+    "application_status": "rejected",
     "applied_at": "2026-06-01T00:47:59.873529+00:00",
     "company": "elevenlabs",
     "external_job_id": "a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "interviewing_at": null,
-    "note": "",
+    "note": "Rejected after application, no interview",
     "offer_at": null,
-    "rejected_at": null,
+    "rejected_at": "2026-06-02T17:37:37.118708+00:00",
     "saved_at": null,
     "skipped_at": null,
     "source": "ashby",
@@ -19,10 +19,16 @@
         "note": "",
         "status": "applied",
         "timestamp": "2026-06-01T00:47:59.873529+00:00"
+      },
+      {
+        "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
+        "note": "Rejected after application, no interview",
+        "status": "rejected",
+        "timestamp": "2026-06-02T17:37:37.118708+00:00"
       }
     ],
     "title": null,
-    "updated_at": "2026-06-01T00:47:59.873529+00:00",
+    "updated_at": "2026-06-02T17:37:37.118708+00:00",
     "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "withdrawn_at": null
   }
