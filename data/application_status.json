@@ -1,26 +1,41 @@
 {
+  "ashby:elevenlabs:275f43d0-b62d-401d-830c-7c1ac0e688aa": {
+    "application_status": "saved",
+    "applied_at": null,
+    "classification": "high_fit",
+    "company": "elevenlabs",
+    "external_job_id": "275f43d0-b62d-401d-830c-7c1ac0e688aa",
+    "geographic_eligibility": "eligible",
+    "identifier_used": null,
+    "interviewing_at": null,
+    "note": "Blocked by Ashby 90-day application limit, need recruiter/manual review.",
+    "offer_at": null,
+    "rejected_at": null,
+    "saved_at": null,
+    "score": 250,
+    "skipped_at": null,
+    "source": "ashby",
+    "stable_job_key": "ashby:elevenlabs:275f43d0-b62d-401d-830c-7c1ac0e688aa",
+    "status_history": null,
+    "title": "Enterprise Solutions Engineer - North America",
+    "updated_at": null,
+    "url": "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa",
+    "withdrawn_at": null
+  },
   "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7": {
     "application_status": "rejected",
-<<<<<<< Updated upstream
-    "applied_at": "2026-06-01T00:47:59.873529+00:00",
-    "company": "elevenlabs",
-    "external_job_id": "a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
-    "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
-    "interviewing_at": null,
-    "note": "Rejected after application, no interview",
-    "offer_at": null,
-    "rejected_at": "2026-06-02T17:37:37.118708+00:00",
-=======
     "applied_at": "2026-06-02T17:34:35.472600+00:00",
+    "classification": "high_fit",
     "company": "elevenlabs",
     "external_job_id": "a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
+    "geographic_eligibility": "eligible",
     "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "interviewing_at": "2026-06-02T17:35:13.815195+00:00",
     "note": "Rejected after application, no interview",
     "offer_at": null,
-    "rejected_at": "2026-06-02T17:35:56.449202+00:00",
->>>>>>> Stashed changes
+    "rejected_at": "2026-06-02T17:37:37.118708+00:00",
     "saved_at": null,
+    "score": 246,
     "skipped_at": null,
     "source": "ashby",
     "stable_job_key": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
@@ -29,26 +44,11 @@
         "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
         "note": "",
         "status": "applied",
-        "timestamp": "2026-06-01T00:47:59.873529+00:00"
-      },
-      {
-        "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
-<<<<<<< Updated upstream
-        "note": "Rejected after application, no interview",
-        "status": "rejected",
-        "timestamp": "2026-06-02T17:37:37.118708+00:00"
-      }
-    ],
-    "title": null,
-    "updated_at": "2026-06-02T17:37:37.118708+00:00",
-=======
-        "note": "",
-        "status": "applied",
         "timestamp": "2026-06-02T17:34:35.472600+00:00"
       },
       {
         "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
-        "note": "Recruiter screen scheduled",
+        "note": "",
         "status": "interviewing",
         "timestamp": "2026-06-02T17:35:13.815195+00:00"
       },
@@ -56,12 +56,11 @@
         "identifier_used": "ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
         "note": "Rejected after application, no interview",
         "status": "rejected",
-        "timestamp": "2026-06-02T17:35:56.449202+00:00"
+        "timestamp": "2026-06-02T17:37:37.118708+00:00"
       }
     ],
-    "title": null,
-    "updated_at": "2026-06-02T17:35:56.449202+00:00",
->>>>>>> Stashed changes
+    "title": "Engineering - Internal AI Transformation",
+    "updated_at": "2026-06-02T17:37:37.118708+00:00",
     "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "withdrawn_at": null
   }
