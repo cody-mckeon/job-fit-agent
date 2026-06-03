@@ -21,6 +21,7 @@ class JobPosting(BaseModel):
     geographic_eligibility: str = "review"
     geographic_reason: str = ""
     department: str = ""
+    employment_type: str = ""
     team: str = ""
     date_found: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

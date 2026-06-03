@@ -5,12 +5,19 @@ from job_fit_agent.scoring import score_job
 TARGET_PROFILE = load_target_profile()
 
 
-def _job(title: str, location: str = "Remote", description: str = "", company: str = "Test Co") -> JobPosting:
+def _job(
+    title: str,
+    location: str = "Remote",
+    description: str = "",
+    company: str = "Test Co",
+    workplace_type: str = "",
+) -> JobPosting:
     return JobPosting(
         source="test",
         company=company,
         title=title,
         location=location,
+        workplace_type=workplace_type,
         url="https://example.com/job",
         description=description,
     )
@@ -916,13 +923,13 @@ def test_north_america_remote_is_eligible() -> None:
 def test_geographic_eligibility_tightened_cases() -> None:
     cases = [
         ("San Francisco", "", "review", "Location requires manual review"),
-        ("San Francisco", "Onsite", "review", "Location requires manual review"),
+        ("San Francisco", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
         ("In-Office", "", "ineligible", "In-office role outside Las Vegas/Nevada"),
         ("SF, NY, SEA, Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
         ("San Francisco, US Remote", "Remote", "eligible", "Remote US role matches target geography"),
         ("Las Vegas In-Office", "", "eligible", "Location aligns with target geography"),
-        ("San Francisco, CA", "Onsite", "review", "Location requires manual review"),
-        ("San Francisco, CA", "Hybrid", "review", "Location requires manual review"),
+        ("San Francisco, CA", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
+        ("San Francisco, CA", "Hybrid", "ineligible", "Hybrid role outside Las Vegas/Nevada"),
         ("Dublin, Ireland", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("UAE", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("Poland", "Remote", "ineligible", "Remote role limited to non-US geography"),
@@ -1272,6 +1279,72 @@ def test_forward_deployed_engineer_with_ai_agents_is_high_fit() -> None:
     assert fit.classification == "high_fit"
 
 
+
+
+def test_location_type_blocks_non_local_onsite_roles() -> None:
+    cases = [
+        ("Solutions Architect", "San Francisco, CA", "On-site", "On-site role outside Cody's local geography: San Francisco, CA"),
+        ("Solutions Architect", "NYC", "On-site", "On-site role outside Cody's local geography: NYC"),
+        ("Solutions Architect", "Austin", "On-site", "On-site role outside Cody's local geography: Austin"),
+        ("Solutions Architect", "Dallas", "On-site", "On-site role outside Cody's local geography: Dallas"),
+        ("Customer Engineer", "West Coast", "On-site", "On-site role outside Cody's local geography: West Coast"),
+    ]
+    for title, location, workplace_type, reason in cases:
+        job = _job(
+            title=title,
+            location=location,
+            workplace_type=workplace_type,
+            description="Design customer AI implementations and API integrations.",
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "ineligible", (location, workplace_type)
+        assert job.geographic_reason == reason, (location, workplace_type)
+        assert fit.viability_level == "skip", (location, workplace_type)
+
+
+def test_us_city_without_location_type_requires_review() -> None:
+    cases = [("Solutions Architect", "San Francisco, CA"), ("Solutions Architect", "NYC")]
+    for title, location in cases:
+        job = _job(
+            title=title,
+            location=location,
+            description="Design customer AI implementations and API integrations.",
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "review", location
+        assert fit.viability_level in {"review", "stretch"}, location
+
+
+def test_location_type_allows_local_onsite_and_hybrid_roles() -> None:
+    cases = [
+        ("Solutions Architect", "Las Vegas", "On-site", "eligible"),
+        ("Solutions Architect", "Henderson", "On-site", "eligible"),
+        ("Solutions Architect", "Nevada", "Hybrid", "eligible"),
+    ]
+    for title, location, workplace_type, expected in cases:
+        job = _job(
+            title=title,
+            location=location,
+            workplace_type=workplace_type,
+            description="Design customer AI implementations and API integrations.",
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == expected, (location, workplace_type)
+        assert fit.viability_level == "apply_now", (location, workplace_type)
+
+
+def test_international_remote_or_onsite_locations_are_ineligible() -> None:
+    cases = [("Solutions Engineer", "EMEA", "Remote"), ("Solutions Architect", "London", "On-site"), ("Solutions Engineer", "ANZ", "Remote")]
+    for title, location, workplace_type in cases:
+        job = _job(
+            title=title,
+            location=location,
+            workplace_type=workplace_type,
+            description="Design customer AI implementations and API integrations.",
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "ineligible", (location, workplace_type)
+        assert fit.viability_level == "skip", (location, workplace_type)
 
 def test_us_city_and_region_geography_review_rules_for_solutions_roles() -> None:
     review_cases = [
