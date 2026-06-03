@@ -1483,3 +1483,63 @@ def test_remote_united_states_and_us_remote_solutions_roles_are_apply_now() -> N
         assert fit.classification == "high_fit", title
         assert job.geographic_eligibility == "eligible", title
         assert fit.viability_level == "apply_now", title
+
+
+def test_remote_city_region_location_type_regressions() -> None:
+    cases = [
+        (
+            "Customer Engineer (West Coast)",
+            "San Francisco, CA; Seattle, WA",
+            "Remote",
+            "review",
+            "Remote role with US city/region constraint, requires review.",
+        ),
+        (
+            "Solutions Architect (San Francisco)",
+            "San Francisco, CA",
+            "On-site",
+            "ineligible",
+            "On-site role outside Cody's local geography: San Francisco, CA",
+        ),
+        (
+            "Solutions Architect (NYC)",
+            "NYC",
+            "On-site",
+            "ineligible",
+            "On-site role outside Cody's local geography: NYC",
+        ),
+        ("Remote United States role", "Remote United States", "Remote", "eligible", ""),
+        ("Remote North America role", "Remote North America", "Remote", "eligible", ""),
+        ("Remote EMEA role", "Remote EMEA", "Remote", "ineligible", "International region detected: EMEA"),
+        ("Remote London role", "Remote London", "Remote", "ineligible", "International location detected: London"),
+        ("Las Vegas On-site role", "Las Vegas", "On-site", "eligible", ""),
+        ("Henderson On-site role", "Henderson", "On-site", "eligible", ""),
+    ]
+    for title, location, workplace_type, expected_eligibility, expected_reason in cases:
+        job = _job(
+            title=title,
+            location=location,
+            workplace_type=workplace_type,
+            description="Design customer AI implementations and API integrations.",
+        )
+
+        score_job(job, TARGET_PROFILE)
+
+        assert job.geographic_eligibility == expected_eligibility, (title, location, workplace_type)
+        assert job.geographic_reason == expected_reason, (title, location, workplace_type)
+
+
+def test_remote_city_region_geography_separate_from_role_fit_viability() -> None:
+    job = _job(
+        title="Customer Engineer (West Coast)",
+        location="San Francisco, CA; Seattle, WA",
+        workplace_type="Remote",
+        description="Provide customer support escalations and account management.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+    assert fit.viability_level in {"review", "skip"}
+    assert job.geographic_eligibility == "review"
+    assert job.geographic_reason == "Remote role with US city/region constraint, requires review."

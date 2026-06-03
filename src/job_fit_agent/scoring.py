@@ -743,6 +743,8 @@ def _has_location_specific_term(text: str) -> bool:
     )
 
 
+REMOTE_US_CITY_REGION_REVIEW_REASON = "Remote role with US city/region constraint, requires review."
+
 def _us_review_geography_reason(text: str) -> str:
     matches: list[tuple[int, int, str, str]] = []
     for term, label, kind in US_REVIEW_GEOGRAPHY_TERMS:
@@ -848,6 +850,9 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
         geographic_reason = _international_geography_reason(combined) or "Location outside target geography"
     elif has_explicit_eligible_signal or has_local_signal:
         geographic_eligibility = "eligible"
+    elif normalized_location_type == "remote" and (has_review_region_signal or has_location_specific):
+        geographic_eligibility = "review"
+        geographic_reason = REMOTE_US_CITY_REGION_REVIEW_REASON
     elif has_review_region_signal or has_location_specific:
         geographic_eligibility = "review"
         geographic_reason = _us_review_geography_reason(combined)
@@ -1275,7 +1280,11 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             job.geographic_reason = _outside_local_geography_reason(job.location, job.normalized_location_type)
         elif job.geographic_eligibility != "ineligible":
             job.geographic_eligibility = "review"
-            job.geographic_reason = us_review_geography_reason
+            job.geographic_reason = (
+                REMOTE_US_CITY_REGION_REVIEW_REASON
+                if job.normalized_location_type == "remote"
+                else us_review_geography_reason
+            )
     elif job.geographic_eligibility == "review" and has_eligible_us_geography and not geography_warning_terms:
         job.geographic_eligibility = "eligible"
 

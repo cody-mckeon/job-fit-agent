@@ -432,3 +432,34 @@ def test_location_viability_cases() -> None:
     assert hybrid_fc["normalized_country"] in {"US", "USA"}
     assert hybrid_fc["normalized_location_type"] == "hybrid"
     assert hybrid_fc["geographic_eligibility"] == "ineligible"
+
+
+def test_fetch_jobs_extracts_structured_ashby_fields_from_api(monkeypatch):
+    api_response = _mock_response({
+        "jobs": [
+            {
+                "title": "Customer Engineer (West Coast)",
+                "jobUrl": "https://jobs.example/customer-engineer-west-coast",
+                "locationExternalName": "San Francisco, CA; Seattle, WA",
+                "locationType": "Remote",
+                "departmentName": "Engineering",
+                "employmentTypeName": "Full-time",
+                "descriptionPlain": "Support customer implementations.",
+            }
+        ]
+    })
+    html_response = _mock_response({}, text="")
+
+    def _mock_get(url, timeout):
+        if "posting-api/job-board" in url:
+            return api_response
+        return html_response
+
+    monkeypatch.setattr(requests, "get", _mock_get)
+
+    jobs = AshbyCollector().fetch_jobs("langchain")
+
+    assert jobs[0].location == "San Francisco, CA; Seattle, WA"
+    assert jobs[0].workplace_type == "Remote"
+    assert jobs[0].department == "Engineering"
+    assert jobs[0].employment_type == "Full-time"
