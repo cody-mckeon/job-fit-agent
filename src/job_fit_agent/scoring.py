@@ -571,13 +571,35 @@ REMOTE_ELIGIBLE_REGION_ALIASES = (
     "remote americas",
 )
 LOCATION_SPECIFIC_TERMS = (
-    "san francisco", "new york", "nyc", "austin", "dallas", "seattle", "los angeles",
-    "mountain view", "west coast", "east coast", "atlanta", "chicago", "foster city",
-    "bay area", "california", "pittsburgh", "boston",
+    "san francisco bay area", "san francisco", "new york city", "new york", "nyc",
+    "austin", "dallas", "seattle", "los angeles", "mountain view", "west coast",
+    "east coast", "charlotte", "raleigh", "miami", "atlanta", "chicago",
+    "foster city", "bay area", "california", "pittsburgh", "boston",
 )
 LOCATION_SPECIFIC_PATTERNS = (
     r"(?<![a-z0-9])sf(?![a-z0-9])",
     r"(?<![a-z0-9])sea(?![a-z0-9])",
+)
+
+US_REVIEW_GEOGRAPHY_TERMS = (
+    ("san francisco bay area", "San Francisco", "city"),
+    ("san francisco", "San Francisco", "city"),
+    ("new york city", "New York City", "city"),
+    ("new york", "New York", "city"),
+    ("nyc", "NYC", "city"),
+    ("austin", "Austin", "city"),
+    ("dallas", "Dallas", "city"),
+    ("seattle", "Seattle", "city"),
+    ("los angeles", "Los Angeles", "city"),
+    ("mountain view", "Mountain View", "city"),
+    ("charlotte", "Charlotte", "city"),
+    ("raleigh", "Raleigh", "city"),
+    ("miami", "Miami", "city"),
+    ("west coast", "West Coast", "region"),
+    ("east coast", "East Coast", "region"),
+)
+US_REVIEW_GEOGRAPHY_PATTERNS = (
+    (r"(?<![a-z0-9])sf(?![a-z0-9])", "San Francisco", "city"),
 )
 LOCAL_ELIGIBILITY_TERMS = ("las vegas", "henderson", "nevada")
 NON_US_REGIONS = (
@@ -721,6 +743,23 @@ def _has_location_specific_term(text: str) -> bool:
     )
 
 
+def _us_review_geography_reason(text: str) -> str:
+    matches: list[tuple[int, int, str, str]] = []
+    for term, label, kind in US_REVIEW_GEOGRAPHY_TERMS:
+        pattern = rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])"
+        match = re.search(pattern, text)
+        if match:
+            matches.append((match.start(), -len(match.group(0)), label, kind))
+    for pattern, label, kind in US_REVIEW_GEOGRAPHY_PATTERNS:
+        match = re.search(pattern, text)
+        if match:
+            matches.append((match.start(), -len(match.group(0)), label, kind))
+    if not matches:
+        return ""
+    _, _, label, kind = sorted(matches)[0]
+    return f"US {kind} detected: {label}, requires review"
+
+
 def _has_local_eligibility_signal(text: str) -> bool:
     return any(_contains_geo_term(text, term) for term in LOCAL_ELIGIBILITY_TERMS)
 
@@ -774,6 +813,7 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
         geographic_eligibility = "eligible"
     elif has_review_region_signal or _has_location_specific_term(combined):
         geographic_eligibility = "review"
+        geographic_reason = _us_review_geography_reason(combined)
     elif normalized_location_type == "remote":
         geographic_eligibility = "review"
     elif not location:
@@ -1175,6 +1215,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
 
     geography_warning_text = f"{job.title} {job.description} {job.location} {job.workplace_type}".lower()
     geography_warning_terms = _geography_warning_terms_in_text(geography_warning_text)
+    us_review_geography_reason = _us_review_geography_reason(geography_warning_text)
+    if job.geographic_eligibility == "review" and us_review_geography_reason and not geography_warning_terms:
+        job.geographic_reason = us_review_geography_reason
     if job.geographic_eligibility == "review" and not geography_warning_terms and (
         _has_remote_us_eligibility_signal(geography_warning_text)
         or _has_remote_region_eligibility_signal(geography_warning_text)
