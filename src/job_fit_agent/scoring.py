@@ -31,7 +31,6 @@ NEGATIVE_KEYWORDS = {
     "nurse": -45,
     "driver": -45,
     "sales development": -35,
-    "account executive": -35,
     "finance operations": -20,
     "tax": -25,
     "legal": -25,
@@ -58,6 +57,71 @@ NEAR_FIT_TERMS = {
 }
 
 PMM_HIGH_FIT_KEYWORDS = {"product analytics", "experimentation", "ai", "platform", "customer-facing web"}
+ENTERPRISE_AI_SOLUTIONS_PRIORITY_TITLES = {
+    "enterprise solutions engineer",
+    "solutions engineer",
+    "ai solutions engineer",
+    "enterprise ai solutions engineer",
+    "forward deployed engineer",
+    "forward-deployed engineer",
+    "forward deployed ai engineer",
+    "implementation engineer",
+    "ai implementation engineer",
+    "ai deployment engineer",
+    "enterprise deployment engineer",
+    "deployment engineer",
+}
+ENTERPRISE_AI_SOLUTIONS_CONTEXT_SIGNALS = {
+    "ai",
+    "agents",
+    "ai agents",
+    "voice ai",
+    "llm",
+    "llms",
+    "llm workflows",
+    "workflow automation",
+    "workflow integration",
+    "integrations",
+    "integration",
+    "api",
+    "apis",
+    "api integration",
+    "enterprise deployment",
+    "pilot deployment",
+    "customer implementation",
+    "technical discovery",
+    "solution design",
+    "systems integration",
+    "customer workflows",
+    "proof of concept",
+    "poc",
+    "post-sales technical",
+    "pre-sales technical",
+    "customer-facing engineering",
+}
+ENTERPRISE_AI_SOLUTIONS_TITLE_BOOST = 22
+ENTERPRISE_AI_SOLUTIONS_CONTEXT_BONUS = 6
+ENTERPRISE_AI_SOLUTIONS_CONTEXT_BONUS_CAP = 36
+CONTEXTUAL_NEGATIVE_TITLE_TERMS = {
+    "account executive": -45,
+    "sdr": -40,
+    "bdr": -40,
+    "customer support": -40,
+    "technical support specialist": -45,
+    "customer success manager": -35,
+    "renewals manager": -40,
+}
+QUOTA_CARRYING_SALES_SIGNALS = {
+    "quota-carrying",
+    "quota carrying",
+    "carry a quota",
+    "sales quota",
+    "pipeline generation",
+    "closing new business",
+    "close new business",
+    "prospecting",
+    "cold calling",
+}
 FORWARD_DEPLOYED_HIGH_PRIORITY_TITLES = {
     "forward deployed engineer",
     "forward-deployed engineer",
@@ -82,7 +146,12 @@ FORWARD_DEPLOYED_STRONG_SIGNALS = {
     "proof of concept",
     "poc",
     "deployment",
+    "pilot deployment",
     "integrations",
+    "api integration",
+    "systems integration",
+    "solution design",
+    "workflow integration",
 }
 FORWARD_DEPLOYED_CONTEXT_SIGNALS = {
     "ai",
@@ -99,6 +168,9 @@ FORWARD_DEPLOYED_CONTEXT_SIGNALS = {
     "enterprise software",
     "technical product delivery",
     "integrations",
+    "api integration",
+    "enterprise deployment",
+    "customer implementation",
 }
 FORWARD_DEPLOYED_DOWNRANK_GUARDRAILS = {
     "sales engineer",
@@ -155,7 +227,19 @@ OPS_AUTOMATION_TITLES = {
 }
 
 MARKET_ROLE_TITLE_FAMILIES = {
+    "enterprise solutions engineer": "solutions_architecture",
+    "solutions engineer": "solutions_architecture",
     "ai solutions engineer": "solutions_architecture",
+    "enterprise ai solutions engineer": "solutions_architecture",
+    "forward deployed engineer": "product_engineering",
+    "forward deployed ai engineer": "product_engineering",
+    "customer engineer": "solutions_architecture",
+    "technical solutions engineer": "solutions_architecture",
+    "implementation engineer": "ai_implementation",
+    "ai implementation engineer": "ai_implementation",
+    "ai deployment engineer": "ai_implementation",
+    "enterprise deployment engineer": "ai_implementation",
+    "solutions architect": "solutions_architecture",
     "ai solutions architect": "solutions_architecture",
     "ai implementation consultant": "ai_implementation",
     "ai implementation manager": "ai_implementation",
@@ -211,6 +295,17 @@ AI_AGENTIC_CONTEXT_SIGNALS = {
     "ai enablement",
     "ai adoption",
     "ai implementation",
+    "enterprise deployment",
+    "customer implementation",
+    "technical discovery",
+    "solution design",
+    "workflow integration",
+    "customer workflows",
+    "systems integration",
+    "api integration",
+    "post-sales technical",
+    "pre-sales technical",
+    "customer-facing engineering",
     "ai transformation",
 }
 AUTOMATION_CONTEXT_SIGNALS = {
@@ -393,6 +488,16 @@ AI_BUILDER_KEYWORDS = {
     "marketing operations automation",
     "integrations",
     "apis",
+    "api integration",
+    "voice ai",
+    "llm workflows",
+    "enterprise deployment",
+    "customer implementation",
+    "technical discovery",
+    "solution design",
+    "workflow integration",
+    "systems integration",
+    "pilot deployment",
     "openai",
     "anthropic",
     "langchain",
@@ -743,9 +848,9 @@ def classify_role_family(title: str) -> str:
         return "technical_product"
     if any(term in normalized for term in ("ai operations", "ml ops", "ai ops", "ai enablement", "ai transformation")):
         return "ai_operations"
-    if any(term in normalized for term in ("ai implementation", "implementation manager")):
+    if any(term in normalized for term in ("ai implementation", "implementation manager", "implementation engineer", "deployment engineer")):
         return "ai_implementation"
-    if any(term in normalized for term in ("solutions architect", "solutions engineer", "solutions consultant")):
+    if any(term in normalized for term in ("solutions architect", "solutions engineer", "solutions consultant", "customer engineer", "technical solutions engineer", "technical solutions consultant")):
         return "solutions_architecture"
     if any(term in normalized for term in ("workflow automation", "process automation", "automation specialist", "automation engineer", "automation consultant", "power platform", "workato", "servicenow", "moveworks")):
         return "workflow_automation"
@@ -896,6 +1001,23 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             keyword_hits += 1
             score += BASE_KEYWORD_SCORE
             reasons.append(f"Keyword match: {keyword} (+{BASE_KEYWORD_SCORE})")
+
+    has_enterprise_ai_solutions_priority_title = _title_contains_any(title_text, ENTERPRISE_AI_SOLUTIONS_PRIORITY_TITLES)
+    enterprise_ai_solutions_context_boost = 0
+    if has_enterprise_ai_solutions_priority_title:
+        score += ENTERPRISE_AI_SOLUTIONS_TITLE_BOOST
+        reasons.append(f"Enterprise AI solutions title boost (+{ENTERPRISE_AI_SOLUTIONS_TITLE_BOOST})")
+    for keyword in ENTERPRISE_AI_SOLUTIONS_CONTEXT_SIGNALS:
+        if keyword in text and enterprise_ai_solutions_context_boost < ENTERPRISE_AI_SOLUTIONS_CONTEXT_BONUS_CAP:
+            applied = min(
+                ENTERPRISE_AI_SOLUTIONS_CONTEXT_BONUS,
+                ENTERPRISE_AI_SOLUTIONS_CONTEXT_BONUS_CAP - enterprise_ai_solutions_context_boost,
+            )
+            enterprise_ai_solutions_context_boost += applied
+            score += applied
+            reasons.append(f"Enterprise AI solutions context: {keyword} (+{applied})")
+    has_enterprise_ai_solutions_context = enterprise_ai_solutions_context_boost >= 12
+
     forward_deployed_signal_boost = 0
     for keyword in FORWARD_DEPLOYED_STRONG_SIGNALS:
         if keyword in text:
@@ -959,10 +1081,23 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         job.geographic_eligibility = "ineligible"
         red_flags.append("DACH region role may not be US eligible")
 
+    primary_role_text = f"{job.title} {job.department} {job.team}".lower()
     for keyword, points in NEGATIVE_KEYWORDS.items():
         if keyword in text:
             score += points
             red_flags.append(f"Mismatch keyword: {keyword} ({points})")
+    for keyword, points in CONTEXTUAL_NEGATIVE_TITLE_TERMS.items():
+        pattern = rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])" if keyword in {"sdr", "bdr"} else re.escape(keyword)
+        if re.search(pattern, primary_role_text):
+            score += points
+            red_flags.append(f"Primary role mismatch: {keyword} ({points})")
+    has_quota_carrying_sales_focus = (
+        any(term in primary_role_text for term in ("sales", "account executive", "account manager", "business development"))
+        and any(signal in text for signal in QUOTA_CARRYING_SALES_SIGNALS)
+    )
+    if has_quota_carrying_sales_focus and "account executive" not in primary_role_text:
+        score -= 35
+        red_flags.append("Quota-carrying sales focus detected (-35)")
     hardcore_engineering_signal = any(keyword in text for keyword in NEGATIVE_ENGINEERING_KEYWORDS)
     if hardcore_engineering_signal:
         red_flags.append("Hardcore infrastructure/backend engineering emphasis detected")
@@ -1028,6 +1163,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if has_forward_deployed_title and forward_deployed_has_context:
         is_high_fit_role_match = True
         reasons.append("Forward deployed engineering role aligns with Cody's AI systems, product implementation, and customer-facing technical delivery experience.")
+    if has_enterprise_ai_solutions_priority_title and has_enterprise_ai_solutions_context:
+        is_high_fit_role_match = True
+        reasons.append("Enterprise AI solutions role aligns with customer-facing AI deployment, implementation, workflow integration, and technical discovery experience.")
     if role_family in ai_native_families and capability_boost >= 12 and (has_market_title_context_pair or role_family not in {"business_systems", "revops_automation", "marketing_ops_automation", "product_operations", "solutions_architecture"}):
         is_high_fit_role_match = True
     if has_market_title_context_pair and role_family in ai_native_families:
@@ -1075,6 +1213,13 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         classification = "low_fit"
 
     title_lower = job.title.lower()
+    has_primary_negative_role = any(
+        (re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", primary_role_text) if term in {"sdr", "bdr"} else term in primary_role_text)
+        for term in CONTEXTUAL_NEGATIVE_TITLE_TERMS
+    )
+    if has_primary_negative_role or has_quota_carrying_sales_focus:
+        if not ("customer success manager" in title_lower and has_enterprise_ai_solutions_context and capability_boost >= 12):
+            classification = "low_fit"
     if has_generic_guardrail_title and not role_family_context_hits and not has_ai_automation_context and not has_platform_automation_context:
         if any(term in title_lower for term in ("technical program manager", "engineering program manager")):
             classification = classification

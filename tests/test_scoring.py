@@ -1179,3 +1179,93 @@ def test_marketing_operations_manager_with_workflow_automation_is_near_or_high_f
         TARGET_PROFILE,
     )
     assert fit.classification in {"near_fit", "high_fit"}
+
+
+def test_elevenlabs_enterprise_solutions_engineer_style_role_is_actionable() -> None:
+    job = _job(
+        title="Enterprise Solutions Engineer - North America",
+        location="Remote US",
+        company="ElevenLabs",
+        description=(
+            "Lead technical discovery, solution design, proof of concept, and pilot deployment "
+            "for enterprise voice AI customers. Own API integration, systems integration, "
+            "customer implementation, and LLM workflows while partnering with Account Executive "
+            "teammates on customer workflows."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "high_fit"
+    assert fit.viability_level == "apply_now"
+    assert not any("account executive" in flag.lower() for flag in fit.red_flags)
+
+
+def test_account_executive_mentioned_as_partner_does_not_majorly_red_flag() -> None:
+    job = _job(
+        title="AI Solutions Engineer",
+        location="Remote US",
+        description=(
+            "Own customer-facing engineering for AI agents, APIs, integrations, workflow automation, "
+            "and enterprise deployment. Partner with Account Executives on technical discovery."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "high_fit"
+    assert not any("account executive" in flag.lower() for flag in fit.red_flags)
+    assert fit.total_score >= 70
+
+
+def test_account_executive_title_remains_low_fit() -> None:
+    job = _job(
+        title="Account Executive",
+        location="Remote US",
+        description="Quota-carrying sales role focused on prospecting, closing new business, and pipeline generation.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+    assert any("account executive" in flag.lower() for flag in fit.red_flags)
+
+
+def test_generic_customer_success_manager_remains_low_fit() -> None:
+    job = _job(
+        title="Customer Success Manager",
+        location="Remote US",
+        description="Manage renewals, customer health, onboarding, support escalations, and quarterly business reviews.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+
+
+def test_ai_solutions_engineer_remote_us_is_high_or_strong_near_fit() -> None:
+    job = _job(
+        title="AI Solutions Engineer",
+        location="Remote US",
+        description=(
+            "Design LLM workflows and AI agents for enterprise deployment, API integration, "
+            "workflow automation, and customer implementation."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification in {"high_fit", "near_fit"}
+    assert fit.classification == "high_fit" or fit.total_score >= 70
+
+
+def test_forward_deployed_engineer_with_ai_agents_is_high_fit() -> None:
+    job = _job(
+        title="Forward Deployed Engineer",
+        location="Remote US",
+        description="Build AI agents for customer workflows, integrations, enterprise deployment, and workflow automation.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "high_fit"
