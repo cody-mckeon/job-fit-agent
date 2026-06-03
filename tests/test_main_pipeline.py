@@ -2154,3 +2154,32 @@ def test_digest_adds_automation_ai_operations_review_section(monkeypatch, capsys
     output = capsys.readouterr().out
     assert "Automation / AI operations roles worth reviewing" in output
     assert "Business Systems Manager" in output
+
+
+def test_digest_separates_eligible_ineligible_and_review_jobs(monkeypatch, capsys) -> None:
+    base = {
+        "score": 90,
+        "status": "new",
+        "application_status": "not_applied",
+        "classification": "high_fit",
+        "viability_level": "apply_now",
+        "source": "ashby",
+        "company": "acme",
+        "viability_reasons": "[]",
+        "red_flags": "[]",
+    }
+    high_rows = [
+        base | {"id": 301, "title": "Remote United States Enterprise Solutions Engineer", "geographic_eligibility": "eligible", "url": "https://jobs.ashbyhq.com/acme/geo-eligible"},
+        base | {"id": 302, "title": "DACH Forward Deployed Engineer", "geographic_eligibility": "ineligible", "geographic_reason": "International region detected: DACH", "url": "https://jobs.ashbyhq.com/acme/geo-ineligible"},
+        base | {"id": 303, "title": "North America Forward Deployed Engineer", "geographic_eligibility": "review", "url": "https://jobs.ashbyhq.com/acme/geo-review"},
+    ]
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_top_jobs_by_classification", lambda classification, limit=50: high_rows if classification == "high_fit" else [])
+    main(["digest"])
+    output = capsys.readouterr().out
+    assert "Actionable apply-now roles" in output
+    assert "Remote United States Enterprise Solutions Engineer" in output.split("Strong role fit, geography not eligible")[0]
+    assert "Strong role fit, geography not eligible" in output
+    assert "DACH Forward Deployed Engineer" in output.split("Needs geography review")[0]
+    assert "Needs geography review" in output
+    assert "North America Forward Deployed Engineer" in output.split("Needs geography review", 1)[1]
