@@ -240,7 +240,10 @@ EXPLICIT_US_GEOGRAPHY_TERMS = (
     "usa remote", "u.s. remote", "remote-us", "us-remote", "remote usa",
     "located in united states", "located in the united states",
     "based in the united states", "open to candidates based in the united states",
-    "united states", "las vegas", "henderson", "nevada", "us-based", "us based",
+    "based anywhere in the united states", "anywhere in the united states",
+    "north america remote", "remote north america", "amer remote", "remote amer",
+    "americas remote", "remote americas",
+    "las vegas", "henderson", "nevada", "us-based", "us based",
 )
 
 
@@ -998,10 +1001,10 @@ def get_unapplied_high_fit_rows(
         geo = str(safe_row_value(row, "geographic_eligibility", "review") or "review").lower()
         if geo in {"eligible", "remote_us"} and not _has_non_us_geography_signal(row):
             eligible_rows.append(row)
-        elif geo == "review" or _has_non_us_geography_signal(row):
+        elif geo == "review" and not _has_non_us_geography_signal(row):
             if include_review and not eligible_only:
                 review_rows.append(row)
-        elif geo == "ineligible":
+        elif geo == "ineligible" or _has_non_us_geography_signal(row):
             if include_ineligible and not eligible_only:
                 ineligible_rows.append(row)
     if limit is not None:
