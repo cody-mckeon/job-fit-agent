@@ -776,10 +776,46 @@ def _geography_warning_terms_in_text(text: str) -> list[str]:
     return [term.upper() if term in {"dach", "emea", "apac", "uk"} else term.title() for term in GEOGRAPHY_WARNING_TERMS if _contains_geo_term(text, term)]
 
 
+def detect_geography_terms(*parts: str) -> list[str]:
+    """Return human-readable geography terms detected in the supplied text parts."""
+    text = " ".join(part for part in parts if part).lower()
+    detected: list[str] = []
+
+    def _add(label: str) -> None:
+        if label and label not in detected:
+            detected.append(label)
+
+    for term in LOCAL_ELIGIBILITY_TERMS:
+        if _contains_geo_term(text, term):
+            _add(term.title())
+    for term in REMOTE_US_ALIASES + REMOTE_US_OPEN_ELIGIBILITY_TERMS + REMOTE_ELIGIBLE_REGION_ALIASES:
+        if term in text:
+            _add(term.upper() if term in {"us remote", "remote us", "usa remote"} else term.title())
+    for term, label, _kind in US_REVIEW_GEOGRAPHY_TERMS:
+        if _contains_geo_term(text, term):
+            _add(label)
+    for pattern, label, _kind in US_REVIEW_GEOGRAPHY_PATTERNS:
+        if re.search(pattern, text):
+            _add(label)
+    for term in GEOGRAPHY_WARNING_TERMS:
+        if _contains_geo_term(text, term):
+            _add(_geography_label(term))
+    return detected
+
+
+def _outside_local_geography_reason(location: str, location_type: str) -> str:
+    label = "On-site" if location_type == "onsite" else "Hybrid"
+    place = (location or "").strip()
+    if place:
+        return f"{label} role outside Cody's local geography: {place}"
+    return f"{label} role outside Cody's local geography"
+
+
 def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]:
     location = (location_raw or "").strip()
+    location_lower = location.lower()
     workplace = (workplace_type or "").strip().lower()
-    combined = f"{location.lower()} {workplace}".strip()
+    combined = f"{location_lower} {workplace}".strip()
     normalized_location_type = "unknown"
     if "hybrid" in combined:
         normalized_location_type = "hybrid"
@@ -801,6 +837,7 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
     has_multi_country = bool(re.search(r"\b(canada|mexico|argentina|peru)\b", combined))
     has_international_signal = any(_contains_geo_term(combined, region) for region in NON_US_REGIONS)
     has_review_region_signal = any(_contains_geo_term(combined, region) for region in REVIEW_REGIONS)
+    has_location_specific = _has_location_specific_term(combined)
 
     if has_remote_us_signal:
         normalized_country = "US"
@@ -811,7 +848,7 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
         geographic_reason = _international_geography_reason(combined) or "Location outside target geography"
     elif has_explicit_eligible_signal or has_local_signal:
         geographic_eligibility = "eligible"
-    elif has_review_region_signal or _has_location_specific_term(combined):
+    elif has_review_region_signal or has_location_specific:
         geographic_eligibility = "review"
         geographic_reason = _us_review_geography_reason(combined)
     elif normalized_location_type == "remote":
@@ -828,31 +865,36 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
             normalized_country = "US"
             if normalized_location_type in {"hybrid", "onsite"}:
                 geographic_eligibility = "eligible" if state == "NV" else "ineligible"
-                if geographic_eligibility == "ineligible" and not geographic_reason:
-                    geographic_reason = "Location outside target geography"
+                geographic_reason = "" if state == "NV" else _outside_local_geography_reason(location, normalized_location_type)
 
-    has_remote_us_signal = _has_remote_us_eligibility_signal(combined) or _has_remote_region_eligibility_signal(combined)
-    has_location_specific_non_local = _has_location_specific_term(combined)
+    has_remote_signal = _has_remote_us_eligibility_signal(combined) or _has_remote_region_eligibility_signal(combined)
     has_in_office = "in-office" in combined or "in office" in combined
     has_nevada_signal = _has_local_eligibility_signal(combined) or any(token in combined for token in (" nv", ",nv"))
 
     if normalized_location_type in {"hybrid", "onsite"}:
         if has_nevada_signal:
             geographic_eligibility = "eligible"
-        else:
+            geographic_reason = ""
+        elif has_international_signal:
             geographic_eligibility = "ineligible"
-            if not geographic_reason:
-                geographic_reason = "Location outside target geography"
+            geographic_reason = _international_geography_reason(combined) or "Location outside target geography"
+        elif has_location_specific or normalized_state:
+            geographic_eligibility = "ineligible"
+            geographic_reason = _outside_local_geography_reason(location, normalized_location_type)
+        elif normalized_location_type == "hybrid":
+            geographic_eligibility = "review"
+            geographic_reason = geographic_reason or "Hybrid location requires manual review"
+        elif not location:
+            geographic_eligibility = "review"
+            geographic_reason = geographic_reason or "On-site location requires manual review"
 
     if has_in_office:
         geographic_eligibility = "eligible" if has_nevada_signal else "ineligible"
-        if geographic_eligibility == "ineligible" and not geographic_reason:
-            geographic_reason = "Location outside target geography"
+        geographic_reason = "" if has_nevada_signal else _outside_local_geography_reason(location, "onsite")
 
-    if has_location_specific_non_local and not has_remote_us_signal and normalized_location_type in {"hybrid", "onsite"}:
+    if has_location_specific and not has_remote_signal and normalized_location_type in {"hybrid", "onsite"} and not has_nevada_signal:
         geographic_eligibility = "ineligible"
-        if not geographic_reason:
-            geographic_reason = "Location outside target geography"
+        geographic_reason = _outside_local_geography_reason(location, normalized_location_type)
 
     return {
         "location_raw": location_raw or "",
@@ -863,7 +905,6 @@ def normalize_location(location_raw: str, workplace_type: str) -> dict[str, str]
         "geographic_eligibility": geographic_eligibility,
         "geographic_reason": geographic_reason,
     }
-
 
 def evaluate_location_viability(location: str, workplace_type: str) -> tuple[str, list[str]]:
     """Evaluate explicit geographic viability for Cody."""
@@ -1124,7 +1165,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if has_cursor_blank_location_limitation:
         job.geographic_eligibility = "review"
         job.geographic_reason = "Location unavailable from source; manual review required"
-    text = f"{job.title} {job.description} {job.location} {job.workplace_type} {job.department} {job.team}".lower()
+    text = f"{job.title} {job.description} {job.location} {job.workplace_type} {job.department} {job.employment_type} {job.team}".lower()
     title_text = job.title.lower()
     score = 0
     reasons: list[str] = []
@@ -1229,12 +1270,16 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         if _contains_geo_term(geography_warning_text, "dach"):
             red_flags.append("DACH region role may not be US eligible")
     elif us_review_geography_reason and not has_eligible_us_geography:
-        job.geographic_eligibility = "review"
-        job.geographic_reason = us_review_geography_reason
+        if job.normalized_location_type == "onsite":
+            job.geographic_eligibility = "ineligible"
+            job.geographic_reason = _outside_local_geography_reason(job.location, job.normalized_location_type)
+        elif job.geographic_eligibility != "ineligible":
+            job.geographic_eligibility = "review"
+            job.geographic_reason = us_review_geography_reason
     elif job.geographic_eligibility == "review" and has_eligible_us_geography and not geography_warning_terms:
         job.geographic_eligibility = "eligible"
 
-    primary_role_text = f"{job.title} {job.department} {job.team}".lower()
+    primary_role_text = f"{job.title} {job.department} {job.employment_type} {job.team}".lower()
     for keyword, points in NEGATIVE_KEYWORDS.items():
         if keyword in text:
             score += points

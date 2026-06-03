@@ -43,10 +43,12 @@ def extract_ashby_hydration_data(html: str) -> dict[str, str]:
         if isinstance(node, dict):
             key = str(node.get("key") or "").strip().lower()
             value = str(node.get("value") or "").strip()
-            if key in {"location", "workplace type", "department", "team"} and value:
+            if key in {"location", "workplace type", "location type", "employment type", "department", "team"} and value:
                 mapping = {
                     "location": "Location",
                     "workplace type": "Location Type",
+                    "location type": "Location Type",
+                    "employment type": "Employment Type",
                     "department": "Department",
                     "team": "Team",
                 }
@@ -59,6 +61,8 @@ def extract_ashby_hydration_data(html: str) -> dict[str, str]:
                     metadata.setdefault("Location", text)
                 elif lowered in {"workplacetype", "locationtype"} and text:
                     metadata.setdefault("Location Type", text)
+                elif lowered in {"employmenttype", "employmenttypename"} and text:
+                    metadata.setdefault("Employment Type", text)
                 elif lowered == "department" and text:
                     metadata.setdefault("Department", text)
                 elif lowered == "team" and text:
@@ -110,6 +114,10 @@ def extract_ashby_app_data_metadata(html: str) -> dict[str, str]:
     team = str(posting.get("teamExternalName") or posting.get("teamName") or "").strip()
     if team:
         metadata["Team"] = team
+
+    employment_type = str(posting.get("employmentType") or posting.get("employmentTypeName") or "").strip()
+    if employment_type:
+        metadata["Employment Type"] = employment_type
 
     is_remote = posting.get("isRemote")
     if isinstance(is_remote, bool):
@@ -300,9 +308,11 @@ class AshbyCollector:
         if not department:
             department = page_metadata.get("Department", "")
 
+        employment_type = page_metadata.get("Employment Type", "")
+
         team = self._extract_field_name(job, ("teamName", "team"))
         if not team:
-            team = page_metadata.get("Team", "") or page_metadata.get("Employment Type", "")
+            team = page_metadata.get("Team", "")
 
         description = str(job.get("descriptionPlain") or job.get("description") or "").strip()
 
@@ -313,6 +323,7 @@ class AshbyCollector:
             location=location,
             workplace_type=workplace_type,
             department=department,
+            employment_type=employment_type,
             team=team,
             url=url,
             description=description,

@@ -72,7 +72,7 @@ from job_fit_agent.repository import (
     update_status,
     upsert_job,
 )
-from job_fit_agent.scoring import score_job
+from job_fit_agent.scoring import detect_geography_terms, score_job
 from job_fit_agent.telegram_commands import parse_telegram_command
 
 LOGGER = logging.getLogger(__name__)
@@ -528,7 +528,8 @@ def extract_ashby_job_from_direct_page(job_url: str, html: str) -> JobPosting:
         location=location,
         workplace_type=workplace_type,
         department=metadata.get("Department", ""),
-        team=metadata.get("Team", "") or metadata.get("Employment Type", ""),
+        employment_type=metadata.get("Employment Type", ""),
+        team=metadata.get("Team", ""),
         url=job_url,
         description=description,
         date_found=datetime.now(UTC),
@@ -2028,10 +2029,10 @@ def location_audit() -> None:
     initialize()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """SELECT source, company, url, location_raw, normalized_location_type, geographic_eligibility, workplace_type
-               FROM jobs"""
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM jobs").fetchall()
+
+    def _audit_value(row: sqlite3.Row, key: str, default: str = "") -> str:
+        return str(row[key] if key in row.keys() and row[key] is not None else default)
 
     blank_known_limitations_by_company: dict[tuple[str, str], list[str]] = {}
     blank_needs_debug_by_company: dict[tuple[str, str], list[str]] = {}
@@ -2039,14 +2040,14 @@ def location_audit() -> None:
     conflicts: list[sqlite3.Row] = []
 
     for row in rows:
-        source = row["source"] or ""
-        company = row["company"] or ""
-        url = row["url"] or ""
-        raw = (row["location_raw"] or "").strip()
+        source = _audit_value(row, "source")
+        company = _audit_value(row, "company")
+        url = _audit_value(row, "url")
+        raw = _audit_value(row, "location_raw").strip()
         lower_raw = raw.lower()
-        normalized_location_type = (row["normalized_location_type"] or "").lower()
-        geographic_eligibility = (row["geographic_eligibility"] or "review").lower()
-        workplace_type = (row["workplace_type"] or "").lower()
+        normalized_location_type = _audit_value(row, "normalized_location_type").lower()
+        geographic_eligibility = (_audit_value(row, "geographic_eligibility", "review") or "review").lower()
+        workplace_type = _audit_value(row, "workplace_type").lower()
         combined = f"{lower_raw} {workplace_type}"
 
         if not raw:
@@ -2086,19 +2087,33 @@ def location_audit() -> None:
     if not conflicts:
         print("none")
     for row in conflicts[:20]:
+        detected_terms = ", ".join(detect_geography_terms(_audit_value(row, "title"), _audit_value(row, "location_raw"), _audit_value(row, "workplace_type"))) or "none"
+        location_type = _audit_value(row, "normalized_location_type") or _audit_value(row, "workplace_type") or "unknown"
         print(
-            f"{row['source']}/{row['company']} | {row['location_raw']} | {row['normalized_location_type']} | "
-            f"{row['geographic_eligibility']} | {row['url']}"
+            f"title: {_audit_value(row, 'title')} | location: {_audit_value(row, 'location_raw')} | "
+            f"location_type: {location_type} | detected_location_terms: {detected_terms} | "
+            f"final geographic_eligibility: {_audit_value(row, 'geographic_eligibility')} | reason: {_audit_value(row, 'geographic_reason')} | "
+            f"url: {_audit_value(row, 'url')}"
         )
 
-    print("\nD. Top sample URLs to debug")
+    print("\nD. Geography decision sample")
+    for row in rows[:20]:
+        detected_terms = ", ".join(detect_geography_terms(_audit_value(row, "title"), _audit_value(row, "location_raw"), _audit_value(row, "workplace_type"))) or "none"
+        location_type = _audit_value(row, "normalized_location_type") or _audit_value(row, "workplace_type") or "unknown"
+        print(
+            f"title: {_audit_value(row, 'title')} | location: {_audit_value(row, 'location_raw')} | "
+            f"location_type: {location_type} | detected_location_terms: {detected_terms} | "
+            f"final geographic_eligibility: {_audit_value(row, 'geographic_eligibility') or 'review'} | reason: {_audit_value(row, 'geographic_reason')}"
+        )
+
+    print("\nD2. Top sample URLs to debug")
     debug_urls = []
     for urls in blank_needs_debug_by_company.values():
         debug_urls.extend(urls[:2])
     for samples in region_by_company.values():
         debug_urls.extend([u for _, u in samples[:2]])
     for row in conflicts[:10]:
-        debug_urls.append(row["url"])
+        debug_urls.append(_audit_value(row, "url"))
     seen = set()
     for url in debug_urls:
         if url and url not in seen:
@@ -3868,7 +3883,7 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
-    if command == "location-audit":
+    if command in {"location-audit", "debug-geography"}:
         location_audit()
         return
 
@@ -3997,6 +4012,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main reject-company <company>")
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
     print("python -m job_fit_agent.main location-audit")
+    print("python -m job_fit_agent.main debug-geography")
     print("python -m job_fit_agent.main prep-application <job_id>")
     print("python -m job_fit_agent.main export-resume-pdf <job_id>")
     print("python -m job_fit_agent.main extract-application-questions <job_id>")

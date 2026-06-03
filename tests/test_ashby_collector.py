@@ -341,6 +341,7 @@ def test_extract_ashby_hydration_data_from_next_data_fixture() -> None:
     assert metadata["Location Type"] == "Remote"
     assert metadata["Department"] == "Growth"
     assert metadata["Team"] == "Platform"
+    assert metadata["Employment Type"] == "Full-time"
 
 
 def test_fetch_jobs_prefers_hydration_metadata_over_sidebar(monkeypatch):
@@ -367,6 +368,7 @@ def test_fetch_jobs_prefers_hydration_metadata_over_sidebar(monkeypatch):
     assert jobs[0].workplace_type == "Remote"
     assert jobs[0].department == "Growth"
     assert jobs[0].team == "Platform"
+    assert jobs[0].employment_type == "Full-time"
 
 
 ASHBY_REPLIT_HTML = """
