@@ -2040,14 +2040,14 @@ def location_audit() -> None:
     conflicts: list[sqlite3.Row] = []
 
     for row in rows:
-        source = _audit_value(row, "source")
-        company = _audit_value(row, "company")
-        url = _audit_value(row, "url")
-        raw = _audit_value(row, "location_raw").strip()
+        source = _row_text(row, "source")
+        company = _row_text(row, "company")
+        url = _row_text(row, "url")
+        raw = _row_text(row, "location_raw").strip()
         lower_raw = raw.lower()
-        normalized_location_type = _audit_value(row, "normalized_location_type").lower()
-        geographic_eligibility = (_audit_value(row, "geographic_eligibility", "review") or "review").lower()
-        workplace_type = _audit_value(row, "workplace_type").lower()
+        normalized_location_type = _row_text(row, "normalized_location_type").lower()
+        geographic_eligibility = (_row_text(row, "geographic_eligibility", "review") or "review").lower()
+        workplace_type = _row_text(row, "workplace_type").lower()
         combined = f"{lower_raw} {workplace_type}"
 
         if not raw:
@@ -2086,13 +2086,13 @@ def location_audit() -> None:
     def _debug_geography_line(row: sqlite3.Row) -> str:
         detected_terms = ", ".join(
             detect_geography_terms(
-                _audit_value(row, "title"),
-                _audit_value(row, "location_raw"),
-                _audit_value(row, "workplace_type"),
+                _row_text(row, "title"),
+                _row_text(row, "location_raw"),
+                _row_text(row, "workplace_type"),
             )
         ) or "none"
-        detected_location_type = _audit_value(row, "normalized_location_type") or "unknown"
-        structured_location_type = _audit_value(row, "workplace_type") or "unknown"
+        detected_location_type = _row_text(row, "normalized_location_type") or "unknown"
+        structured_location_type = _row_text(row, "workplace_type") or "unknown"
         return (
             f"title: {_audit_value(row, 'title')} | source: {_audit_value(row, 'source')} | "
             f"location: {_audit_value(row, 'location_raw')} | location_type: {structured_location_type} | "
@@ -2118,7 +2118,7 @@ def location_audit() -> None:
     for samples in region_by_company.values():
         debug_urls.extend([u for _, u in samples[:2]])
     for row in conflicts[:10]:
-        debug_urls.append(_audit_value(row, "url"))
+        debug_urls.append(_row_text(row, "url"))
     seen = set()
     for url in debug_urls:
         if url and url not in seen:
@@ -2133,6 +2133,107 @@ def location_audit() -> None:
         print("  - blank location_raw may be unavailable in source metadata; manual review required")
         for sample in urls[:5]:
             print(f"  - {sample}")
+
+
+def _row_text(row: sqlite3.Row, key: str, default: str = "") -> str:
+    return str(safe_row_value(row, key, default) or "")
+
+
+def _json_list_from_row(row: sqlite3.Row, key: str) -> list[str]:
+    raw = safe_row_value(row, key, "")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(item) for item in raw]
+    try:
+        parsed = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return [str(raw)]
+    if isinstance(parsed, list):
+        return [str(item) for item in parsed]
+    return [str(parsed)]
+
+
+def _non_us_terms_in_text(text: str) -> list[str]:
+    detected: list[str] = []
+    lowered = (text or "").lower()
+    for term in NON_US_GEOGRAPHY_TERMS:
+        if _contains_geography_term(lowered, term):
+            label = term.upper() if term in {"dach", "emea", "apac", "anz", "latam", "eu", "uk"} else term.title()
+            if label not in detected:
+                detected.append(label)
+    return detected
+
+
+def debug_geography(job_id: int) -> None:
+    initialize()
+    row = get_job_by_id(job_id)
+    if row is None:
+        print(json.dumps({"error": f"Job not found: {job_id}"}, indent=2))
+        return
+
+    job = JobPosting(
+        source=_row_text(row, "source"),
+        company=_row_text(row, "company"),
+        title=_row_text(row, "title"),
+        location=_row_text(row, "location"),
+        location_raw=_row_text(row, "location_raw"),
+        normalized_country=_row_text(row, "normalized_country"),
+        normalized_state=_row_text(row, "normalized_state"),
+        normalized_city=_row_text(row, "normalized_city"),
+        normalized_location_type=_row_text(row, "normalized_location_type"),
+        geographic_eligibility=_row_text(row, "geographic_eligibility", "review") or "review",
+        geographic_reason=_row_text(row, "geographic_reason"),
+        workplace_type=_row_text(row, "workplace_type"),
+        department=_row_text(row, "department"),
+        employment_type=_row_text(row, "employment_type"),
+        team=_row_text(row, "team"),
+        url=_row_text(row, "url"),
+        description="",
+    )
+    fit = score_job(job, load_target_profile())
+
+    structured_text = " ".join(
+        [
+            job.title,
+            job.location,
+            job.location_raw,
+            job.workplace_type,
+            job.normalized_country,
+            job.normalized_state,
+            job.normalized_city,
+            job.normalized_location_type,
+        ]
+    )
+    noisy_parts: list[str] = []
+    for key in ("reasons", "red_flags", "viability_reasons"):
+        noisy_parts.extend(_json_list_from_row(row, key))
+    noisy_parts.extend(_row_text(row, key) for key in ("geographic_reason", "notes", "department", "employment_type", "team"))
+    noisy_text = " ".join(noisy_parts)
+    detected_international_terms = _non_us_terms_in_text(structured_text)
+    ignored_noisy_terms = [term for term in _non_us_terms_in_text(noisy_text) if term not in detected_international_terms]
+
+    print(json.dumps({
+        "id": job_id,
+        "title": job.title,
+        "company": job.company,
+        "source": job.source,
+        "url": job.url,
+        "location": job.location,
+        "location_raw": job.location_raw,
+        "normalized_country": job.normalized_country,
+        "normalized_state": job.normalized_state,
+        "normalized_city": job.normalized_city,
+        "normalized_location_type": job.normalized_location_type,
+        "workplace_type": job.workplace_type,
+        "detected_location_terms": detect_geography_terms(structured_text),
+        "detected_international_terms": detected_international_terms,
+        "ignored_noisy_terms": ignored_noisy_terms,
+        "final_geographic_eligibility": job.geographic_eligibility,
+        "geographic_reason": job.geographic_reason,
+        "red_flags": fit.red_flags,
+        "viability_reasons": fit.viability_reasons,
+    }, indent=2))
 
 
 PROFILE_CONTEXT_PATH = Path("profile/profile_context.yaml")
@@ -3888,8 +3989,21 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
-    if command in {"location-audit", "debug-geography"}:
+    if command == "location-audit":
         location_audit()
+        return
+
+    if command == "debug-geography":
+        if len(args) == 1:
+            location_audit()
+            return
+        if len(args) != 2:
+            print("Usage: python -m job_fit_agent.main debug-geography [<job_id>]")
+            return
+        try:
+            debug_geography(int(args[1]))
+        except ValueError:
+            print(f"Invalid job id: {args[1]}")
         return
 
     if command == "prep-application":
@@ -4017,7 +4131,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main reject-company <company>")
     print("python -m job_fit_agent.main debug-ashby-url <job_url>")
     print("python -m job_fit_agent.main location-audit")
-    print("python -m job_fit_agent.main debug-geography")
+    print("python -m job_fit_agent.main debug-geography [<job_id>]")
     print("python -m job_fit_agent.main prep-application <job_id>")
     print("python -m job_fit_agent.main export-resume-pdf <job_id>")
     print("python -m job_fit_agent.main extract-application-questions <job_id>")

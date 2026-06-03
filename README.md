@@ -359,6 +359,12 @@ Use `location-audit` when you want a scalable cross-company audit of stored jobs
 python -m job_fit_agent.main location-audit
 ```
 
+Use `debug-geography` with a job ID when you need JSON showing the structured location inputs, ignored noisy geography terms, final geography decision, red flags, and viability reasons for one stored job:
+
+```bash
+python -m job_fit_agent.main debug-geography <job_id>
+```
+
 `location-audit` prints:
 - Blank `location_raw` needing debugging by source/company with sample URLs.
 - Region-only `location_raw` values by source/company (e.g. Europe, EMEA, APAC, LATAM, North America).

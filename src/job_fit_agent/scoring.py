@@ -1129,7 +1129,7 @@ def _evaluate_location_fit(job: JobPosting, target_profile: TargetProfile) -> tu
         and any(term in combined_location_text for term in NON_LOCAL_HYBRID_CITY_TERMS)
         and not any(term in combined_location_text for term in LOCAL_LOCATION_TERMS)
     )
-    if (has_non_local_us and not has_remote_us) or has_explicit_non_local_hybrid:
+    if ((has_non_local_us and not has_remote_us and not has_remote) or has_explicit_non_local_hybrid):
         score_delta += US_NON_LOCAL_PENALTY
         if is_hybrid:
             red_flags.append("Hybrid in-office requirement outside Las Vegas/Nevada")
@@ -1259,20 +1259,21 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     if job.normalized_location_type == "unknown" and "Onsite or location-specific US role outside Las Vegas/Nevada" in red_flags:
         job.geographic_eligibility = "review"
 
-    geography_warning_text = f"{job.title} {job.description} {job.location} {job.workplace_type}".lower()
-    geography_warning_terms = _geography_warning_terms_in_text(geography_warning_text)
-    us_review_geography_reason = _us_review_geography_reason(geography_warning_text)
-    has_explicit_us_eligibility = _has_explicit_us_eligibility(geography_warning_text)
+    structured_geography_text = f"{job.title} {job.location} {job.location_raw} {job.workplace_type}".lower()
+    geography_warning_terms = _geography_warning_terms_in_text(structured_geography_text)
+    us_review_geography_reason = _us_review_geography_reason(structured_geography_text)
+    has_explicit_us_eligibility = _has_explicit_us_eligibility(structured_geography_text)
     has_eligible_us_geography = (
-        _has_remote_us_eligibility_signal(geography_warning_text)
-        or _has_remote_region_eligibility_signal(geography_warning_text)
-        or _has_local_eligibility_signal(geography_warning_text)
+        _has_remote_us_eligibility_signal(structured_geography_text)
+        or _has_remote_region_eligibility_signal(structured_geography_text)
+        or _has_local_eligibility_signal(structured_geography_text)
     )
+    has_structured_remote_us = job.normalized_location_type == "remote" and job.normalized_country == "US"
     if geography_warning_terms and not has_explicit_us_eligibility:
         job.geographic_eligibility = "ineligible"
-        job.geographic_reason = _international_geography_reason(geography_warning_text) or f"International location detected: {geography_warning_terms[0]}"
+        job.geographic_reason = _international_geography_reason(structured_geography_text) or f"International location detected: {geography_warning_terms[0]}"
         red_flags.append(job.geographic_reason)
-        if _contains_geo_term(geography_warning_text, "dach"):
+        if _contains_geo_term(structured_geography_text, "dach"):
             red_flags.append("DACH region role may not be US eligible")
     elif us_review_geography_reason and not has_eligible_us_geography:
         if job.normalized_location_type == "onsite":
@@ -1287,6 +1288,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
             )
     elif job.geographic_eligibility == "review" and has_eligible_us_geography and not geography_warning_terms:
         job.geographic_eligibility = "eligible"
+
+    if has_structured_remote_us and job.geographic_eligibility == "review" and _has_location_specific_term(structured_geography_text):
+        job.geographic_reason = REMOTE_US_CITY_REGION_REVIEW_REASON
 
     primary_role_text = f"{job.title} {job.department} {job.employment_type} {job.team}".lower()
     for keyword, points in NEGATIVE_KEYWORDS.items():

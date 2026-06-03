@@ -1543,3 +1543,82 @@ def test_remote_city_region_geography_separate_from_role_fit_viability() -> None
     assert fit.viability_level in {"review", "skip"}
     assert job.geographic_eligibility == "review"
     assert job.geographic_reason == "Remote role with US city/region constraint, requires review."
+
+
+def test_remote_us_city_structured_fields_ignore_noisy_apac_text() -> None:
+    job = _job(
+        title="Customer Engineer (West Coast)",
+        location="San Francisco, CA",
+        description="Partner with US customers. Unrelated footer: APAC privacy contact.",
+        workplace_type="Remote",
+    )
+    job.location_raw = "San Francisco, CA"
+    job.normalized_country = "US"
+    job.normalized_state = "CA"
+    job.normalized_city = "San Francisco"
+    job.normalized_location_type = "remote"
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "review"
+    assert "Remote role with US city/region constraint" in job.geographic_reason
+    assert "Onsite or location-specific US role outside Las Vegas/Nevada" not in fit.red_flags
+    assert "International region detected: APAC" not in fit.red_flags
+
+
+def test_remote_us_city_role_with_noisy_apac_elsewhere_stays_review() -> None:
+    job = _job(
+        title="Product Manager",
+        location="Seattle, WA",
+        description="Own analytics roadmap. This company has an APAC support team.",
+        workplace_type="Remote",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "review"
+    assert "Remote role with US city/region constraint" in job.geographic_reason
+    assert all("APAC" not in flag for flag in fit.red_flags)
+
+
+def test_on_site_san_francisco_role_remains_ineligible() -> None:
+    job = _job("Product Manager", location="San Francisco, CA", workplace_type="Onsite")
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level == "skip"
+    assert "Onsite role outside Las Vegas/Nevada" in fit.viability_reasons
+
+
+def test_remote_emea_role_remains_ineligible() -> None:
+    job = _job("Product Manager", location="Remote EMEA", workplace_type="Remote")
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level == "skip"
+    assert "International region detected: EMEA" in fit.red_flags
+
+
+def test_remote_apac_role_remains_ineligible() -> None:
+    job = _job("Product Manager", location="Remote APAC", workplace_type="Remote")
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "ineligible"
+    assert fit.viability_level == "skip"
+    assert "International region detected: APAC" in fit.red_flags
+
+
+def test_remote_united_states_role_remains_eligible() -> None:
+    job = _job("Product Manager", location="Remote United States", workplace_type="Remote")
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "eligible"
+    assert fit.viability_level == "apply_now"
+
+
+def test_las_vegas_on_site_role_remains_eligible() -> None:
+    job = _job("Product Manager", location="Las Vegas, NV", workplace_type="Onsite")
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert job.geographic_eligibility == "eligible"
+    assert fit.viability_level in {"apply_now", "review"}
