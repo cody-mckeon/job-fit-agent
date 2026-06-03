@@ -905,17 +905,17 @@ def test_anz_remote_is_ineligible() -> None:
     assert job.geographic_eligibility == "ineligible"
     assert "Remote role restricted to Australia / ANZ" in fit.viability_reasons
 
-def test_north_america_remote_is_review() -> None:
+def test_north_america_remote_is_eligible() -> None:
     job = _job("Product Manager", location="Remote North America")
     job.workplace_type = "Remote"
     fit = score_job(job, TARGET_PROFILE)
-    assert job.geographic_eligibility == "review"
-    assert "Remote North America requires manual review" in fit.viability_reasons
+    assert job.geographic_eligibility == "eligible"
+    assert "Remote US role matches target geography" in fit.viability_reasons
 
 
 def test_geographic_eligibility_tightened_cases() -> None:
     cases = [
-        ("San Francisco", "", "ineligible", "Location-specific role outside Las Vegas/Nevada"),
+        ("San Francisco", "", "review", "Location requires manual review"),
         ("San Francisco", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
         ("In-Office", "", "ineligible", "In-office role outside Las Vegas/Nevada"),
         ("SF, NY, SEA, Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
@@ -928,7 +928,7 @@ def test_geographic_eligibility_tightened_cases() -> None:
         ("Poland", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("Bangalore, India", "Remote", "ineligible", "Location outside target geography"),
         ("Barcelona, Spain", "Remote", "ineligible", "Remote role limited to non-US geography"),
-        ("Remote North America", "Remote", "review", "Remote North America requires manual review"),
+        ("Remote North America", "Remote", "eligible", "Remote US role matches target geography"),
         ("Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
         ("Las Vegas, NV", "Hybrid", "eligible", "Location aligns with target geography"),
     ]
@@ -940,13 +940,14 @@ def test_geographic_eligibility_tightened_cases() -> None:
         assert expected_reason in fit.viability_reasons
 
 
-def test_unknown_location_type_with_outside_nevada_red_flag_is_ineligible() -> None:
+def test_unknown_location_type_with_outside_nevada_red_flag_needs_review() -> None:
     job = _job("Product Manager", location="San Francisco")
     job.workplace_type = ""
     fit = score_job(job, TARGET_PROFILE)
     assert job.normalized_location_type == "unknown"
     assert "Onsite or location-specific US role outside Las Vegas/Nevada" in fit.red_flags
-    assert job.geographic_eligibility == "ineligible"
+    assert job.geographic_eligibility == "review"
+    assert fit.viability_level == "review"
 
 def test_india_city_country_terms_are_ineligible() -> None:
     for raw in ("Delhi", "New Delhi", "India", "Bangalore"):
@@ -1270,6 +1271,64 @@ def test_forward_deployed_engineer_with_ai_agents_is_high_fit() -> None:
 
     assert fit.classification == "high_fit"
 
+
+
+def test_us_city_and_region_geography_review_rules_for_solutions_roles() -> None:
+    review_cases = [
+        ("Solutions Architect", "San Francisco"),
+        ("Solutions Architect", "SF"),
+        ("Solutions Architect", "New York"),
+        ("Solutions Architect", "NYC"),
+        ("Solutions Architect", "Austin"),
+        ("Customer Engineer", "West Coast"),
+        ("Solutions Engineer - Enterprise - AMER", ""),
+        ("Enterprise Solutions Engineer - North America", ""),
+        ("Enterprise Solutions Engineer", "Remote"),
+        ("Enterprise Solutions Engineer", "Remote-first"),
+        ("Enterprise Solutions Engineer", "Distributed"),
+        ("Enterprise Solutions Engineer", "United States"),
+    ]
+    for title, location in review_cases:
+        job = _job(title=title, location=location, description="Design customer AI implementations and API integrations.")
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "review", (title, location)
+        assert fit.viability_level != "apply_now", (title, location)
+
+
+def test_explicit_us_north_america_and_local_geography_are_eligible() -> None:
+    eligible_cases = [
+        ("Enterprise Solutions Engineer - North America Remote", ""),
+        ("Remote United States Enterprise Solutions Engineer", "Remote United States"),
+        ("Enterprise Solutions Engineer", "North America Remote"),
+        ("Enterprise Solutions Engineer", "AMER Remote"),
+        ("Enterprise Solutions Engineer", "Americas Remote"),
+        ("Enterprise Solutions Engineer", "Las Vegas"),
+        ("Enterprise Solutions Engineer", "Henderson"),
+        ("Enterprise Solutions Engineer", "Nevada"),
+        ("Enterprise Solutions Engineer", "based anywhere in the United States"),
+        ("Enterprise Solutions Engineer", "open to candidates based in the United States"),
+    ]
+    for title, location in eligible_cases:
+        job = _job(title=title, location=location, description="Design customer AI implementations and API integrations.")
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "eligible", (title, location)
+        assert fit.viability_level == "apply_now", (title, location)
+
+
+def test_international_geography_wins_over_generic_remote() -> None:
+    ineligible_cases = [
+        ("Solutions Engineer, EMEA", "Remote"),
+        ("Solutions Architect", "London"),
+        ("Enterprise Solutions Engineer - ANZ", "Remote"),
+        ("Enterprise Solutions Engineer", "Remote - EMEA"),
+        ("Enterprise Solutions Engineer", "Remote - Germany"),
+        ("Enterprise Solutions Engineer", "Remote - APAC"),
+    ]
+    for title, location in ineligible_cases:
+        job = _job(title=title, location=location, description="Design customer AI implementations and API integrations.")
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "ineligible", (title, location)
+        assert fit.viability_level == "skip", (title, location)
 
 def test_international_solutions_roles_keep_high_fit_but_are_not_actionable() -> None:
     cases = [
