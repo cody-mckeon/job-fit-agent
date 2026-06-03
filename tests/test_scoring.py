@@ -1275,29 +1275,34 @@ def test_forward_deployed_engineer_with_ai_agents_is_high_fit() -> None:
 
 def test_us_city_and_region_geography_review_rules_for_solutions_roles() -> None:
     review_cases = [
-        ("Solutions Architect", "San Francisco"),
-        ("Solutions Architect", "SF"),
-        ("Solutions Architect", "New York"),
-        ("Solutions Architect", "NYC"),
-        ("Solutions Architect", "Austin"),
-        ("Customer Engineer", "West Coast"),
-        ("Solutions Engineer - Enterprise - AMER", ""),
-        ("Enterprise Solutions Engineer - North America", ""),
-        ("Enterprise Solutions Engineer", "Remote"),
-        ("Enterprise Solutions Engineer", "Remote-first"),
-        ("Enterprise Solutions Engineer", "Distributed"),
-        ("Enterprise Solutions Engineer", "United States"),
+        ("Solutions Architect (Dallas)", "", "US city detected: Dallas, requires review"),
+        ("Solutions Architect (San Francisco)", "", "US city detected: San Francisco, requires review"),
+        ("Solutions Architect (NYC)", "", "US city detected: NYC, requires review"),
+        ("Solutions Architect (Austin)", "", "US city detected: Austin, requires review"),
+        ("Customer Engineer (West Coast)", "", "US region detected: West Coast, requires review"),
+        ("Senior Solutions Engineer, Majors, San Francisco", "", "US city detected: San Francisco, requires review"),
+        ("Senior Solutions Engineer, Named Accounts - San Francisco", "", "US city detected: San Francisco, requires review"),
+        ("Senior Solutions Engineer - Mid-Market - Dallas or Austin", "", "US city detected: Dallas, requires review"),
+        ("Solutions Engineer - Enterprise - AMER", "", ""),
+        ("Enterprise Solutions Engineer - North America", "", ""),
+        ("Enterprise Solutions Engineer", "Remote", ""),
+        ("Enterprise Solutions Engineer", "Remote-first", ""),
+        ("Enterprise Solutions Engineer", "Distributed", ""),
+        ("Enterprise Solutions Engineer", "United States", ""),
     ]
-    for title, location in review_cases:
+    for title, location, expected_reason in review_cases:
         job = _job(title=title, location=location, description="Design customer AI implementations and API integrations.")
         fit = score_job(job, TARGET_PROFILE)
         assert job.geographic_eligibility == "review", (title, location)
-        assert fit.viability_level != "apply_now", (title, location)
+        assert fit.viability_level in {"review", "stretch"}, (title, location)
+        if expected_reason:
+            assert job.geographic_reason == expected_reason, (title, location)
 
 
 def test_explicit_us_north_america_and_local_geography_are_eligible() -> None:
     eligible_cases = [
         ("Enterprise Solutions Engineer - North America Remote", ""),
+        ("Enterprise Solutions Engineer - North America", "open to candidates based in the United States"),
         ("Remote United States Enterprise Solutions Engineer", "Remote United States"),
         ("Enterprise Solutions Engineer", "North America Remote"),
         ("Enterprise Solutions Engineer", "AMER Remote"),
@@ -1318,6 +1323,7 @@ def test_explicit_us_north_america_and_local_geography_are_eligible() -> None:
 def test_international_geography_wins_over_generic_remote() -> None:
     ineligible_cases = [
         ("Solutions Engineer, EMEA", "Remote"),
+        ("Solutions Architect (London)", ""),
         ("Solutions Architect", "London"),
         ("Enterprise Solutions Engineer - ANZ", "Remote"),
         ("Enterprise Solutions Engineer", "Remote - EMEA"),
