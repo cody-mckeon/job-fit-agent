@@ -1216,21 +1216,23 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     geography_warning_text = f"{job.title} {job.description} {job.location} {job.workplace_type}".lower()
     geography_warning_terms = _geography_warning_terms_in_text(geography_warning_text)
     us_review_geography_reason = _us_review_geography_reason(geography_warning_text)
-    if job.geographic_eligibility == "review" and us_review_geography_reason and not geography_warning_terms:
-        job.geographic_reason = us_review_geography_reason
-    if job.geographic_eligibility == "review" and not geography_warning_terms and (
+    has_explicit_us_eligibility = _has_explicit_us_eligibility(geography_warning_text)
+    has_eligible_us_geography = (
         _has_remote_us_eligibility_signal(geography_warning_text)
         or _has_remote_region_eligibility_signal(geography_warning_text)
         or _has_local_eligibility_signal(geography_warning_text)
-    ):
-        job.geographic_eligibility = "eligible"
-    has_explicit_us_eligibility = _has_explicit_us_eligibility(geography_warning_text)
+    )
     if geography_warning_terms and not has_explicit_us_eligibility:
         job.geographic_eligibility = "ineligible"
         job.geographic_reason = _international_geography_reason(geography_warning_text) or f"International location detected: {geography_warning_terms[0]}"
         red_flags.append(job.geographic_reason)
         if _contains_geo_term(geography_warning_text, "dach"):
             red_flags.append("DACH region role may not be US eligible")
+    elif us_review_geography_reason and not has_eligible_us_geography:
+        job.geographic_eligibility = "review"
+        job.geographic_reason = us_review_geography_reason
+    elif job.geographic_eligibility == "review" and has_eligible_us_geography and not geography_warning_terms:
+        job.geographic_eligibility = "eligible"
 
     primary_role_text = f"{job.title} {job.department} {job.team}".lower()
     for keyword, points in NEGATIVE_KEYWORDS.items():
@@ -1392,6 +1394,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     viability_reasons: list[str] = []
     viability_level = "apply_now"
     location_viability_level, location_viability_reasons = evaluate_location_viability(job.location, job.workplace_type)
+    if job.geographic_eligibility == "review" and location_viability_level == "skip" and not geography_warning_terms:
+        location_viability_level = "review"
+        location_viability_reasons = ["Location requires manual review"]
     if job.geographic_eligibility == "eligible" and location_viability_level != "apply_now":
         location_viability_level = "apply_now"
         location_viability_reasons = ["Remote US role matches target geography"] if job.normalized_location_type == "remote" else ["Location aligns with target geography"]
