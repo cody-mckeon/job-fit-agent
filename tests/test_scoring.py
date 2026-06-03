@@ -916,13 +916,13 @@ def test_north_america_remote_is_eligible() -> None:
 def test_geographic_eligibility_tightened_cases() -> None:
     cases = [
         ("San Francisco", "", "review", "Location requires manual review"),
-        ("San Francisco", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
+        ("San Francisco", "Onsite", "review", "Location requires manual review"),
         ("In-Office", "", "ineligible", "In-office role outside Las Vegas/Nevada"),
         ("SF, NY, SEA, Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
         ("San Francisco, US Remote", "Remote", "eligible", "Remote US role matches target geography"),
         ("Las Vegas In-Office", "", "eligible", "Location aligns with target geography"),
-        ("San Francisco, CA", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
-        ("San Francisco, CA", "Hybrid", "ineligible", "Hybrid role outside Las Vegas/Nevada"),
+        ("San Francisco, CA", "Onsite", "review", "Location requires manual review"),
+        ("San Francisco, CA", "Hybrid", "review", "Location requires manual review"),
         ("Dublin, Ireland", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("UAE", "Remote", "ineligible", "Remote role limited to non-US geography"),
         ("Poland", "Remote", "ineligible", "Remote role limited to non-US geography"),
@@ -1298,6 +1298,40 @@ def test_us_city_and_region_geography_review_rules_for_solutions_roles() -> None
         if expected_reason:
             assert job.geographic_reason == expected_reason, (title, location)
 
+
+
+def test_us_city_titles_override_non_international_location_ineligibility() -> None:
+    cases = [
+        "Customer Engineer (West Coast)",
+        "Senior Solutions Engineer, Majors, San Francisco",
+        "Senior Solutions Engineer, Named Accounts - San Francisco",
+        "Solutions Architect (Austin)",
+        "Solutions Architect (Dallas)",
+        "Solutions Architect (NYC)",
+        "Solutions Architect (San Francisco)",
+    ]
+    for title in cases:
+        job = _job(
+            title=title,
+            location="Hybrid",
+            description="Design customer AI implementations and API integrations.",
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert job.geographic_eligibility == "review", title
+        assert fit.viability_level == "review", title
+
+
+def test_low_fit_role_classification_does_not_force_us_city_geography_ineligible() -> None:
+    job = _job(
+        title="Customer Support Specialist (Dallas)",
+        location="Hybrid",
+        description="Handle support tickets and customer support escalations.",
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+    assert job.geographic_eligibility == "review"
 
 def test_explicit_us_north_america_and_local_geography_are_eligible() -> None:
     eligible_cases = [
