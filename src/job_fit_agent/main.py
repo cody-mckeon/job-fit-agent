@@ -2083,28 +2083,33 @@ def location_audit() -> None:
         for raw, sample_url in samples[:5]:
             print(f"  - {raw} :: {sample_url}")
 
+    def _debug_geography_line(row: sqlite3.Row) -> str:
+        detected_terms = ", ".join(
+            detect_geography_terms(
+                _audit_value(row, "title"),
+                _audit_value(row, "location_raw"),
+                _audit_value(row, "workplace_type"),
+            )
+        ) or "none"
+        detected_location_type = _audit_value(row, "normalized_location_type") or "unknown"
+        structured_location_type = _audit_value(row, "workplace_type") or "unknown"
+        return (
+            f"title: {_audit_value(row, 'title')} | source: {_audit_value(row, 'source')} | "
+            f"location: {_audit_value(row, 'location_raw')} | location_type: {structured_location_type} | "
+            f"detected_location_terms: {detected_terms} | detected_location_type: {detected_location_type} | "
+            f"geographic_eligibility: {_audit_value(row, 'geographic_eligibility') or 'review'} | "
+            f"reason: {_audit_value(row, 'geographic_reason')}"
+        )
+
     print("\nC. Conflicting metadata")
     if not conflicts:
         print("none")
     for row in conflicts[:20]:
-        detected_terms = ", ".join(detect_geography_terms(_audit_value(row, "title"), _audit_value(row, "location_raw"), _audit_value(row, "workplace_type"))) or "none"
-        location_type = _audit_value(row, "normalized_location_type") or _audit_value(row, "workplace_type") or "unknown"
-        print(
-            f"title: {_audit_value(row, 'title')} | location: {_audit_value(row, 'location_raw')} | "
-            f"location_type: {location_type} | detected_location_terms: {detected_terms} | "
-            f"final geographic_eligibility: {_audit_value(row, 'geographic_eligibility')} | reason: {_audit_value(row, 'geographic_reason')} | "
-            f"url: {_audit_value(row, 'url')}"
-        )
+        print(f"{_debug_geography_line(row)} | url: {_audit_value(row, 'url')}")
 
     print("\nD. Geography decision sample")
     for row in rows[:20]:
-        detected_terms = ", ".join(detect_geography_terms(_audit_value(row, "title"), _audit_value(row, "location_raw"), _audit_value(row, "workplace_type"))) or "none"
-        location_type = _audit_value(row, "normalized_location_type") or _audit_value(row, "workplace_type") or "unknown"
-        print(
-            f"title: {_audit_value(row, 'title')} | location: {_audit_value(row, 'location_raw')} | "
-            f"location_type: {location_type} | detected_location_terms: {detected_terms} | "
-            f"final geographic_eligibility: {_audit_value(row, 'geographic_eligibility') or 'review'} | reason: {_audit_value(row, 'geographic_reason')}"
-        )
+        print(_debug_geography_line(row))
 
     print("\nD2. Top sample URLs to debug")
     debug_urls = []

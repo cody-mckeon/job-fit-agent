@@ -308,7 +308,9 @@ class AshbyCollector:
         if not department:
             department = page_metadata.get("Department", "")
 
-        employment_type = page_metadata.get("Employment Type", "")
+        employment_type = self._extract_field_name(job, ("employmentType", "employmentTypeName"))
+        if not employment_type:
+            employment_type = page_metadata.get("Employment Type", "")
 
         team = self._extract_field_name(job, ("teamName", "team"))
         if not team:
@@ -344,7 +346,8 @@ class AshbyCollector:
             _add_part(location_obj.get("locationName"))
             _add_part(location_obj.get("name"))
 
-        _add_part(job.get("locationName"))
+        for key in ("locationName", "locationExternalName", "locationDescription"):
+            _add_part(job.get(key))
 
         address_obj = job.get("address")
         if isinstance(address_obj, dict):
@@ -407,8 +410,14 @@ class AshbyCollector:
         return ""
 
     def _extract_workplace_type(self, job: dict[str, Any]) -> str:
-        workplace = str(job.get("workplaceType") or "").strip()
-        return self._normalize_workplace_type(workplace)
+        for key in ("workplaceType", "locationType", "workLocationType", "workplace_type", "location_type"):
+            workplace = str(job.get(key) or "").strip()
+            normalized = self._normalize_workplace_type(workplace)
+            if normalized:
+                return normalized
+        if job.get("isRemote") is True:
+            return "Remote"
+        return ""
 
     def _normalize_workplace_type(self, workplace: str) -> str:
         if not workplace:
