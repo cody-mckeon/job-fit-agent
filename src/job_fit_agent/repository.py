@@ -50,6 +50,7 @@ def initialize(db_path: Path = DB_PATH) -> None:
                 normalized_city TEXT DEFAULT "",
                 normalized_location_type TEXT DEFAULT "",
                 geographic_eligibility TEXT DEFAULT "review",
+                geographic_reason TEXT DEFAULT "",
                 workplace_type TEXT,
                 department TEXT,
                 team TEXT,
@@ -108,6 +109,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute('ALTER TABLE jobs ADD COLUMN normalized_location_type TEXT DEFAULT ""')
     if "geographic_eligibility" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN geographic_eligibility TEXT DEFAULT "review"')
+    if "geographic_reason" not in columns:
+        conn.execute('ALTER TABLE jobs ADD COLUMN geographic_reason TEXT DEFAULT ""')
     if "application_status" not in columns:
         conn.execute('ALTER TABLE jobs ADD COLUMN application_status TEXT DEFAULT "not_applied"')
         conn.execute('UPDATE jobs SET application_status = "not_applied" WHERE application_status IS NULL')
@@ -155,9 +158,9 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
             conn.execute(
                 """
                 INSERT INTO jobs (
-                    source, company, title, location, location_raw, normalized_country, normalized_state, normalized_city, normalized_location_type, geographic_eligibility, workplace_type, department, team,
+                    source, company, title, location, location_raw, normalized_country, normalized_state, normalized_city, normalized_location_type, geographic_eligibility, geographic_reason, workplace_type, department, team,
                     url, classification, role_family, score, viability_score, viability_level, viability_reasons, reasons, red_flags, first_seen_at, last_seen_at, status, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.source,
@@ -170,6 +173,7 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
                     job.normalized_city,
                     job.normalized_location_type,
                     job.geographic_eligibility,
+                    job.geographic_reason,
                     job.workplace_type,
                     job.department,
                     job.team,
@@ -206,7 +210,7 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
         conn.execute(
             """
             UPDATE jobs
-            SET source = ?, company = ?, title = ?, location = ?, location_raw = ?, normalized_country = ?, normalized_state = ?, normalized_city = ?, normalized_location_type = ?, geographic_eligibility = ?, workplace_type = ?,
+            SET source = ?, company = ?, title = ?, location = ?, location_raw = ?, normalized_country = ?, normalized_state = ?, normalized_city = ?, normalized_location_type = ?, geographic_eligibility = ?, geographic_reason = ?, workplace_type = ?,
                 department = ?, team = ?, classification = ?, role_family = ?, score = ?,
                 viability_score = ?, viability_level = ?, viability_reasons = ?, reasons = ?, red_flags = ?, last_seen_at = ?
             WHERE url = ?
@@ -222,6 +226,7 @@ def upsert_job(job: JobPosting, fit: FitScore, db_path: Path = DB_PATH) -> Upser
                 job.normalized_city,
                 job.normalized_location_type,
                 job.geographic_eligibility,
+                job.geographic_reason,
                 job.workplace_type,
                 job.department,
                 job.team,

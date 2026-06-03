@@ -818,3 +818,45 @@ def test_ai_automation_high_fit_geography_review_is_not_auto_prep_eligible():
         reasons='["AI automation or operations role aligns with Cody workflow automation"]',
     )
     assert job_main._is_prep_next_application_eligible(job) is False
+
+
+def test_prep_next_application_skips_ineligible_high_fit_jobs(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main._get_prep_next_application_candidates",
+        lambda: [
+            _job(201, title="Forward Deployed Engineer, GTM, DACH", score=99, geographic_eligibility="ineligible", geographic_reason="International region detected: DACH"),
+            _job(202, title="Enterprise Solutions Engineer", score=80),
+        ],
+    )
+    prep_next_application(dry_run=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 202
+
+
+def test_prep_next_application_skips_review_jobs_by_default(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [_job(203, geographic_eligibility="review")])
+    result = prep_next_application(dry_run=True)
+    assert result is None
+    assert "No actionable jobs found" in capsys.readouterr().out
+
+
+def test_prep_next_application_includes_review_job_id_with_include_review(monkeypatch, capsys):
+    job = _job(204, geographic_eligibility="review")
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 204 else None)
+    prep_next_application(dry_run=True, job_id=204, include_review=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 204
+    assert payload["geographic_eligibility"] == "review"
+
+
+def test_prep_next_application_force_warns_for_review_job(monkeypatch, capsys):
+    job = _job(205, geographic_eligibility="review")
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job if job_id == 205 else None)
+    prep_next_application(dry_run=True, job_id=205, force=True)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 205
+    assert payload["warning"] == "Warning: geography is not eligible/requires review."

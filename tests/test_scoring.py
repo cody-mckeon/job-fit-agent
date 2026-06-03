@@ -1269,3 +1269,45 @@ def test_forward_deployed_engineer_with_ai_agents_is_high_fit() -> None:
     fit = score_job(job, TARGET_PROFILE)
 
     assert fit.classification == "high_fit"
+
+
+def test_international_solutions_roles_keep_high_fit_but_are_not_actionable() -> None:
+    cases = [
+        ("Forward Deployed Engineer, GTM, DACH", "DACH", "International region detected: DACH"),
+        ("Forward Deployed Engineer, GTM, France", "France", "International location detected: France"),
+        ("Enterprise Solutions Engineer - Spain", "Spain", "International location detected: Spain"),
+        ("Enterprise Solutions Engineer - ANZ", "ANZ", "International region detected: ANZ"),
+    ]
+    for title, location, reason in cases:
+        job = _job(
+            title=title,
+            location=location,
+            company="ElevenLabs",
+            description=(
+                "Own technical discovery, solution design, proof of concept, pilot deployment, "
+                "API integration, systems integration, AI agents, LLM workflows, customer implementation, "
+                "and enterprise deployment."
+            ),
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert fit.classification == "high_fit", title
+        assert job.geographic_eligibility == "ineligible", title
+        assert job.geographic_reason == reason, title
+        assert reason in fit.viability_reasons or reason in fit.red_flags
+
+
+def test_remote_united_states_and_us_remote_solutions_roles_are_apply_now() -> None:
+    cases = [
+        ("Enterprise Solutions Engineer", "Remote United States"),
+        ("US Remote AI Solutions Engineer", "US Remote"),
+    ]
+    for title, location in cases:
+        job = _job(
+            title=title,
+            location=location,
+            description="Design AI agents, API integrations, LLM workflows, and enterprise deployment for customers.",
+        )
+        fit = score_job(job, TARGET_PROFILE)
+        assert fit.classification == "high_fit", title
+        assert job.geographic_eligibility == "eligible", title
+        assert fit.viability_level == "apply_now", title

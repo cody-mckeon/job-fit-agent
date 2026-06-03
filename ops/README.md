@@ -70,7 +70,7 @@ make docker-prep-next
 docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-application --notify-telegram
 ```
 
-`unapplied-high-fit` shows eligible high-fit roles first and geography-review roles in a separate section. Add `--eligible-only`, `--include-ineligible`, `--limit <n>`, or `--json` when triaging from automation.
+`unapplied-high-fit` keeps score and actionability separate: eligible high-fit roles appear first, geography-review roles stay in manual review, and ineligible international roles appear only when explicitly auditing. Add `--eligible-only`, `--include-ineligible`, `--limit <n>`, or `--json` when triaging from automation.
 
 If a job exists online but is missing from local SQLite, prepare directly from the Ashby job page with `prep-url`. This path is useful when an Ashby board API collector returns `403` but the direct posting still renders:
 
@@ -109,7 +109,7 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped 
 docker compose run --rm job-fit-agent python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"
 ```
 
-Auto-prep requires both strong role fit and acceptable geography. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection and actionable digest sections. Jobs marked `application_status=applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, or `saved` in SQLite or `data/application_status.json` are also excluded from default digest actionable sections, prep-next auto-selection, and daily Telegram recommendations. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --force`; forced Telegram summaries warn that geography requires manual review before applying.
+Role score measures title/skills/role-family fit, not application readiness. Actionability additionally requires high/near fit, `apply_now` or `strong_review` viability, `geographic_eligibility=eligible`, a real job URL, and no applied/skipped/rejected/withdrawn/offer/blocked application status. High role fit does not override geography gating: geography-review, geography-ineligible, and non-US-region roles are excluded from default auto-selection, actionable digest sections, Telegram package auto-selection, and daily Telegram recommendations. Digest separates `Actionable apply-now roles`, `Strong role fit, geography not eligible`, and `Needs geography review`. To intentionally prepare a geography-review job, select it explicitly with `--job-id <id> --include-review`; use `--force` only for a deliberate override, which warns `Warning: geography is not eligible/requires review.`
 
 Telegram handoff env vars:
 - `TELEGRAM_BOT_TOKEN`
@@ -222,7 +222,7 @@ Mobile workflow: **Telegram → download zip → review files → submit manuall
 GitHub Actions artifact upload remains unchanged as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications). Applied and skipped jobs are filtered out as well, and digest includes summary counts for unapplied high-fit, applied, and skipped roles. Geography-review and geography-ineligible jobs are also excluded from actionable defaults; high role-fit geography-review jobs belong in manual review, not scheduled auto-prep.
+Placeholder/test URLs are filtered out of actionable recommendations (digest default sections, prep-next-application auto-select, and Telegram notifications). Applied and skipped jobs are filtered out as well, and digest includes summary counts for unapplied high-fit, applied, and skipped roles. Geography-review and geography-ineligible jobs are also excluded from actionable defaults; high role-fit geography-review jobs belong in `Needs geography review`, and high role-fit international jobs belong in `Strong role fit, geography not eligible`, not scheduled auto-prep.
 
 Set repository secrets:
 - `TELEGRAM_BOT_TOKEN`

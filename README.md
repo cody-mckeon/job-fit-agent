@@ -312,19 +312,20 @@ Recommended application prep workflow:
    - Digest prints application tracking counts for unapplied high-fit, applied, and skipped jobs.
 2. Review open high-fit roles before prepping:
    `python -m job_fit_agent.main unapplied-high-fit`
-   - Default output shows eligible jobs first and geography-review jobs in a separate manual-review section.
+   - Default output separates `Actionable apply-now roles`, `Strong role fit, geography not eligible`, and `Needs geography review` so role score remains visible without making international roles actionable.
    - Use `--eligible-only` to hide review/ineligible roles, `--include-ineligible` to audit blocked geography roles, `--limit <n>` to cap output, or `--json` for structured output.
 3. `python -m job_fit_agent.main prep-next-application`
    - Optional Telegram handoff:
      `python -m job_fit_agent.main prep-next-application --notify-telegram`
    - Optional explicit job selection with Telegram:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
-   - Auto-prep requires both strong role fit and acceptable geography; high role fit never overrides geography gating.
-   - Auto-selection only prepares valid-URL jobs with acceptable geography (`eligible`/Remote US) and apply-ready viability. Geography-review or geography-ineligible jobs are excluded from default auto-prep and actionable digest sections.
+   - Role score measures role-family/title/skill fit only; application actionability additionally requires `classification in {high_fit, near_fit}`, `viability_level in {apply_now, strong_review}`, `geographic_eligibility=eligible`, and no applied/skipped/rejected/withdrawn/offer/blocked application status.
+   - Auto-selection only prepares valid-URL jobs with eligible geography and apply-ready viability. Geography-review or geography-ineligible jobs are excluded from default auto-prep, actionable digest sections, daily Telegram apply-now recommendations, and Telegram package auto-selection.
    - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, geography `review`/`ineligible`, non-US geography signals, invalid URL, or `applied/rejected/archived`).
-     Use `--force` to override intentionally for manual review cases:
+   - To intentionally prepare a geography-review job after manual review, select it explicitly with `--include-review`; to override any specific job after review, use `--force`:
+     `python -m job_fit_agent.main prep-next-application --job-id <id> --include-review`
      `python -m job_fit_agent.main prep-next-application --job-id <id> --force`
-   - Geography-review jobs require manual selection and `--force`; forced packages and Telegram summaries include a manual geography review warning before applying.
+   - Forced geography-review/ineligible packages and Telegram summaries warn: `Warning: geography is not eligible/requires review.`
    - `--dry-run` output includes an `actionable` field so you can verify if the selected job is actionable before prep.
    - `--skip-pdf` keeps fast local/dev runs by skipping `pandoc` PDF export while still generating markdown outputs (`submit_resume.md`, `cover_letter.md`, `answer_bank.md`).
    - Note: job IDs are local database IDs and can differ between environments/machines.
@@ -390,7 +391,7 @@ Mobile flow: **Telegram → download zip → review files → submit manually**.
 GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked with active/closed lifecycle statuses (`applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`) or `saved` in SQLite or `data/application_status.json`, geography-review, and geography-ineligible jobs by default; digest can surface high role-fit geography-review jobs in a separate manual-review section. Use `unapplied-high-fit` any time to see valid high-fit roles that still need an application decision.
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked with active/closed lifecycle statuses (`applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`) or `saved` in SQLite or `data/application_status.json`, geography-review, and geography-ineligible jobs by default. Digest keeps role score separate from actionability by showing eligible roles in `Actionable apply-now roles`, international/geography-ineligible role fits in `Strong role fit, geography not eligible`, and manual-review roles in `Needs geography review`. Use `unapplied-high-fit --eligible-only` any time to see valid high-fit roles that still need an application decision.
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`

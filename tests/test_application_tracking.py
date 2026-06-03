@@ -406,3 +406,25 @@ def test_pipeline_command_groups_applied_interviewing_offer(tmp_path, monkeypatc
     assert "Pipeline Interviewing PM" in output
     assert "Status: offer" in output
     assert "Pipeline Offer PM" in output
+
+
+def test_unapplied_high_fit_eligible_only_excludes_ineligible_and_review(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    from job_fit_agent.repository import initialize, upsert_job
+    from job_fit_agent.models import JobPosting, FitScore
+    initialize()
+    rows = [
+        ("eligible", "Eligible AI Solutions Engineer"),
+        ("ineligible", "DACH Forward Deployed Engineer"),
+        ("review", "North America Forward Deployed Engineer"),
+    ]
+    for idx, (geo, title) in enumerate(rows, start=1):
+        job = JobPosting(source="ashby", company="acme", title=title, location="Remote US", url=f"https://jobs.ashbyhq.com/acme/eligible-only-{idx}", description="")
+        job.geographic_eligibility = geo
+        fit = FitScore(total_score=90, classification="high_fit", role_family="solutions_architecture", viability_level="apply_now")
+        upsert_job(job, fit)
+    main(["unapplied-high-fit", "--eligible-only"])
+    output = capsys.readouterr().out
+    assert "Eligible AI Solutions Engineer" in output
+    assert "DACH Forward Deployed Engineer" not in output
+    assert "North America Forward Deployed Engineer" not in output
