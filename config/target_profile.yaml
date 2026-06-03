@@ -85,6 +85,16 @@ target_titles:
 - Power Platform Consultant
 - Power Platform Developer
 - ServiceNow Architect
+- Enterprise Solutions Engineer
+- Solutions Engineer
+- Enterprise AI Solutions Engineer
+- Customer Engineer
+- Technical Solutions Engineer
+- Implementation Engineer
+- AI Implementation Engineer
+- AI Deployment Engineer
+- Enterprise Deployment Engineer
+- Solutions Architect
 target_keywords:
 - AI
 - analytics
@@ -149,6 +159,21 @@ target_keywords:
 - marketing systems
 - sales operations automation
 - lifecycle automation
+- enterprise deployment
+- customer implementation
+- technical discovery
+- solution design
+- workflow integration
+- voice AI
+- LLM workflows
+- proof of concept
+- pilot deployment
+- customer workflows
+- systems integration
+- API integration
+- post-sales technical
+- pre-sales technical
+- customer-facing engineering
 preferred_locations:
 - Remote US
 - Remote United States
@@ -241,6 +266,12 @@ industry_bias:
 - internal automation
 - systems automation
 - lifecycle automation
+- voice AI
+- enterprise deployment
+- customer implementation
+- workflow integration
+- systems integration
+- API integration
 local_priority_companies:
 - slickdeals
 - mgm resorts
