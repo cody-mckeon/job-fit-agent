@@ -1,5 +1,6 @@
 import json
 
+from job_fit_agent import main as job_main
 from job_fit_agent.main import main, prep_next_application
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.repository import get_job_by_id, get_job_by_url, initialize, update_application_tracking, upsert_job
@@ -638,3 +639,83 @@ def test_block_cli_command_with_job_id_updates_blocked_status(tmp_path, monkeypa
     assert row["application_status"] == "blocked"
     assert row["blocked_at"]
     assert row["application_notes"] == "Ashby 90-day application limit"
+
+
+def test_block_company_with_days_stores_expires_at(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["block-company", "elevenlabs", "Ashby 90-day application limit", "--days", "90"])
+
+    store = json.loads((tmp_path / "data/company_application_blocks.json").read_text())
+    record = store["elevenlabs"]
+    assert record["status"] == "blocked"
+    assert record["expires_at"]
+    assert job_main._company_block_days_remaining(record) in {89, 90}
+
+
+def test_block_company_with_expires_at_stores_exact_date(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["block-company", "elevenlabs", "Ashby 90-day application limit", "--expires-at", "2099-09-02"])
+
+    store = json.loads((tmp_path / "data/company_application_blocks.json").read_text())
+    assert store["elevenlabs"]["expires_at"] == "2099-09-02"
+
+
+def test_expired_company_block_does_not_exclude_prep_next_application(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/elevenlabs/expired-company-block-prep", "Expired Company PM")
+    (tmp_path / "data/company_application_blocks.json").write_text(json.dumps({
+        "elevenlabs": {
+            "company": "elevenlabs",
+            "status": "blocked",
+            "reason": "Ashby 90-day application limit",
+            "blocked_at": "2000-01-01T00:00:00+00:00",
+            "expires_at": "2000-01-02",
+            "strategy": "recruiter/manual review",
+        }
+    }))
+
+    prep_next_application(dry_run=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == job_id
+
+
+def test_blocked_report_shows_days_remaining_for_company_block(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    main(["block-company", "elevenlabs", "Ashby 90-day application limit", "--days", "90"])
+    capsys.readouterr()
+
+    main(["blocked"])
+
+    output = capsys.readouterr().out
+    assert "days_remaining:" in output
+    assert "expires_at:" in output
+    assert "suggested_next_action:" in output
+
+
+def test_unblock_expired_marks_expired_company_blocks(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data/company_application_blocks.json").write_text(json.dumps({
+        "elevenlabs": {
+            "company": "elevenlabs",
+            "status": "blocked",
+            "reason": "Ashby 90-day application limit",
+            "blocked_at": "2000-01-01T00:00:00+00:00",
+            "expires_at": "2000-01-02",
+            "strategy": "recruiter/manual review",
+        }
+    }))
+
+    main(["unblock-expired"])
+
+    store = json.loads((tmp_path / "data/company_application_blocks.json").read_text())
+    assert store["elevenlabs"]["status"] == "expired"
+    assert "expired_company_blocks: 1" in capsys.readouterr().out
