@@ -860,3 +860,166 @@ def test_prep_next_application_force_warns_for_review_job(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["job_id"] == 205
     assert payload["warning"] == "Warning: geography is not eligible/requires review."
+
+
+def test_prep_next_application_help_does_not_call_prep_next_application(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_next_application",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not prep")),
+    )
+
+    main(["prep-next-application", "--help"])
+
+    output = capsys.readouterr().out
+    assert "Usage: python -m job_fit_agent.main prep-next-application" in output
+    assert "--min-score <n>" in output
+
+
+def test_prep_next_application_unknown_flag_errors_without_package(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_next_application",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not prep")),
+    )
+
+    try:
+        main(["prep-next-application", "--definitely-not-a-real-flag"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("unknown flag should exit with an error")
+
+    output = capsys.readouterr().out
+    assert "unknown prep-next-application option" in output
+    assert "--definitely-not-a-real-flag" in output
+
+
+def test_prep_next_application_min_score_75_excludes_score_31(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [_job(31, score=31)])
+
+    result = prep_next_application(dry_run=True, min_score=75)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == payload
+    assert payload == {
+        "actionable": False,
+        "message": "No eligible jobs found at or above min_score.",
+        "min_score": 75,
+        "next_action": "lower min_score, include review jobs, or expand sources",
+    }
+
+
+def test_prep_next_application_score_equal_to_min_score_is_included(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [_job(75, score=75)])
+
+    result = prep_next_application(dry_run=True, min_score=75)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == payload
+    assert payload["job_id"] == 75
+    assert payload["score"] == 75
+    assert payload["min_score"] == 75
+
+
+def test_prep_next_application_score_above_min_score_is_included(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [_job(76, score=76)])
+
+    result = prep_next_application(dry_run=True, min_score=75)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == payload
+    assert payload["job_id"] == 76
+    assert payload["score"] == 76
+    assert payload["min_score"] == 75
+
+
+def test_prep_next_application_no_qualifying_job_returns_actionable_false(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr(
+        "job_fit_agent.main._get_prep_next_application_candidates",
+        lambda: [_job(70, score=70), _job(71, score=71)],
+    )
+
+    prep_next_application(dry_run=True, min_score=75)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["actionable"] is False
+    assert payload["message"] == "No eligible jobs found at or above min_score."
+    assert payload["min_score"] == 75
+
+
+def test_prep_next_application_job_id_below_min_score_returns_actionable_false(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(77, score=74) if job_id == 77 else None)
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_application",
+        lambda job_id: (_ for _ in ()).throw(AssertionError("should not prep")),
+    )
+
+    result = prep_next_application(job_id=77, min_score=75)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == payload
+    assert payload["actionable"] is False
+    assert payload["job_id"] == 77
+    assert payload["score"] == 74
+    assert payload["min_score"] == 75
+
+
+def test_prep_next_application_job_id_below_min_score_force_is_allowed_with_warning(monkeypatch, capsys):
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: _job(78, score=74) if job_id == 78 else None)
+    monkeypatch.setattr("job_fit_agent.main.prep_application", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", lambda job_id: None)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    result = prep_next_application(job_id=78, min_score=75, force=True, skip_browser=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == payload
+    assert payload["job_id"] == 78
+    assert payload["actionable"] is False
+    assert payload["warning"] == "Prepared despite score below min_score because --force was used."
+    assert payload["min_score"] == 75
+
+
+def test_prep_next_application_dry_run_with_min_score_creates_no_artifacts(monkeypatch, tmp_path, capsys):
+    application_dir = tmp_path / "applications" / "acme-job"
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._get_prep_next_application_candidates", lambda: [_job(79, score=75)])
+    monkeypatch.setattr("job_fit_agent.main._application_dir_for_job", lambda job, job_id: application_dir)
+    monkeypatch.setattr(
+        "job_fit_agent.main.prep_application",
+        lambda job_id: (_ for _ in ()).throw(AssertionError("should not create folder")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.export_resume_pdf",
+        lambda job_id: (_ for _ in ()).throw(AssertionError("should not export pdf")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main._create_application_package_zip",
+        lambda app_dir: (_ for _ in ()).throw(AssertionError("should not create zip")),
+    )
+    monkeypatch.setattr(
+        "job_fit_agent.main.extract_application_questions_browser",
+        lambda job_id: (_ for _ in ()).throw(AssertionError("should not launch browser extraction")),
+    )
+
+    prep_next_application(dry_run=True, min_score=75)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == 79
+    assert not application_dir.exists()
+    assert not application_dir.with_suffix(".zip").exists()
+
+
+def test_prep_next_application_cli_passes_min_score(monkeypatch):
+    captured = {}
+    monkeypatch.setattr("job_fit_agent.main.prep_next_application", lambda **kwargs: captured.update(kwargs) or {"actionable": False})
+
+    main(["prep-next-application", "--dry-run", "--min-score", "75"])
+
+    assert captured["dry_run"] is True
+    assert captured["min_score"] == 75

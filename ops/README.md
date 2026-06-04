@@ -67,8 +67,10 @@ Review unapplied high-fit roles and run prep-next-application:
 docker compose run --rm job-fit-agent python -m job_fit_agent.main unapplied-high-fit
 make docker-prep-next
 # or with Telegram handoff:
-docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-application --notify-telegram
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-next-application --min-score 75 --notify-telegram
 ```
+
+Use `prep-next-application --min-score <n>` to prevent package generation for auto-selected jobs below the threshold; explicit `--job-id` selections below the threshold are blocked unless `--force` is supplied.
 
 `unapplied-high-fit` keeps score and actionability separate: eligible high-fit roles appear first, geography-review roles stay in manual review, and ineligible international roles appear only when explicitly auditing. Add `--eligible-only`, `--include-ineligible`, `--limit <n>`, or `--json` when triaging from automation. For one-off geography investigations, run `python -m job_fit_agent.main debug-geography <job_id>` to inspect structured location fields, ignored noisy terms, final eligibility, red flags, and viability reasons as JSON.
 

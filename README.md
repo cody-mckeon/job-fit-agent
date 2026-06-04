@@ -321,10 +321,11 @@ Recommended application prep workflow:
    - Default output separates `Actionable apply-now roles`, `Strong role fit, geography not eligible`, and `Needs geography review` so role score remains visible without making international roles actionable.
    - Use `--eligible-only` to hide review/ineligible roles, `--include-ineligible` to audit blocked geography roles, `--limit <n>` to cap output, or `--json` for structured output.
 3. `python -m job_fit_agent.main prep-next-application`
-   - Optional Telegram handoff:
-     `python -m job_fit_agent.main prep-next-application --notify-telegram`
+   - Optional Telegram handoff with a minimum score gate:
+     `python -m job_fit_agent.main prep-next-application --min-score 75 --notify-telegram`
    - Optional explicit job selection with Telegram:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
+   - Use `--min-score <n>` to require auto-selected jobs to have `score >= n`; with `--job-id`, jobs below the threshold return `actionable=false` unless `--force` is also supplied.
    - Role score measures role-family/title/skill fit only; application actionability additionally requires `classification in {high_fit, near_fit}`, `viability_level in {apply_now, strong_review}`, `geographic_eligibility=eligible`, no applied/skipped/rejected/withdrawn/offer/blocked application status, and no active, unexpired company-level block in `data/company_application_blocks.json`.
    - Auto-selection only prepares valid-URL jobs with eligible geography and apply-ready viability. Geography-review or geography-ineligible jobs are excluded from default auto-prep, actionable digest sections, daily Telegram apply-now recommendations, and Telegram package auto-selection.
    - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, geography `review`/`ineligible`, non-US geography signals, invalid URL, `applied/rejected/archived`, or company-level blocked).

@@ -3657,6 +3657,26 @@ def _is_actionable_real_job_url(url: str) -> bool:
     return True
 
 
+def _prep_next_application_score(job: dict[str, Any]) -> int:
+    try:
+        return int(safe_row_value(job, "score", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _prep_next_application_meets_min_score(job: dict[str, Any], min_score: int | None) -> bool:
+    return min_score is None or _prep_next_application_score(job) >= min_score
+
+
+def _prep_next_application_no_min_score_match(min_score: int) -> dict[str, Any]:
+    return {
+        "actionable": False,
+        "message": "No eligible jobs found at or above min_score.",
+        "min_score": min_score,
+        "next_action": "lower min_score, include review jobs, or expand sources",
+    }
+
+
 def _prep_next_application_rank_key(job: dict[str, Any]) -> tuple[int, int, int, int, int]:
     classification_rank = {"high_fit": 0, "apply_now": 0, "near_fit": 1}
     viability_rank = {"apply_now": 0, "strong_review": 1}
@@ -3665,7 +3685,7 @@ def _prep_next_application_rank_key(job: dict[str, Any]) -> tuple[int, int, int,
     return (
         classification_rank.get(str(safe_row_value(job, "classification", "")).lower(), 99),
         viability_rank.get(str(safe_row_value(job, "viability_level", "")).lower(), 99),
-        -int(safe_row_value(job, "score", 0) or 0),
+        -_prep_next_application_score(job),
         geography_rank.get(str(safe_row_value(job, "geographic_eligibility", "")).lower(), 99),
         status_rank.get(str(safe_row_value(job, "status", "")).lower(), 99),
     )
@@ -3717,9 +3737,12 @@ def prep_next_application(
     force: bool = False,
     skip_pdf: bool = False,
     include_review: bool = False,
+    min_score: int | None = None,
 ) -> dict[str, Any] | None:
     initialize()
     selected_job = None
+    forced_below_min_score = False
+    min_score_warning: str | None = None
     if job_id is not None:
         row = get_job_by_id(job_id)
         if row is None:
@@ -3734,9 +3757,26 @@ def prep_next_application(
             print("Job is not actionable. Use --force to prepare anyway.")
             print(json.dumps({"error": "Job is not actionable. Use --force to prepare anyway."}))
             return None
+        if not _prep_next_application_meets_min_score(selected_job, min_score):
+            if not force:
+                payload = _prep_next_application_no_min_score_match(int(min_score or 0))
+                payload.update({
+                    "job_id": int(selected_job["id"]),
+                    "score": selected_job.get("score"),
+                })
+                print(json.dumps(payload, indent=2))
+                return payload
+            forced_below_min_score = True
+            min_score_warning = f"Prepared despite score below min_score because --force was used."
     else:
         candidates = [job for job in _get_prep_next_application_candidates() if _is_prep_next_application_eligible(job)]
-        if not candidates:
+        if min_score is not None:
+            candidates = [job for job in candidates if _prep_next_application_meets_min_score(job, min_score)]
+            if not candidates:
+                payload = _prep_next_application_no_min_score_match(min_score)
+                print(json.dumps(payload, indent=2))
+                return payload
+        elif not candidates:
             print(json.dumps({"error": "No actionable jobs found"}))
             return None
         selected_job = sorted(candidates, key=_prep_next_application_rank_key)[0]
@@ -3750,6 +3790,8 @@ def prep_next_application(
     warning = None
     warnings: list[str] = []
     selected_job_actionable = _is_actionable_selected_job(selected_job)
+    if forced_below_min_score:
+        selected_job_actionable = False
     questions_created = False
     answers_created = False
 
@@ -3833,6 +3875,7 @@ def prep_next_application(
         "package_zip_path": package_zip_path,
         "package_zip_created": package_zip_created,
         "actionable": selected_job_actionable,
+        "min_score": min_score,
         "skip_browser": skip_browser,
         "pdf_export": pdf_export_status,
         "application_tracking": _application_tracking_counts(),
@@ -3844,7 +3887,10 @@ def prep_next_application(
     warnings.extend(message for message in _geography_warnings_for_job(selected_job) if message not in warnings)
     if warning:
         summary["warning"] = warning
-    if force and not selected_job_actionable:
+    if min_score_warning:
+        summary["warning"] = min_score_warning
+        warnings.append(min_score_warning)
+    if force and not selected_job_actionable and not min_score_warning:
         forced_geo = str(selected_job.get("geographic_eligibility", "")).lower()
         forced_classification = str(selected_job.get("classification", "")).lower()
         forced_viability = str(selected_job.get("viability_level", "")).lower()
@@ -4013,6 +4059,73 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
     lines.extend(["", "Next action: Review materials manually before submitting."])
     return "\n".join(lines)
 
+
+
+PREP_NEXT_APPLICATION_USAGE = (
+    "Usage: python -m job_fit_agent.main prep-next-application "
+    "[--dry-run] [--job-id <id>] [--min-score <n>] [--include-review] "
+    "[--force] [--skip-browser] [--skip-pdf] [--notify-telegram]"
+)
+
+
+def _parse_prep_next_application_args(tokens: list[str]) -> dict[str, Any] | None:
+    if "--help" in tokens or "-h" in tokens:
+        print(PREP_NEXT_APPLICATION_USAGE)
+        return None
+
+    allowed_flags = {
+        "--dry-run",
+        "--job-id",
+        "--min-score",
+        "--include-review",
+        "--force",
+        "--skip-browser",
+        "--skip-pdf",
+        "--notify-telegram",
+    }
+    parsed: dict[str, Any] = {
+        "dry_run": False,
+        "job_id": None,
+        "min_score": None,
+        "include_review": False,
+        "force": False,
+        "skip_browser": False,
+        "skip_pdf": False,
+        "notify_telegram": False,
+    }
+
+    idx = 0
+    while idx < len(tokens):
+        token = tokens[idx]
+        if token not in allowed_flags:
+            print(f"Error: unknown prep-next-application option: {token}")
+            print(PREP_NEXT_APPLICATION_USAGE)
+            raise SystemExit(2)
+        if token in {"--job-id", "--min-score"}:
+            if idx + 1 >= len(tokens) or tokens[idx + 1].startswith("--"):
+                print(f"Error: {token} requires an integer value")
+                print(PREP_NEXT_APPLICATION_USAGE)
+                raise SystemExit(2)
+            try:
+                value = int(tokens[idx + 1])
+            except ValueError:
+                print(f"Error: {token} requires an integer value")
+                print(PREP_NEXT_APPLICATION_USAGE)
+                raise SystemExit(2)
+            parsed["job_id" if token == "--job-id" else "min_score"] = value
+            idx += 2
+            continue
+        parsed[{
+            "--dry-run": "dry_run",
+            "--include-review": "include_review",
+            "--force": "force",
+            "--skip-browser": "skip_browser",
+            "--skip-pdf": "skip_pdf",
+            "--notify-telegram": "notify_telegram",
+        }[token]] = True
+        idx += 1
+
+    return parsed
 
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
@@ -4394,28 +4507,11 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if command == "prep-next-application":
-        dry_run = "--dry-run" in args[1:]
-        skip_browser = "--skip-browser" in args[1:]
-        skip_pdf = "--skip-pdf" in args[1:]
-        selected_job_id: int | None = None
-        force = "--force" in args[1:]
-        include_review = "--include-review" in args[1:]
-        if "--job-id" in args[1:]:
-            try:
-                job_id_index = args.index("--job-id")
-                selected_job_id = int(args[job_id_index + 1])
-            except (ValueError, IndexError):
-                print("Usage: python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--include-review] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]")
-                return
-        notify_telegram = "--notify-telegram" in args[1:]
-        summary = prep_next_application(
-            dry_run=dry_run,
-            job_id=selected_job_id,
-            skip_browser=skip_browser,
-            force=force,
-            skip_pdf=skip_pdf,
-            include_review=include_review,
-        )
+        parsed = _parse_prep_next_application_args(args[1:])
+        if parsed is None:
+            return
+        notify_telegram = bool(parsed.pop("notify_telegram"))
+        summary = prep_next_application(**parsed)
         if notify_telegram:
             config = load_notification_config().telegram
             if not config.bot_token or not config.chat_id:
@@ -4480,7 +4576,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
     print("python -m job_fit_agent.main generate-application-answers <job_id>")
-    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]")
+    print("python -m job_fit_agent.main prep-next-application [--dry-run] [--job-id <id>] [--min-score <n>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]")
 
 
 if __name__ == "__main__":
