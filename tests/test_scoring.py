@@ -1644,3 +1644,84 @@ def test_las_vegas_on_site_role_remains_eligible() -> None:
 
     assert job.geographic_eligibility == "eligible"
     assert fit.viability_level in {"apply_now", "review"}
+
+
+def test_ai_solutions_engineer_remote_us_agent_deployment_lane_is_strong_fit() -> None:
+    job = _job(
+        title="AI Solutions Engineer",
+        location="Remote US",
+        description=(
+            "Deploy AI agents inside customer workflows, perform workflow analysis, build "
+            "API-connected workflows and integrations, run proof of concept and pilot deployment "
+            "programs, and operationalize AI adoption with enablement and product analytics."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification in {"high_fit", "near_fit"}
+    assert fit.classification == "high_fit" or fit.total_score >= 70
+
+
+def test_enterprise_solutions_engineer_with_ai_agents_and_integrations_is_high_fit() -> None:
+    job = _job(
+        title="Enterprise Solutions Engineer",
+        location="Remote US",
+        description=(
+            "Own customer implementation for AI agents, integrations, API-connected workflows, "
+            "workflow automation, proof of concept, pilot deployment, enablement, and measurable "
+            "process improvement for enterprise customers."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "high_fit"
+
+
+def test_customer_engineer_with_ai_agents_and_workflow_implementation_is_near_fit() -> None:
+    job = _job(
+        title="Customer Engineer",
+        location="Remote US",
+        description=(
+            "Lead customer implementation of AI agents, workflow analysis, integrations, "
+            "API-connected workflows, internal tools, enablement, and business process automation."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "near_fit"
+    assert not any("Hardcore infrastructure/backend engineering emphasis detected" in flag for flag in fit.red_flags)
+
+
+def test_backend_platform_engineer_with_distributed_systems_and_on_call_is_low_fit() -> None:
+    job = _job(
+        title="Backend Platform Engineer",
+        location="Remote US",
+        description=(
+            "Own backend platform ownership, distributed systems, cloud platform engineering, "
+            "production backend services, on-call incident response, and reliability engineering."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+    assert "Technical depth review: role may require production engineering ownership beyond AI implementation." in fit.red_flags
+
+
+def test_infrastructure_engineer_sre_is_low_fit() -> None:
+    job = _job(
+        title="Infrastructure Engineer / SRE",
+        location="Remote US",
+        description=(
+            "Own infrastructure engineering, SRE reliability, Kubernetes, cloud infrastructure, "
+            "on-call rotations, incident response, and production reliability."
+        ),
+    )
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+    assert "Technical depth review: role may require production engineering ownership beyond AI implementation." in fit.red_flags

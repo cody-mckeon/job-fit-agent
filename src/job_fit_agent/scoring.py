@@ -65,6 +65,12 @@ ENTERPRISE_AI_SOLUTIONS_PRIORITY_TITLES = {
     "forward deployed engineer",
     "forward-deployed engineer",
     "forward deployed ai engineer",
+    "forward deployed software engineer",
+    "forward deployed applied ai engineer",
+    "technical solutions engineer",
+    "technical solutions consultant",
+    "enterprise solutions consultant",
+    "workflow automation engineer",
     "implementation engineer",
     "ai implementation engineer",
     "ai deployment engineer",
@@ -87,8 +93,19 @@ ENTERPRISE_AI_SOLUTIONS_CONTEXT_SIGNALS = {
     "apis",
     "api integration",
     "enterprise deployment",
+    "agent deployment",
+    "deployment of ai agents",
     "pilot deployment",
     "customer implementation",
+    "customer implementations",
+    "workflow analysis",
+    "ai adoption",
+    "business process automation",
+    "api-connected workflows",
+    "internal tools",
+    "operationalizing ai",
+    "process improvement",
+    "product analytics",
     "technical discovery",
     "solution design",
     "systems integration",
@@ -126,8 +143,9 @@ FORWARD_DEPLOYED_HIGH_PRIORITY_TITLES = {
     "forward deployed engineer",
     "forward-deployed engineer",
     "forward deployed ai engineer",
-    "forward deployed product engineer",
     "forward deployed software engineer",
+    "forward deployed applied ai engineer",
+    "forward deployed product engineer",
 }
 FORWARD_DEPLOYED_STRONG_SIGNALS = {
     "forward deployed",
@@ -142,13 +160,17 @@ FORWARD_DEPLOYED_STRONG_SIGNALS = {
     "technical discovery",
     "customer workflows",
     "workflow automation",
+    "workflow analysis",
+    "business process automation",
     "prototypes",
     "proof of concept",
     "poc",
     "deployment",
+    "agent deployment",
     "pilot deployment",
     "integrations",
     "api integration",
+    "api-connected workflows",
     "systems integration",
     "solution design",
     "workflow integration",
@@ -160,6 +182,8 @@ FORWARD_DEPLOYED_CONTEXT_SIGNALS = {
     "customer implementation",
     "implementation",
     "workflow automation",
+    "workflow analysis",
+    "ai adoption",
     "data",
     "ml",
     "machine learning",
@@ -170,7 +194,7 @@ FORWARD_DEPLOYED_CONTEXT_SIGNALS = {
     "integrations",
     "api integration",
     "enterprise deployment",
-    "customer implementation",
+    "operationalizing ai",
 }
 FORWARD_DEPLOYED_DOWNRANK_GUARDRAILS = {
     "sales engineer",
@@ -233,6 +257,8 @@ MARKET_ROLE_TITLE_FAMILIES = {
     "enterprise ai solutions engineer": "solutions_architecture",
     "forward deployed engineer": "product_engineering",
     "forward deployed ai engineer": "product_engineering",
+    "forward deployed software engineer": "product_engineering",
+    "forward deployed applied ai engineer": "product_engineering",
     "customer engineer": "solutions_architecture",
     "technical solutions engineer": "solutions_architecture",
     "implementation engineer": "ai_implementation",
@@ -297,6 +323,14 @@ AI_AGENTIC_CONTEXT_SIGNALS = {
     "ai implementation",
     "enterprise deployment",
     "customer implementation",
+    "customer implementations",
+    "workflow analysis",
+    "business process automation",
+    "api-connected workflows",
+    "internal tools",
+    "operationalizing ai",
+    "process improvement",
+    "product analytics",
     "technical discovery",
     "solution design",
     "workflow integration",
@@ -307,6 +341,9 @@ AI_AGENTIC_CONTEXT_SIGNALS = {
     "pre-sales technical",
     "customer-facing engineering",
     "ai transformation",
+    "agent deployment",
+    "pilot deployment",
+    "proof of concept",
 }
 AUTOMATION_CONTEXT_SIGNALS = {
     "workflow automation",
@@ -316,6 +353,7 @@ AUTOMATION_CONTEXT_SIGNALS = {
     "internal automation",
     "systems automation",
     "integrations",
+    "api-connected workflows",
     "no-code",
     "low-code",
     "zapier",
@@ -341,6 +379,8 @@ INTERNAL_TOOLS_CONTEXT_SIGNALS = {
     "asana automation",
     "slack automation",
     "product systems",
+    "ai enablement",
+    "internal tools / ai enablement",
 }
 ROLE_FAMILY_CONTEXT_SIGNALS = AI_AGENTIC_CONTEXT_SIGNALS | AUTOMATION_CONTEXT_SIGNALS | INTERNAL_TOOLS_CONTEXT_SIGNALS
 AI_AUTOMATION_CONTEXT_SIGNALS = {
@@ -360,6 +400,7 @@ AI_AUTOMATION_CONTEXT_SIGNALS = {
     "workflow automation",
     "process automation",
     "business process automation",
+    "workflow analysis",
     "process improvement",
     "internal automation",
     "systems automation",
@@ -373,9 +414,15 @@ AI_AUTOMATION_CONTEXT_SIGNALS = {
     "marketing systems",
     "enterprise automation",
     "implementation",
+    "agent deployment",
+    "pilot deployment",
+    "proof of concept",
     "integrations",
     "systems design",
     "workflow design",
+    "api-connected workflows",
+    "operationalizing ai",
+    "product analytics",
     "no-code",
     "low-code",
     "nocode",
@@ -402,6 +449,7 @@ PLATFORM_AUTOMATION_CONTEXT_SIGNALS = {
     "enterprise automation",
     "process automation",
     "business process automation",
+    "workflow analysis",
     "integrations",
     "implementation",
     "workflow design",
@@ -492,12 +540,22 @@ AI_BUILDER_KEYWORDS = {
     "voice ai",
     "llm workflows",
     "enterprise deployment",
+    "agent deployment",
     "customer implementation",
+    "customer implementations",
+    "workflow analysis",
+    "ai adoption",
+    "api-connected workflows",
+    "operationalizing ai",
+    "process improvement",
+    "product analytics",
     "technical discovery",
     "solution design",
     "workflow integration",
     "systems integration",
     "pilot deployment",
+    "proof of concept",
+    "customer workflows",
     "openai",
     "anthropic",
     "langchain",
@@ -507,7 +565,19 @@ AI_BUILDER_KEYWORDS = {
 AI_BUILDER_KEYWORD_BONUS = 6
 AI_BUILDER_BONUS_CAP = 30
 NEGATIVE_ENGINEERING_KEYWORDS = {
+    "backend platform ownership",
+    "backend platform",
+    "platform ownership",
+    "production backend ownership",
+    "production backend",
+    "cloud platform engineering",
+    "cloud infrastructure",
+    "infrastructure engineering",
     "distributed systems",
+    "on-call",
+    "on call",
+    "incident response",
+    "reliability engineering",
     "compiler",
     "kernel",
     "c++",
@@ -1347,8 +1417,10 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         job.geographic_reason = REMOTE_US_CITY_REGION_REVIEW_REASON
 
     primary_role_text = f"{job.title} {job.department} {job.employment_type} {job.team}".lower()
+    primary_role_negative_keywords = {"engineer only", "software engineer", "infrastructure engineer"}
     for keyword, points in NEGATIVE_KEYWORDS.items():
-        if keyword in text:
+        keyword_scope_text = primary_role_text if keyword in primary_role_negative_keywords else text
+        if keyword in keyword_scope_text:
             score += points
             red_flags.append(f"Mismatch keyword: {keyword} ({points})")
     for keyword, points in CONTEXTUAL_NEGATIVE_TITLE_TERMS.items():
@@ -1365,7 +1437,7 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         red_flags.append("Quota-carrying sales focus detected (-35)")
     hardcore_engineering_signal = any(keyword in text for keyword in NEGATIVE_ENGINEERING_KEYWORDS)
     if hardcore_engineering_signal:
-        red_flags.append("Hardcore infrastructure/backend engineering emphasis detected")
+        red_flags.append("Technical depth review: role may require production engineering ownership beyond AI implementation.")
 
 
     has_strong_match = title_hits > 0 and keyword_hits > 0
@@ -1421,6 +1493,25 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
     role_context_text = f"{job.description} {job.department} {job.team}".lower()
     role_family_context_hits = [term for term in ROLE_FAMILY_CONTEXT_SIGNALS if term in role_context_text]
     has_market_title_context_pair = bool(market_title_hits and role_family_context_hits)
+    ai_implementation_context_hits = [
+        term
+        for term in ENTERPRISE_AI_SOLUTIONS_CONTEXT_SIGNALS | ROLE_FAMILY_CONTEXT_SIGNALS
+        if term in role_context_text
+    ]
+    is_ai_implementation_lane = (
+        role_family in {
+            "solutions_architecture",
+            "ai_implementation",
+            "workflow_automation",
+            "ai_operations",
+            "ai_automation",
+            "ai_transformation",
+            "business_systems",
+            "internal_tools",
+            "product_engineering",
+        }
+        and bool(ai_implementation_context_hits)
+    )
     is_high_fit_role_match = has_strong_match and role_family in {"product_management", "product_operations", "technical_product"}
     if has_forward_deployed_title and forward_deployed_has_context:
         is_high_fit_role_match = True
@@ -1466,12 +1557,12 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
 
     if role_family in {"engineering", "data_science", "infrastructure_engineering", "sre", "security_engineering"}:
         classification = "low_fit"
-    if hardcore_engineering_signal and role_family not in {"product_engineering", "workflow_automation", "ai_builder", "ai_operations", "developer_tools"}:
+    if hardcore_engineering_signal and not is_ai_implementation_lane:
         classification = "low_fit"
-    if hardcore_engineering_signal and capability_boost < 12:
+    if hardcore_engineering_signal and capability_boost < 12 and not is_ai_implementation_lane:
         classification = "low_fit"
 
-    if has_forced_low_fit_title:
+    if has_forced_low_fit_title and not (has_forward_deployed_title and forward_deployed_has_context):
         classification = "low_fit"
 
     title_lower = job.title.lower()
@@ -1496,6 +1587,9 @@ def explain_score(job: JobPosting, target_profile: TargetProfile) -> FitScore:
         if not (forward_deployed_has_context and (forward_deployed_signal_boost >= 8 or capability_boost >= 6)):
             classification = "low_fit" if any(term in title_lower for term in ("field service engineer", "it support engineer", "technical account manager")) else "near_fit"
             red_flags.append("Role title matches downrank guardrails without strong AI/product implementation overlap")
+    if "customer engineer" in title_lower and classification == "high_fit":
+        classification = "near_fit"
+        red_flags.append("Customer Engineer role needs review for implementation depth and ownership scope")
     if has_platform_automation_title and not has_platform_automation_context:
         classification = "near_fit" if classification == "high_fit" else classification
         red_flags.append("Platform role lacks clear AI/workflow automation or business transformation ownership")
