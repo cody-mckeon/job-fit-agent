@@ -63,10 +63,16 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
         action = "skip"
         job_id_token = parts[1]
         note_parts = parts[2:]
-    elif verb in {"save", "/save"}:
+    elif verb in {"save", "/save", "saved", "/saved"}:
         if len(parts) < 2:
             raise ValueError("Missing job id.")
         action = "save"
+        job_id_token = parts[1]
+        note_parts = parts[2:]
+    elif verb in {"block-company", "/block-company"}:
+        if len(parts) < 3:
+            raise ValueError("Missing company or reason.")
+        action = "block-company"
         job_id_token = parts[1]
         note_parts = parts[2:]
     elif verb in {"blocked", "/blocked", "block", "/block"}:
@@ -115,5 +121,7 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
         raise ValueError("Skip reason is required.")
     if action == "blocked" and not note:
         raise ValueError("Blocked reason is required.")
+    if action == "block-company" and not note:
+        raise ValueError("Company block reason is required.")
 
     return TelegramStatusCommand(action=action, job_identifier=job_identifier, note=note)

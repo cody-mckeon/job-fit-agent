@@ -518,3 +518,123 @@ def test_blocked_report_includes_blocked_jobs(tmp_path, monkeypatch, capsys):
     assert "Ashby 90-day application limit" in output
     assert "2026-06-04T00:00:00+00:00" in output
     assert "Recruiter/manual review" in output
+
+
+def test_block_company_creates_durable_company_block(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["block-company", "elevenlabs", "Ashby 90-day application limit, recruiter/manual review only"])
+
+    output = capsys.readouterr().out
+    store = json.loads((tmp_path / "data/company_application_blocks.json").read_text())
+    record = store["elevenlabs"]
+    assert "Blocked company: elevenlabs" in output
+    assert record["company"] == "elevenlabs"
+    assert record["status"] == "blocked"
+    assert record["reason"] == "Ashby 90-day application limit, recruiter/manual review only"
+    assert record["blocked_at"]
+    assert record["strategy"] == "recruiter/manual review"
+
+
+def test_prep_next_application_excludes_blocked_company_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    blocked_id = _insert("https://jobs.ashbyhq.com/elevenlabs/company-blocked-prep", "Blocked Company PM")
+    open_id = _insert("https://jobs.ashbyhq.com/acme/open-company-blocked-prep", "Open Company PM")
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data/company_application_blocks.json").write_text(json.dumps({
+        "elevenlabs": {
+            "company": "elevenlabs",
+            "status": "blocked",
+            "reason": "Ashby 90-day application limit",
+            "blocked_at": "2026-06-04T00:00:00+00:00",
+            "strategy": "recruiter/manual review",
+        }
+    }))
+
+    prep_next_application(dry_run=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == open_id
+    assert payload["job_id"] != blocked_id
+
+
+def test_unapplied_high_fit_excludes_blocked_company_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert("https://jobs.ashbyhq.com/elevenlabs/company-blocked-unapplied", "Blocked Company Unapplied PM")
+    _insert("https://jobs.ashbyhq.com/acme/open-company-unapplied", "Open Company Unapplied PM")
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data/company_application_blocks.json").write_text(json.dumps({
+        "elevenlabs": {
+            "company": "ElevenLabs",
+            "status": "blocked",
+            "reason": "Ashby 90-day application limit",
+            "blocked_at": "2026-06-04T00:00:00+00:00",
+            "strategy": "recruiter/manual review",
+        }
+    }))
+
+    main(["unapplied-high-fit"])
+
+    output = capsys.readouterr().out
+    assert "Blocked Company Unapplied PM" not in output
+    assert "Open Company Unapplied PM" in output
+
+
+def test_force_allows_specific_blocked_company_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/elevenlabs/company-blocked-force", "Blocked Company Force PM")
+    (tmp_path / "data/company_application_blocks.json").write_text(json.dumps({
+        "elevenlabs": {
+            "company": "elevenlabs",
+            "status": "blocked",
+            "reason": "Ashby 90-day application limit",
+            "blocked_at": "2026-06-04T00:00:00+00:00",
+            "strategy": "recruiter/manual review",
+        }
+    }))
+
+    prep_next_application(dry_run=True, job_id=job_id, force=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == job_id
+
+
+def test_blocked_report_includes_company_blocks(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data/company_application_blocks.json").write_text(json.dumps({
+        "elevenlabs": {
+            "company": "elevenlabs",
+            "status": "blocked",
+            "reason": "Ashby 90-day application limit",
+            "blocked_at": "2026-06-04T00:00:00+00:00",
+            "strategy": "recruiter/manual review",
+        }
+    }))
+
+    main(["blocked"])
+
+    output = capsys.readouterr().out
+    assert "Blocked, needs relationship strategy" in output
+    assert "company: elevenlabs" in output
+    assert "title: Company-level block" in output
+    assert "strategy: recruiter/manual review" in output
+
+
+def test_block_cli_command_with_job_id_updates_blocked_status(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/block-cli", "Block CLI PM")
+
+    main(["block", str(job_id), "Ashby", "90-day", "application", "limit"])
+
+    row = get_job_by_id(job_id)
+    assert row is not None
+    assert row["application_status"] == "blocked"
+    assert row["blocked_at"]
+    assert row["application_notes"] == "Ashby 90-day application limit"

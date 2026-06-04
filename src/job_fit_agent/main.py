@@ -36,8 +36,11 @@ from job_fit_agent.application_status import (
     EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES,
     build_url_for_stable_key,
     load_application_status,
+    load_company_application_blocks,
+    normalize_company_key,
     parse_stable_job_key,
     save_application_status,
+    save_company_application_blocks,
 )
 from job_fit_agent.discovery.providers import StaticCompanyProvider
 from job_fit_agent.config import (
@@ -733,6 +736,7 @@ def run_pipeline() -> None:
             and fit.classification == "high_fit"
             and fit.viability_level == "apply_now"
             and job.geographic_eligibility in {"eligible", "remote_us"}
+            and not _is_company_blocked_for_application(dict(row) if row is not None else {"company": job.company})
         ):
             new_high_fit.append((job, fit))
 
@@ -821,6 +825,8 @@ def _is_actionable_job(row: dict[str, Any], *, require_real_url: bool = True, re
         return False
     if application_status in ACTIONABLE_APPLICATION_STATUS_EXCLUSIONS:
         return False
+    if _is_company_blocked_for_application(row):
+        return False
     if status in {"applied", "rejected", "archived", "blocked"}:
         return False
     if _has_non_us_geography_signal(row):
@@ -840,6 +846,8 @@ def _is_actionable_digest_row(row: dict) -> bool:
     if status in {"archived", "rejected", "applied", "blocked"}:
         return False
     if application_status in ACTIONABLE_APPLICATION_STATUS_EXCLUSIONS:
+        return False
+    if _is_company_blocked_for_application(row):
         return False
     if viability_level not in {"apply_now", "strong_review"}:
         return False
@@ -909,6 +917,8 @@ def _is_unapplied_high_fit_candidate(row: dict[str, Any]) -> bool:
         return False
     if _application_tracking_status(row) not in {"", "not_applied"}:
         return False
+    if _is_company_blocked_for_application(row):
+        return False
     if not _is_actionable_real_job_url(str(safe_row_value(row, "url", ""))):
         return False
     return True
@@ -977,6 +987,10 @@ def _application_tracking_counts(rows: list[dict[str, Any]] | None = None) -> di
             if _application_tracking_status(row) == application_status
             or (application_status == "applied" and str(safe_row_value(row, "status", "")).lower() == "applied")
         ) + sum(1 for row in status_only if str(row.get("application_status", "")).lower() == application_status)
+    counts["blocked_count"] += sum(
+        1 for record in _company_application_block_records().values()
+        if str(record.get("status", "")).lower() == "blocked"
+    )
     return counts
 
 def _load_all_jobs() -> list[dict[str, Any]]:
@@ -1112,6 +1126,83 @@ def _application_status_records() -> dict[str, dict[str, Any]]:
         return load_application_status()
     except (OSError, json.JSONDecodeError, ValueError):
         return {}
+
+
+def _company_application_block_records() -> dict[str, dict[str, Any]]:
+    try:
+        return load_company_application_blocks()
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _company_block_for_company(company: str) -> dict[str, Any] | None:
+    key = normalize_company_key(company)
+    if not key:
+        return None
+    record = _company_application_block_records().get(key)
+    if not record or str(record.get("status", "")).lower() != "blocked":
+        return None
+    expires_at = str(record.get("expires_at") or "").strip()
+    if expires_at:
+        try:
+            expires_dt = datetime.fromisoformat(expires_at)
+            if expires_dt.tzinfo is None:
+                expires_dt = expires_dt.replace(tzinfo=UTC)
+            if expires_dt <= datetime.now(UTC):
+                return None
+        except ValueError:
+            pass
+    return record
+
+
+def _company_block_for_job(job: dict[str, Any]) -> dict[str, Any] | None:
+    company_block = _company_block_for_company(str(safe_row_value(job, "company", "") or ""))
+    if company_block is not None:
+        return company_block
+    try:
+        parsed = parse_job_url(str(safe_row_value(job, "url", "") or ""))
+    except ValueError:
+        return None
+    return _company_block_for_company(parsed.company)
+
+
+def _is_company_blocked_for_application(job: dict[str, Any]) -> bool:
+    return _company_block_for_job(job) is not None
+
+
+def block_company(company: str, reason: str, *, quiet: bool = False) -> dict[str, Any]:
+    company_value = str(company or "").strip()
+    reason_value = str(reason or "").strip()
+    if not company_value:
+        raise ValueError("Company is required.")
+    if not reason_value:
+        raise ValueError("Company block reason is required.")
+    key = normalize_company_key(company_value)
+    timestamp = _utc_timestamp()
+    records = load_company_application_blocks()
+    existing = records.get(key, {})
+    history = existing.get("status_history")
+    if not isinstance(history, list):
+        history = []
+    history.append({"status": "blocked", "timestamp": timestamp, "reason": reason_value})
+    record = dict(existing)
+    record.update({
+        "company": company_value,
+        "status": "blocked",
+        "reason": reason_value,
+        "blocked_at": timestamp,
+        "expires_at": existing.get("expires_at"),
+        "strategy": "recruiter/manual review",
+        "updated_at": timestamp,
+        "status_history": history,
+    })
+    records[key] = record
+    save_company_application_blocks(records)
+    if not quiet:
+        print(f"Blocked company: {company_value}.")
+        print(f"reason: {reason_value}")
+        print("strategy: recruiter/manual review")
+    return record
 
 
 def _persistent_status_for_stable_key(stable_job_key: str) -> dict[str, Any] | None:
@@ -1482,6 +1573,8 @@ def mark_withdrawn(job_id: int | None = None, url: str | None = None, note: str 
     return _mark_application_status("withdrawn", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
 
 def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> str:
+    if action == "block-company":
+        return f"Blocked company: {job.get('company', '')}. Strategy: recruiter/manual review."
     if job.get("warning"):
         return f"Marked {job.get('application_status', action)} by stable key: {job.get('stable_job_key')}. Job details will be enriched when rediscovered."
     company = str(job.get("company", "")).strip()
@@ -1515,6 +1608,9 @@ def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
             new_status = "saved"
         elif parsed.action == "blocked":
             updated = mark_blocked(identifier=parsed.job_identifier, reason=parsed.note, quiet=True)
+            new_status = "blocked"
+        elif parsed.action == "block-company":
+            updated = block_company(parsed.job_identifier, parsed.note, quiet=True)
             new_status = "blocked"
         elif parsed.action in {"rejected", "interviewing", "offer", "withdrawn"}:
             updated = _mark_application_status(parsed.action, identifier=parsed.job_identifier, note=parsed.note, quiet=True)
@@ -1626,9 +1722,31 @@ def _format_blocked_report_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _format_company_blocked_report_row(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "company": record.get("company", ""),
+        "title": "Company-level block",
+        "url": "",
+        "reason": record.get("reason", "none") or "none",
+        "blocked_at": record.get("blocked_at", record.get("updated_at", "")),
+        "suggested_next_action": "Recruiter/manual review: use relationship strategy before any additional application.",
+        "stable_job_key": "",
+        "strategy": record.get("strategy", "recruiter/manual review"),
+    }
+
+
 def print_blocked_jobs(*, limit: int = 50, as_json: bool = False) -> None:
-    rows = _rows_for_application_status("blocked", limit=limit)
+    try:
+        rows = _rows_for_application_status("blocked", limit=limit)
+    except sqlite3.Error:
+        rows = []
     formatted = [_format_blocked_report_row(row) for row in rows]
+    company_blocks = sorted(
+        (_format_company_blocked_report_row(record) for record in _company_application_block_records().values() if str(record.get("status", "")).lower() == "blocked"),
+        key=lambda row: str(row.get("blocked_at", "") or ""),
+        reverse=True,
+    )
+    formatted = (company_blocks + formatted)[:limit]
     if as_json:
         print(json.dumps(formatted, indent=2))
         return
@@ -1643,6 +1761,8 @@ def print_blocked_jobs(*, limit: int = 50, as_json: bool = False) -> None:
         print(f"reason: {row['reason']}")
         print(f"blocked_at: {row['blocked_at']}")
         print(f"suggested_next_action: {row['suggested_next_action']}")
+        if row.get("strategy"):
+            print(f"strategy: {row['strategy']}")
         print(f"stable_job_key: {row['stable_job_key']}")
         print("-")
 
@@ -1779,7 +1899,7 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         print()
         _print_digest_rows("Automation / AI operations roles worth reviewing", automation_review_rows, "No automation / AI operations roles worth reviewing.")
         print()
-        _print_digest_rows("Blocked, needs relationship strategy", blocked_rows, "No blocked jobs.")
+        print_blocked_jobs(limit=10)
         print()
         _print_digest_rows("Actionable high-fit jobs", actionable_high_fit_rows, "No actionable high-fit jobs.")
         print()
@@ -3847,8 +3967,11 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc) if str(exc) else "Usage: python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
         return
 
-    if command == "blocked":
-        if len(args) >= 2 and not args[1].startswith("--"):
+    if command in {"block", "blocked"}:
+        if command == "block" or (len(args) >= 2 and not args[1].startswith("--")):
+            if len(args) < 3:
+                print(f'Usage: python -m job_fit_agent.main {command} <job_id> "<reason>"')
+                return
             try:
                 mark_blocked(identifier=args[1], reason=" ".join(args[2:]) or None)
             except ValueError as exc:
@@ -3860,6 +3983,17 @@ def main(argv: list[str] | None = None) -> None:
             print("Usage: python -m job_fit_agent.main blocked <identifier> <reason> OR blocked [--limit <n>] [--json]")
             return
         print_blocked_jobs(limit=limit, as_json="--json" in args[1:])
+        return
+
+
+    if command == "block-company":
+        if len(args) < 3:
+            print('Usage: python -m job_fit_agent.main block-company <company> "<reason>"')
+            return
+        try:
+            block_company(args[1], " ".join(args[2:]))
+        except ValueError as exc:
+            print(str(exc))
         return
 
 
@@ -4208,6 +4342,8 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main mark-applied (--job-id <id> | --url <job_url>) [--note <note>]")
     print("python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
     print('python -m job_fit_agent.main telegram-command "blocked <job_identifier> <reason>"')
+    print('python -m job_fit_agent.main block <job_id> "<reason>"')
+    print('python -m job_fit_agent.main block-company <company> "<reason>"')
     print("python -m job_fit_agent.main blocked [--limit <n>] [--json]")
     print("python -m job_fit_agent.main applied <job_id>")
     print('python -m job_fit_agent.main skip <job_id> "<reason>"')

@@ -202,7 +202,7 @@ Setup steps:
 
 ## Application workflow lifecycle
 
-Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Treat `data/application_status.json` as the durable, shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
+Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Company-level application cooldowns/blocks are persisted in `data/company_application_blocks.json` so Ashby-style company limits can suppress every related role until a recruiter/manual-review strategy is available. Treat these durable JSON files as the shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
 
 Valid statuses:
 - `new`
@@ -224,6 +224,9 @@ python -m job_fit_agent.main telegram-command "rejected ashby:company:external-i
 python -m job_fit_agent.main telegram-command "offer ashby:company:external-id Verbal offer"
 python -m job_fit_agent.main telegram-command "withdrawn ashby:company:external-id Accepted another role"
 python -m job_fit_agent.main telegram-command "blocked ashby:company:external-id Ashby 90-day application limit, recruiter/manual review needed"
+python -m job_fit_agent.main telegram-command "block-company elevenlabs Ashby 90-day application limit, recruiter/manual review only"
+python -m job_fit_agent.main block <job_id> "Ashby 90-day application limit"
+python -m job_fit_agent.main block-company elevenlabs "Ashby 90-day application limit, recruiter/manual review only"
 python -m job_fit_agent.main blocked
 python -m job_fit_agent.main rejected
 python -m job_fit_agent.main pipeline
@@ -321,9 +324,9 @@ Recommended application prep workflow:
      `python -m job_fit_agent.main prep-next-application --notify-telegram`
    - Optional explicit job selection with Telegram:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
-   - Role score measures role-family/title/skill fit only; application actionability additionally requires `classification in {high_fit, near_fit}`, `viability_level in {apply_now, strong_review}`, `geographic_eligibility=eligible`, and no applied/skipped/rejected/withdrawn/offer/blocked application status.
+   - Role score measures role-family/title/skill fit only; application actionability additionally requires `classification in {high_fit, near_fit}`, `viability_level in {apply_now, strong_review}`, `geographic_eligibility=eligible`, no applied/skipped/rejected/withdrawn/offer/blocked application status, and no active company-level block in `data/company_application_blocks.json`.
    - Auto-selection only prepares valid-URL jobs with eligible geography and apply-ready viability. Geography-review or geography-ineligible jobs are excluded from default auto-prep, actionable digest sections, daily Telegram apply-now recommendations, and Telegram package auto-selection.
-   - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, geography `review`/`ineligible`, non-US geography signals, invalid URL, or `applied/rejected/archived`).
+   - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, geography `review`/`ineligible`, non-US geography signals, invalid URL, `applied/rejected/archived`, or company-level blocked).
    - To intentionally prepare a geography-review job after manual review, select it explicitly with `--include-review`; to override any specific job after review, use `--force`:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --include-review`
      `python -m job_fit_agent.main prep-next-application --job-id <id> --force`
@@ -339,9 +342,9 @@ Recommended application prep workflow:
    - From Telegram or GitHub Actions, prefer stable job keys such as `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; they remain safe even when the local SQLite database does not contain that job row.
    - Review submitted roles with `python -m job_fit_agent.main applied` or `python -m job_fit_agent.main applied --json`.
    - Review rejected roles with `python -m job_fit_agent.main rejected`; review blocked roles with `python -m job_fit_agent.main blocked`; review active applications with `python -m job_fit_agent.main pipeline` grouped by `applied`, `interviewing`, and `offer`; review outcomes with `python -m job_fit_agent.main outcomes`.
-   - If an application system blocks submission, run `python -m job_fit_agent.main telegram-command "blocked <stable_job_key> <reason>"` so the role moves to the `Blocked, needs relationship strategy` report and stays out of recommendations.
+   - If an application system blocks a single submission, run `python -m job_fit_agent.main telegram-command "blocked <stable_job_key> <reason>"` so the role moves to the `Blocked, needs relationship strategy` report and stays out of recommendations. If the system blocks the whole company/cooldown cohort (for example an Ashby 90-day related-application limit), run `python -m job_fit_agent.main block-company <company> "<reason>"` or Telegram `block-company <company> <reason>`; default recommendations exclude all jobs from that company unless you explicitly pass `--force` with a specific `--job-id`.
    - If Cody intentionally passes on a role, run `python -m job_fit_agent.main mark-skipped --job-id <job_id> --reason "Not US eligible"` or `python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"`.
-   - `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, `blocked`, and `saved` application statuses from both SQLite and `data/application_status.json` are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations. Saved jobs stay tracked for later review but are not auto-prepped unless explicitly selected.
+   - `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, `blocked`, and `saved` application statuses from both SQLite and `data/application_status.json`, plus active company-level blocks in `data/company_application_blocks.json`, are excluded from future `prep-next-application` auto-selection, `unapplied-high-fit` defaults, default digest actionable sections, and daily Telegram recommendations. Saved jobs stay tracked for later review but are not auto-prepped unless explicitly selected.
    - After Telegram status updates, run `git pull` locally before triage so your Mac has the latest `data/application_status.json` state.
 
 Telegram handoff requires:
@@ -400,7 +403,7 @@ Mobile flow: **Telegram → download zip → review files → submit manually**.
 GitHub Actions artifact upload remains in place as backup storage.
 Local computer does not need to be on for scheduled runs, and final application submission remains manual.
 
-Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked with active/closed lifecycle statuses (`applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`) or `saved` in SQLite or `data/application_status.json`, geography-review, and geography-ineligible jobs by default. Digest keeps role score separate from actionability by showing eligible roles in `Actionable apply-now roles`, international/geography-ineligible role fits in `Strong role fit, geography not eligible`, and manual-review roles in `Needs geography review`. Use `unapplied-high-fit --eligible-only` any time to see valid high-fit roles that still need an application decision.
+Actionable recommendations in digest, prep-next-application, and Telegram notifications automatically exclude placeholder/test URLs (for example `example.com`, `localhost`, `127.0.0.1`, `test.com`, missing scheme URLs, and URLs containing `fake`/`placeholder`). They also exclude jobs marked with active/closed lifecycle statuses (`applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, `blocked`) or `saved` in SQLite or `data/application_status.json`, jobs whose company has an active block in `data/company_application_blocks.json`, geography-review, and geography-ineligible jobs by default. Digest keeps role score separate from actionability by showing eligible roles in `Actionable apply-now roles`, international/geography-ineligible role fits in `Strong role fit, geography not eligible`, and manual-review roles in `Needs geography review`. Use `unapplied-high-fit --eligible-only` any time to see valid high-fit roles that still need an application decision.
 
 Required GitHub secrets for Telegram package summaries:
 - `TELEGRAM_BOT_TOKEN`
