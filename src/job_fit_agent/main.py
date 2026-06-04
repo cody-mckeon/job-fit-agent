@@ -61,6 +61,14 @@ from job_fit_agent.config import (
 )
 from job_fit_agent.models import FitScore, JobPosting
 from job_fit_agent.notifications.telegram import send_document_with_credentials, send_message, send_message_with_credentials
+
+from job_fit_agent.opportunity_pipeline import (
+    SECTION_ORDER,
+    build_opportunity_pipeline,
+    grouped_pipeline,
+    pipeline_review,
+    set_company_status,
+)
 from job_fit_agent.repository import (
     DB_PATH,
     VALID_STATUSES,
@@ -4127,6 +4135,43 @@ def _parse_prep_next_application_args(tokens: list[str]) -> dict[str, Any] | Non
 
     return parsed
 
+
+def print_opportunity_pipeline() -> None:
+    """Print company-centered Opportunity Pipeline grouped by strategy status."""
+    grouped = grouped_pipeline(build_opportunity_pipeline())
+    print("Opportunity Pipeline")
+    for status, title in SECTION_ORDER:
+        print(title)
+        rows = grouped.get(status, [])
+        if not rows:
+            print("No companies.")
+            print()
+            continue
+        for row in rows:
+            print(f"company: {row.get('company', '')}")
+            print(f"priority: {row.get('priority', '')}")
+            print(f"best_job_score: {row.get('best_job_score', '')}")
+            print(f"best_job_classification: {row.get('best_job_classification', '')}")
+            print(f"best_job_viability_level: {row.get('best_job_viability_level', '')}")
+            print(f"application_channel: {row.get('application_channel', '')}")
+            if row.get("blocked_until"):
+                print(f"blocked_until: {row.get('blocked_until', '')}")
+            print(f"current_best_job_id: {row.get('current_best_job_id', '')}")
+            print(f"current_best_job_url: {row.get('current_best_job_url', '')}")
+            print(f"next_action: {row.get('next_action', '')}")
+            notes = str(row.get("notes", "") or "")
+            if notes:
+                print(f"notes: {notes}")
+            print("-")
+        print()
+
+
+def print_pipeline_review() -> None:
+    """Print the best next Opportunity Pipeline action for today."""
+    payload = pipeline_review()
+    print("Best next action today")
+    print(json.dumps(payload, indent=2))
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "run"
@@ -4218,6 +4263,30 @@ def main(argv: list[str] | None = None) -> None:
         unblock_expired_company_blocks()
         return
 
+
+
+    if command == "opportunity-pipeline":
+        print_opportunity_pipeline()
+        return
+
+    if command == "pipeline-review":
+        print_pipeline_review()
+        return
+
+    if command == "set-company-status":
+        if len(args) != 4:
+            print('Usage: python -m job_fit_agent.main set-company-status <company> <status> "<next_action>"')
+            return
+        try:
+            record = set_company_status(args[1], args[2], args[3])
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return
+        # Refresh score-derived fields around the durable status override.
+        records = build_opportunity_pipeline()
+        refreshed = next((item for item in records if normalize_company_key(str(item.get("company", ""))) == normalize_company_key(str(record.get("company", "")))), record)
+        print(json.dumps(refreshed, indent=2))
+        return
 
     if command == "pipeline":
         try:
@@ -4557,6 +4626,9 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main telegram-command "applied 19"')
     print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
+    print("python -m job_fit_agent.main opportunity-pipeline")
+    print("python -m job_fit_agent.main pipeline-review")
+    print('python -m job_fit_agent.main set-company-status <company> <status> "<next_action>"')
     print("python -m job_fit_agent.main set-status <job_id> <status>")
     print("python -m job_fit_agent.main list-status <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')

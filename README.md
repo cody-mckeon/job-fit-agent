@@ -202,7 +202,7 @@ Setup steps:
 
 ## Application workflow lifecycle
 
-Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Company-level application cooldowns/blocks are persisted in `data/company_application_blocks.json` so Ashby-style company limits can suppress every related role until a recruiter/manual-review strategy is available or the temporary block expires. Treat these durable JSON files as the shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
+Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Company-level application cooldowns/blocks are persisted in `data/company_application_blocks.json` so Ashby-style company limits can suppress every related role until a recruiter/manual-review strategy is available or the temporary block expires. The separate Opportunity Pipeline persists company-centered strategy in `data/opportunity_pipeline.json`; it consumes job scores and application state, but it does not replace or overwrite the Ashby/Greenhouse/Lever job scoring engine. Treat these durable JSON files as the shareable source of truth for application and strategy status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
 
 Valid statuses:
 - `new`
@@ -313,6 +313,22 @@ Generated filename format:
 
 Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.md` exists, the exporter uses the legacy file and prints a regeneration reminder.
 
+## Opportunity Pipeline strategy layer
+
+Job scoring answers **"Is this specific job a fit?"** The Opportunity Pipeline answers **"What should Cody do next?"** It keeps job scoring as a core product and adds a company-centered guide layer that recommends whether to apply, build a relationship, wait through a cooldown, research, watch, or skip.
+
+Cody's target lane for this strategy layer is deploying AI agents inside organizations, workflow automation, AI operations, product systems, technical implementation, product analytics, internal AI transformation, and agent-enabled business process improvement. Pipeline review uses scored jobs as one signal alongside application status, company blocks, geography, viability level, company priority, and relationship/manual-review opportunities.
+
+```bash
+python -m job_fit_agent.main opportunity-pipeline
+python -m job_fit_agent.main pipeline-review
+python -m job_fit_agent.main set-company-status elevenlabs blocked_cooldown "Wait until 2026-09-02 or pursue recruiter/manual review"
+python -m job_fit_agent.main set-company-status linear relationship_strategy "Manual review Product Manager and AI Product Engineer roles before applying"
+python -m job_fit_agent.main set-company-status stripe watch "Weak current fit, watch for AI operations, internal tools, or agent deployment roles"
+```
+
+`opportunity-pipeline` prints grouped sections: Apply now, Relationship strategy, Blocked / cooldown, Research targets, Watchlist, and Skip. `pipeline-review` prints **Best next action today** with reasoning, recommended company/job/channel, and why Cody should not simply direct-apply when an application is blocked, weak, generic, too technical, too international, or better handled through relationship strategy. A high-priority company can stay high priority even when the current best role is blocked or not ideal.
+
 Recommended application prep workflow:
 1. `python -m job_fit_agent.main digest`
    - Digest prints application tracking counts for unapplied high-fit, applied, skipped, and blocked jobs.
@@ -326,7 +342,7 @@ Recommended application prep workflow:
    - Optional explicit job selection with Telegram:
      `python -m job_fit_agent.main prep-next-application --job-id <id> --notify-telegram`
    - Use `--min-score <n>` to require auto-selected jobs to have `score >= n`; with `--job-id`, jobs below the threshold return `actionable=false` unless `--force` is also supplied.
-   - Role score measures role-family/title/skill fit only; application actionability additionally requires `classification in {high_fit, near_fit}`, `viability_level in {apply_now, strong_review}`, `geographic_eligibility=eligible`, no applied/skipped/rejected/withdrawn/offer/blocked application status, and no active, unexpired company-level block in `data/company_application_blocks.json`.
+   - Role score measures role-family/title/skill fit only; application actionability additionally requires `classification in {high_fit, near_fit}`, `viability_level in {apply_now, strong_review}`, `geographic_eligibility=eligible`, no applied/skipped/rejected/withdrawn/offer/blocked application status, and no active, unexpired company-level block in `data/company_application_blocks.json`. Opportunity Pipeline may still recommend relationship or research work when raw scores are strong but the best action is not direct application.
    - Auto-selection only prepares valid-URL jobs with eligible geography and apply-ready viability. Geography-review or geography-ineligible jobs are excluded from default auto-prep, actionable digest sections, daily Telegram apply-now recommendations, and Telegram package auto-selection.
    - When using `--job-id`, prep is blocked by default if the job is non-actionable (`low_fit`, `skip`, geography `review`/`ineligible`, non-US geography signals, invalid URL, `applied/rejected/archived`, or company-level blocked).
    - To intentionally prepare a geography-review job after manual review, select it explicitly with `--include-review`; to override any specific job after review, use `--force`:
