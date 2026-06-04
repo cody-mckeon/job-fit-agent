@@ -85,6 +85,14 @@ from job_fit_agent.repository import (
 )
 from job_fit_agent.scoring import detect_geography_terms, score_job
 from job_fit_agent.telegram_commands import parse_telegram_command
+from job_fit_agent.work_opportunities import (
+    WORK_SECTION_ORDER,
+    add_rfp,
+    add_work_opportunity,
+    grouped_work_opportunities,
+    opportunity_review,
+    prep_work_opportunity,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -4136,6 +4144,61 @@ def _parse_prep_next_application_args(tokens: list[str]) -> dict[str, Any] | Non
     return parsed
 
 
+
+
+def _parse_work_option_args(tokens: list[str], value_options: set[str]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    idx = 0
+    while idx < len(tokens):
+        token = tokens[idx]
+        if token not in value_options:
+            raise ValueError(f"Unknown option: {token}")
+        if idx + 1 >= len(tokens) or tokens[idx + 1].startswith("--"):
+            raise ValueError(f"{token} requires a value.")
+        parsed[token[2:].replace("-", "_")] = tokens[idx + 1]
+        idx += 2
+    return parsed
+
+
+def print_work_opportunities() -> None:
+    """Print Work Opportunity Engine records grouped by execution status."""
+    grouped = grouped_work_opportunities()
+    print("Work Opportunity Engine")
+    for section, title in WORK_SECTION_ORDER:
+        print(title)
+        rows = grouped.get(section, [])
+        if not rows:
+            print("No opportunities.")
+            print()
+            continue
+        for row in rows:
+            print(f"opportunity_id: {row.get('opportunity_id', '')}")
+            print(f"title: {row.get('title', '')}")
+            print(f"company: {row.get('company', '')}")
+            print(f"opportunity_type: {row.get('opportunity_type', '')}")
+            print(f"source: {row.get('source', '')}")
+            print(f"priority: {row.get('priority', '')}")
+            print(f"fit_score: {row.get('fit_score', '')}")
+            print(f"revenue_potential: {row.get('revenue_potential', '')}")
+            print(f"relationship_value: {row.get('relationship_value', '')}")
+            if row.get("deadline"):
+                print(f"deadline: {row.get('deadline', '')}")
+            if row.get("blocked_until"):
+                print(f"blocked_until: {row.get('blocked_until', '')}")
+            print(f"next_action: {row.get('next_action', '')}")
+            if row.get("why_fit"):
+                print(f"why_fit: {row.get('why_fit', '')}")
+            if row.get("notes"):
+                print(f"notes: {row.get('notes', '')}")
+            print("-")
+        print()
+
+
+def print_opportunity_review() -> None:
+    """Print the highest-leverage next action across W2 and non-W2 opportunities."""
+    print("Best work opportunity action today")
+    print(json.dumps(opportunity_review(), indent=2))
+
 def print_opportunity_pipeline() -> None:
     """Print company-centered Opportunity Pipeline grouped by strategy status."""
     grouped = grouped_pipeline(build_opportunity_pipeline())
@@ -4263,6 +4326,75 @@ def main(argv: list[str] | None = None) -> None:
         unblock_expired_company_blocks()
         return
 
+
+
+    if command == "work-opportunities":
+        print_work_opportunities()
+        return
+
+    if command == "add-work-opportunity":
+        usage = "Usage: python -m job_fit_agent.main add-work-opportunity --title <title> --company <company> --type <type> --source <source> [--source-detail <detail>] [--url <url>] [--priority <high|medium|low>] [--status <status>] [--why-fit <text>] [--deadline <YYYY-MM-DD>] [--next-action <text>] [--notes <text>]"
+        try:
+            parsed = _parse_work_option_args(args[1:], {"--title", "--company", "--type", "--source", "--source-detail", "--url", "--priority", "--status", "--why-fit", "--deadline", "--next-action", "--notes"})
+            record = add_work_opportunity(
+                title=parsed.get("title"),
+                company=parsed.get("company"),
+                opportunity_type=parsed.get("type"),
+                source=parsed.get("source"),
+                source_detail=parsed.get("source_detail", ""),
+                url=parsed.get("url", ""),
+                priority=parsed.get("priority", "medium"),
+                status=parsed.get("status", "research"),
+                why_fit=parsed.get("why_fit", ""),
+                deadline=parsed.get("deadline", ""),
+                next_action=parsed.get("next_action", ""),
+                notes=parsed.get("notes", ""),
+            )
+        except ValueError as exc:
+            print(str(exc))
+            print(usage)
+            return
+        print(json.dumps(record, indent=2))
+        return
+
+    if command == "add-rfp":
+        usage = "Usage: python -m job_fit_agent.main add-rfp --title <title> --organization <organization> [--url <url>] [--deadline <YYYY-MM-DD>] [--source <source>] [--source-detail <detail>] [--priority <high|medium|low>] [--why-fit <text>] [--notes <text>]"
+        try:
+            parsed = _parse_work_option_args(args[1:], {"--title", "--organization", "--url", "--deadline", "--source", "--source-detail", "--priority", "--why-fit", "--notes"})
+            record = add_rfp(
+                title=parsed.get("title"),
+                organization=parsed.get("organization"),
+                url=parsed.get("url", ""),
+                deadline=parsed.get("deadline", ""),
+                source=parsed.get("source", "government"),
+                source_detail=parsed.get("source_detail", ""),
+                priority=parsed.get("priority", "medium"),
+                why_fit=parsed.get("why_fit", ""),
+                notes=parsed.get("notes", ""),
+            )
+        except ValueError as exc:
+            print(str(exc))
+            print(usage)
+            return
+        print(json.dumps(record, indent=2))
+        return
+
+    if command == "opportunity-review":
+        print_opportunity_review()
+        return
+
+    if command in {"prep-rfp", "prep-1099", "prep-local-outreach"}:
+        if len(args) != 2:
+            print(f"Usage: python -m job_fit_agent.main {command} <opportunity_id>")
+            return
+        prep_kind = {"prep-rfp": "rfp", "prep-1099": "1099", "prep-local-outreach": "local_outreach"}[command]
+        try:
+            payload = prep_work_opportunity(args[1], prep_kind)
+        except ValueError as exc:
+            print(str(exc))
+            return
+        print(json.dumps(payload, indent=2))
+        return
 
 
     if command == "opportunity-pipeline":
@@ -4626,6 +4758,13 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main telegram-command "applied 19"')
     print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
+    print("python -m job_fit_agent.main work-opportunities")
+    print("python -m job_fit_agent.main add-work-opportunity --title <title> --company <company> --type <type> --source <source> [--priority <priority>] [--status <status>]")
+    print("python -m job_fit_agent.main add-rfp --title <title> --organization <organization> [--deadline <YYYY-MM-DD>]")
+    print("python -m job_fit_agent.main opportunity-review")
+    print("python -m job_fit_agent.main prep-rfp <opportunity_id>")
+    print("python -m job_fit_agent.main prep-1099 <opportunity_id>")
+    print("python -m job_fit_agent.main prep-local-outreach <opportunity_id>")
     print("python -m job_fit_agent.main opportunity-pipeline")
     print("python -m job_fit_agent.main pipeline-review")
     print('python -m job_fit_agent.main set-company-status <company> <status> "<next_action>"')

@@ -313,6 +313,40 @@ Generated filename format:
 
 Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.md` exists, the exporter uses the legacy file and prints a regeneration reminder.
 
+
+## Work Opportunity Engine
+
+The Work Opportunity Engine expands the ecosystem beyond W2 applications. It tracks W2 jobs, 1099 contract work, fractional roles, RFPs, vendor opportunities, local business opportunities, warm intros, and manual leads from podcasts, LinkedIn, local events, or conversations in `data/work_opportunities.json`.
+
+Cody's target lane remains deploying AI agents inside organizations, workflow automation, AI operations, product systems, technical implementation, product analytics, internal AI transformation, and agent-enabled business process improvement. `opportunity-review` compares Work Opportunity Engine records against W2 jobs, the company universe, Opportunity Pipeline strategy, blocked companies, deadlines, relationship value, and fit score so it can recommend the highest-leverage action today instead of always preferring W2 jobs.
+
+```bash
+python -m job_fit_agent.main work-opportunities
+python -m job_fit_agent.main add-work-opportunity \
+  --title "AI workflow automation pilot" \
+  --company "Local hospitality group" \
+  --type local_business \
+  --source manual \
+  --source-detail "Identified through local Las Vegas business research" \
+  --priority high \
+  --status qualify \
+  --why-fit "Potential agent deployment opportunity for operations, reporting, and workflow automation" \
+  --next-action "Research pain points and prepare diagnostic outreach"
+python -m job_fit_agent.main add-rfp \
+  --title "AI operations workflow RFP" \
+  --organization "County Innovation Office" \
+  --deadline 2099-06-15 \
+  --source government \
+  --priority high \
+  --why-fit "Agent deployment and workflow automation for internal operations"
+python -m job_fit_agent.main opportunity-review
+python -m job_fit_agent.main prep-rfp <opportunity_id>
+python -m job_fit_agent.main prep-1099 <opportunity_id>
+python -m job_fit_agent.main prep-local-outreach <opportunity_id>
+```
+
+`work-opportunities` groups durable records into Pursue now, Proposal needed, Relationship strategy, Research / qualify, Blocked, Submitted / waiting, Won, and Lost / skipped. The prep commands create markdown folders under `applications/work_opportunities/` with an opportunity brief, qualification checklist, proposed solution outline, risks, outreach note, and next steps. Company-level W2 blocks suppress direct W2 recommendations, but they do not automatically block separate RFP, vendor, 1099, or local-business strategies for the same organization.
+
 ## Opportunity Pipeline strategy layer
 
 Job scoring answers **"Is this specific job a fit?"** The Opportunity Pipeline answers **"What should Cody do next?"** It keeps job scoring as a core product and adds a company-centered guide layer that recommends whether to apply, build a relationship, wait through a cooldown, research, watch, or skip.
