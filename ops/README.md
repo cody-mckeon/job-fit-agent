@@ -88,7 +88,7 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main applied
 docker compose run --rm job-fit-agent python -m job_fit_agent.main pipeline
 ```
 
-Application lifecycle decisions are durable in the tracked `data/application_status.json` file keyed by stable job key. Supported lifecycle statuses are `not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, and `skipped`; each status change appends `status_history` and writes lifecycle timestamps such as `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, and `updated_at`. The local `data/jobs.sqlite` row id is runtime/local state and may differ across Cody's Mac, Telegram, and GitHub Actions. For Telegram/GitHub Actions, use the stable command from the package whenever possible, for example `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; mobile aliases are convenient shortcuts, but stable keys are safest across machines. After a Telegram status update commits back to GitHub, run `git pull` locally before triage so digest and prep use the latest durable status store. Rejected jobs remain tracked for learning and analytics, but are excluded from active application work.
+Application lifecycle decisions are durable in the tracked `data/application_status.json` file keyed by stable job key. Supported lifecycle statuses are `not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`; each status change appends `status_history` and writes lifecycle timestamps such as `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, `blocked_at`, and `updated_at`. The local `data/jobs.sqlite` row id is runtime/local state and may differ across Cody's Mac, Telegram, and GitHub Actions. For Telegram/GitHub Actions, use the stable command from the package whenever possible, for example `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; mobile aliases are convenient shortcuts, but stable keys are safest across machines. After a Telegram status update commits back to GitHub, run `git pull` locally before triage so digest and prep use the latest durable status store. Rejected and blocked jobs remain tracked for learning, analytics, and relationship strategy, but are excluded from active application recommendations.
 
 Post-application lifecycle examples:
 
@@ -97,6 +97,8 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-comm
 docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "rejected ashby:company:external-id Rejected after application"
 docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "offer ashby:company:external-id"
 docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "withdrawn ashby:company:external-id Accepted another role"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main telegram-command "blocked ashby:company:external-id Ashby 90-day application limit, recruiter/manual review needed"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main blocked
 docker compose run --rm job-fit-agent python -m job_fit_agent.main rejected
 docker compose run --rm job-fit-agent python -m job_fit_agent.main outcomes
 ```

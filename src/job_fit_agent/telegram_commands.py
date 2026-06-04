@@ -69,6 +69,12 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
         action = "save"
         job_id_token = parts[1]
         note_parts = parts[2:]
+    elif verb in {"blocked", "/blocked", "block", "/block"}:
+        if len(parts) < 2:
+            raise ValueError("Missing job id.")
+        action = "blocked"
+        job_id_token = parts[1]
+        note_parts = parts[2:]
     elif verb in {"rejected", "/rejected", "reject", "/reject"}:
         if len(parts) < 2:
             raise ValueError("Missing job id.")
@@ -107,5 +113,7 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
         raise ValueError("Ambiguous command text.")
     if action == "skip" and not note:
         raise ValueError("Skip reason is required.")
+    if action == "blocked" and not note:
+        raise ValueError("Blocked reason is required.")
 
     return TelegramStatusCommand(action=action, job_identifier=job_identifier, note=note)

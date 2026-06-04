@@ -286,3 +286,17 @@ def test_parser_accepts_application_lifecycle_commands():
         assert parsed.action == action
         assert parsed.job_id == 19
         assert parsed.note == note
+
+
+def test_parser_parses_blocked_with_reason():
+    parsed = parse_telegram_command("blocked 19 Ashby 90-day application limit")
+    assert parsed.as_dict() == {"action": "blocked", "job_identifier": "19", "note": "Ashby 90-day application limit", "job_id": 19}
+
+
+def test_parser_requires_blocked_reason():
+    try:
+        parse_telegram_command("blocked 19")
+    except ValueError as exc:
+        assert "Blocked reason is required" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError")
