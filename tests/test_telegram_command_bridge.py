@@ -300,3 +300,46 @@ def test_parser_requires_blocked_reason():
         assert "Blocked reason is required" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("expected ValueError")
+
+
+def test_parser_parses_block_company_with_reason():
+    parsed = parse_telegram_command("block-company elevenlabs Ashby 90-day application limit, recruiter/manual review only")
+    assert parsed.action == "block-company"
+    assert parsed.job_identifier == "elevenlabs"
+    assert parsed.note == "Ashby 90-day application limit, recruiter/manual review only"
+
+
+def test_parser_parses_saved_alias():
+    parsed = parse_telegram_command("saved ashby:linear:saved-alias")
+    assert parsed.action == "save"
+    assert parsed.job_identifier == "ashby:linear:saved-alias"
+
+
+def test_telegram_command_block_company_creates_store(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["telegram-command", "block-company elevenlabs Ashby 90-day application limit, recruiter/manual review only"])
+
+    result = json.loads(capsys.readouterr().out)
+    store = json.loads((tmp_path / "data/company_application_blocks.json").read_text())
+    assert result["success"] is True
+    assert result["new_status"] == "blocked"
+    assert result["company"] == "elevenlabs"
+    assert result["message"] == "Blocked company: elevenlabs. Strategy: recruiter/manual review."
+    assert store["elevenlabs"]["status"] == "blocked"
+    assert store["elevenlabs"]["reason"] == "Ashby 90-day application limit, recruiter/manual review only"
+
+
+def test_telegram_command_block_alias_updates_blocked_status(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/block-command", "Block PM")
+
+    main(["telegram-command", f"block {job_id} Ashby 90-day application limit"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["new_status"] == "blocked"
+    assert row is not None and row["application_status"] == "blocked"
