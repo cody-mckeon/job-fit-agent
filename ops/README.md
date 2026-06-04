@@ -93,6 +93,21 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main pipeline
 Application lifecycle decisions are durable in the tracked `data/application_status.json` file keyed by stable job key. Company-level application cooldowns/blocks are durable in `data/company_application_blocks.json` and suppress related roles from that company until Cody uses a recruiter/manual-review strategy or the temporary block expires. Company-centered Opportunity Pipeline strategy is durable in `data/opportunity_pipeline.json`; it consumes job scores and application state without replacing or overwriting the Ashby/Greenhouse/Lever job scoring engine. Supported lifecycle statuses are `not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`; each status change appends `status_history` and writes lifecycle timestamps such as `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, `blocked_at`, and `updated_at`. The local `data/jobs.sqlite` row id is runtime/local state and may differ across Cody's Mac, Telegram, and GitHub Actions. For Telegram/GitHub Actions, use the stable command from the package whenever possible, for example `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; mobile aliases are convenient shortcuts, but stable keys are safest across machines. After a Telegram status update commits back to GitHub, run `git pull` locally before triage so digest and prep use the latest durable status store. Rejected and blocked jobs remain tracked for learning, analytics, and relationship strategy, but are excluded from active application recommendations.
 
 
+
+Work Opportunity Engine commands:
+
+```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main work-opportunities
+docker compose run --rm job-fit-agent python -m job_fit_agent.main add-work-opportunity --title "AI workflow automation pilot" --company "Local hospitality group" --type local_business --source manual --priority high --status qualify --why-fit "Operations workflow automation and AI agent deployment" --next-action "Research pain points and prepare diagnostic outreach"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main add-rfp --title "AI operations workflow RFP" --organization "County Innovation Office" --deadline 2099-06-15 --source government --priority high --why-fit "Agent deployment and workflow automation for internal operations"
+docker compose run --rm job-fit-agent python -m job_fit_agent.main opportunity-review
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-rfp <opportunity_id>
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-1099 <opportunity_id>
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-local-outreach <opportunity_id>
+```
+
+Use this layer for all work Cody could pursue, not only W2 roles: 1099 contracts, fractional roles, RFPs, vendor opportunities, local business opportunities, warm intros, and manual leads from podcasts, LinkedIn, local events, or conversations. Records are durable in `data/work_opportunities.json`. `opportunity-review` compares W2 jobs, company-universe records, Opportunity Pipeline strategy, Work Opportunity Engine records, blocked companies, deadlines, relationship value, and fit score, then recommends the highest-leverage next action today. A W2 company cooldown does not automatically prevent separate 1099, RFP, vendor, or local-business strategy for that organization.
+
 Opportunity Pipeline strategy commands:
 
 ```bash
