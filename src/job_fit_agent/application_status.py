@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 
 APPLICATION_STATUS_PATH = Path("data/application_status.json")
-APPLICATION_STATUSES = {"not_applied", "saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"}
+APPLICATION_STATUSES = {"not_applied", "saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped", "blocked"}
 DURABLE_APPLICATION_STATUSES = APPLICATION_STATUSES - {"not_applied"}
-TERMINAL_APPLICATION_STATUSES = {"rejected", "offer", "withdrawn", "skipped"}
+TERMINAL_APPLICATION_STATUSES = {"rejected", "offer", "withdrawn", "skipped", "blocked"}
 ACTIVE_APPLICATION_STATUSES = {"applied", "interviewing", "offer"}
-EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES = {"saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"}
+EXCLUDED_FROM_AUTO_PREP_APPLICATION_STATUSES = {"saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped", "blocked"}
 APPLICATION_STATUS_TIMESTAMP_FIELDS = {status: f"{status}_at" for status in DURABLE_APPLICATION_STATUSES}
 
 

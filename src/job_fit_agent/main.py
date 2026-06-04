@@ -970,7 +970,7 @@ def _application_tracking_counts(rows: list[dict[str, Any]] | None = None) -> di
             pass
     status_only = [record for key, record in _application_status_records().items() if key not in row_keys]
     counts = {"unapplied_high_fit_count": sum(1 for row in rows if _is_unapplied_high_fit_candidate(row))}
-    for application_status in ("saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"):
+    for application_status in ("saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped", "blocked"):
         counts[f"{application_status}_count"] = sum(
             1
             for row in rows
@@ -1141,6 +1141,7 @@ def _merge_persistent_status(row: dict[str, Any]) -> dict[str, Any]:
         ("withdrawn_at", "withdrawn_at"),
         ("skipped_at", "skipped_at"),
         ("saved_at", "saved_at"),
+        ("blocked_at", "blocked_at"),
         ("updated_at", "updated_at"),
         ("note", "application_notes"),
     ):
@@ -1173,6 +1174,7 @@ def _stable_key_record_defaults(stable_job_key: str) -> dict[str, Any]:
         "withdrawn_at": None,
         "skipped_at": None,
         "saved_at": None,
+        "blocked_at": None,
         "updated_at": None,
         "note": "",
         "status_history": [],
@@ -1261,6 +1263,7 @@ def _enrich_application_status_record_for_job(job: dict[str, Any]) -> None:
             "withdrawn_at",
             "skipped_at",
             "saved_at",
+            "blocked_at",
             "updated_at",
             "note",
             "status_history",
@@ -1443,6 +1446,12 @@ def mark_saved(job_id: int | None = None, url: str | None = None, note: str | No
     return _mark_application_status("saved", job_id=job_id, url=url, identifier=identifier, note=note, quiet=quiet)
 
 
+def mark_blocked(job_id: int | None = None, url: str | None = None, reason: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
+    if identifier is None and url and _looks_like_stable_job_key(url):
+        identifier = url
+        url = None
+    return _mark_application_status("blocked", job_id=job_id, url=url, identifier=identifier, note=reason, quiet=quiet)
+
 
 
 def mark_rejected(job_id: int | None = None, url: str | None = None, note: str | None = None, *, quiet: bool = False, identifier: str | None = None) -> dict[str, Any]:
@@ -1485,6 +1494,9 @@ def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> 
         return f"Marked {label} as skipped.{suffix}"
     if action == "save":
         return f"Saved {label} for later."
+    if action == "blocked":
+        suffix = f" Reason: {note}" if note else ""
+        return f"Marked {label} as blocked; recruiter/manual review needed.{suffix}"
     suffix = f" Note: {note}" if note else ""
     return f"Marked {label} as {job.get('application_status', action)}.{suffix}"
 
@@ -1501,6 +1513,9 @@ def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
         elif parsed.action == "save":
             updated = mark_saved(identifier=parsed.job_identifier, quiet=True)
             new_status = "saved"
+        elif parsed.action == "blocked":
+            updated = mark_blocked(identifier=parsed.job_identifier, reason=parsed.note, quiet=True)
+            new_status = "blocked"
         elif parsed.action in {"rejected", "interviewing", "offer", "withdrawn"}:
             updated = _mark_application_status(parsed.action, identifier=parsed.job_identifier, note=parsed.note, quiet=True)
             new_status = parsed.action
@@ -1589,6 +1604,46 @@ def _print_application_status_jobs(application_status: str, *, limit: int = 50, 
         print(f"url: {safe_row_value(row, 'url', '')}")
         print(f"stable_job_key: {safe_row_value(row, 'stable_job_key', '') or _stable_job_key_for_job(row)}")
         print(f"notes: {safe_row_value(row, 'application_notes', safe_row_value(row, 'note', '')) or 'none'}")
+        print("-")
+
+
+def _suggested_blocked_next_action(row: dict[str, Any]) -> str:
+    reason = str(safe_row_value(row, "application_notes", safe_row_value(row, "note", "")) or "").lower()
+    if "90" in reason or "limit" in reason or "ashby" in reason:
+        return "Recruiter/manual review: ask for application-limit exception or referral-backed review before reapplying."
+    return "Relationship strategy: contact recruiter/hiring manager or seek referral before any new application attempt."
+
+
+def _format_blocked_report_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "company": safe_row_value(row, "company", ""),
+        "title": safe_row_value(row, "title", ""),
+        "url": safe_row_value(row, "url", ""),
+        "reason": safe_row_value(row, "application_notes", safe_row_value(row, "note", "")) or "none",
+        "blocked_at": safe_row_value(row, "blocked_at", safe_row_value(row, "updated_at", "")),
+        "suggested_next_action": _suggested_blocked_next_action(row),
+        "stable_job_key": safe_row_value(row, "stable_job_key", "") or _stable_job_key_for_job(row),
+    }
+
+
+def print_blocked_jobs(*, limit: int = 50, as_json: bool = False) -> None:
+    rows = _rows_for_application_status("blocked", limit=limit)
+    formatted = [_format_blocked_report_row(row) for row in rows]
+    if as_json:
+        print(json.dumps(formatted, indent=2))
+        return
+    print("Blocked, needs relationship strategy")
+    if not formatted:
+        print("No blocked jobs.")
+        return
+    for row in formatted:
+        print(f"company: {row['company']}")
+        print(f"title: {row['title']}")
+        print(f"url: {row['url']}")
+        print(f"reason: {row['reason']}")
+        print(f"blocked_at: {row['blocked_at']}")
+        print(f"suggested_next_action: {row['suggested_next_action']}")
+        print(f"stable_job_key: {row['stable_job_key']}")
         print("-")
 
 
@@ -1695,6 +1750,13 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         and _is_actionable_real_job_url(str(safe_row_value(row, "url", "")))
     ]
     tracking_counts = _application_tracking_counts(list(high_fit_rows) + list(near_fit_rows))
+    try:
+        blocked_rows = _rows_for_application_status("blocked", limit=10)
+    except sqlite3.Error:
+        blocked_rows = [
+            row for row in high_fit_rows + near_fit_rows
+            if str(safe_row_value(row, "application_status", "not_applied") or "not_applied").lower() == "blocked"
+        ][:10]
 
     print("Application tracking summary")
     print(f"unapplied_high_fit_count: {tracking_counts['unapplied_high_fit_count']}")
@@ -1705,6 +1767,7 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
     print(f"withdrawn_count: {tracking_counts['withdrawn_count']}")
     print(f"saved_count: {tracking_counts['saved_count']}")
     print(f"skipped_count: {tracking_counts['skipped_count']}")
+    print(f"blocked_count: {tracking_counts['blocked_count']}")
     print()
 
     if not group_by_status:
@@ -1715,6 +1778,8 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         _print_digest_rows("High role fit but geography review / Needs geography review", geography_review_rows, "No jobs needing geography review.")
         print()
         _print_digest_rows("Automation / AI operations roles worth reviewing", automation_review_rows, "No automation / AI operations roles worth reviewing.")
+        print()
+        _print_digest_rows("Blocked, needs relationship strategy", blocked_rows, "No blocked jobs.")
         print()
         _print_digest_rows("Actionable high-fit jobs", actionable_high_fit_rows, "No actionable high-fit jobs.")
         print()
@@ -3648,6 +3713,7 @@ def _format_prep_next_application_telegram_message(summary: dict[str, Any]) -> s
                 f"Withdrawn: {tracking.get('withdrawn_count', 0)}",
                 f"Saved: {tracking.get('saved_count', 0)}",
                 f"Skipped: {tracking.get('skipped_count', 0)}",
+                f"Blocked: {tracking.get('blocked_count', 0)}",
             ]
         )
 
@@ -3779,6 +3845,21 @@ def main(argv: list[str] | None = None) -> None:
             mark_skipped(job_id=selected_job_id, url=selected_url, reason=reason)
         except (ValueError, IndexError) as exc:
             print(str(exc) if str(exc) else "Usage: python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
+        return
+
+    if command == "blocked":
+        if len(args) >= 2 and not args[1].startswith("--"):
+            try:
+                mark_blocked(identifier=args[1], reason=" ".join(args[2:]) or None)
+            except ValueError as exc:
+                print(str(exc))
+            return
+        try:
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args[1:] else 50
+        except (ValueError, IndexError):
+            print("Usage: python -m job_fit_agent.main blocked <identifier> <reason> OR blocked [--limit <n>] [--json]")
+            return
+        print_blocked_jobs(limit=limit, as_json="--json" in args[1:])
         return
 
 
@@ -4126,6 +4207,8 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main unapplied-high-fit [--eligible-only] [--include-ineligible] [--limit <n>] [--json]")
     print("python -m job_fit_agent.main mark-applied (--job-id <id> | --url <job_url>) [--note <note>]")
     print("python -m job_fit_agent.main mark-skipped (--job-id <id> | --url <job_url>) [--reason <reason>]")
+    print('python -m job_fit_agent.main telegram-command "blocked <job_identifier> <reason>"')
+    print("python -m job_fit_agent.main blocked [--limit <n>] [--json]")
     print("python -m job_fit_agent.main applied <job_id>")
     print('python -m job_fit_agent.main skip <job_id> "<reason>"')
     print("python -m job_fit_agent.main save <job_id>")

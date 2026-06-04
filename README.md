@@ -202,7 +202,7 @@ Setup steps:
 
 ## Application workflow lifecycle
 
-Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, and `skipped`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Treat `data/application_status.json` as the durable, shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
+Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Treat `data/application_status.json` as the durable, shareable source of truth for application status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.
 
 Valid statuses:
 - `new`
@@ -213,7 +213,7 @@ Valid statuses:
 - `rejected`
 - `archived`
 
-New jobs default to `new`. Re-scores update scoring fields but preserve your existing workflow status. Application lifecycle records keep `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, `updated_at`, `note`, and `status_history` in `data/application_status.json`. Rejected jobs remain tracked for learning and analytics, but they are no longer active pipeline work.
+New jobs default to `new`. Re-scores update scoring fields but preserve your existing workflow status. Application lifecycle records keep `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, `blocked_at`, `updated_at`, `note`, and `status_history` in `data/application_status.json`. Rejected jobs remain tracked for learning and analytics, but they are no longer active pipeline work.
 
 Mark lifecycle outcomes with stable keys when possible:
 
@@ -223,6 +223,8 @@ python -m job_fit_agent.main telegram-command "interviewing ashby:company:extern
 python -m job_fit_agent.main telegram-command "rejected ashby:company:external-id Rejected after application"
 python -m job_fit_agent.main telegram-command "offer ashby:company:external-id Verbal offer"
 python -m job_fit_agent.main telegram-command "withdrawn ashby:company:external-id Accepted another role"
+python -m job_fit_agent.main telegram-command "blocked ashby:company:external-id Ashby 90-day application limit, recruiter/manual review needed"
+python -m job_fit_agent.main blocked
 python -m job_fit_agent.main rejected
 python -m job_fit_agent.main pipeline
 python -m job_fit_agent.main outcomes
@@ -309,7 +311,7 @@ Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.m
 
 Recommended application prep workflow:
 1. `python -m job_fit_agent.main digest`
-   - Digest prints application tracking counts for unapplied high-fit, applied, and skipped jobs.
+   - Digest prints application tracking counts for unapplied high-fit, applied, skipped, and blocked jobs.
 2. Review open high-fit roles before prepping:
    `python -m job_fit_agent.main unapplied-high-fit`
    - Default output separates `Actionable apply-now roles`, `Strong role fit, geography not eligible`, and `Needs geography review` so role score remains visible without making international roles actionable.
@@ -336,9 +338,10 @@ Recommended application prep workflow:
    - You can also mark by URL: `python -m job_fit_agent.main mark-applied --url <job_url>`
    - From Telegram or GitHub Actions, prefer stable job keys such as `applied ashby:elevenlabs:a3097257-a07a-4a7e-b9fe-b8555c1a0fa7`; they remain safe even when the local SQLite database does not contain that job row.
    - Review submitted roles with `python -m job_fit_agent.main applied` or `python -m job_fit_agent.main applied --json`.
-   - Review rejected roles with `python -m job_fit_agent.main rejected`; review active applications with `python -m job_fit_agent.main pipeline` grouped by `applied`, `interviewing`, and `offer`; review outcomes with `python -m job_fit_agent.main outcomes`.
+   - Review rejected roles with `python -m job_fit_agent.main rejected`; review blocked roles with `python -m job_fit_agent.main blocked`; review active applications with `python -m job_fit_agent.main pipeline` grouped by `applied`, `interviewing`, and `offer`; review outcomes with `python -m job_fit_agent.main outcomes`.
+   - If an application system blocks submission, run `python -m job_fit_agent.main telegram-command "blocked <stable_job_key> <reason>"` so the role moves to the `Blocked, needs relationship strategy` report and stays out of recommendations.
    - If Cody intentionally passes on a role, run `python -m job_fit_agent.main mark-skipped --job-id <job_id> --reason "Not US eligible"` or `python -m job_fit_agent.main mark-skipped --url <job_url> --reason "DACH role"`.
-   - `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `saved` application statuses from both SQLite and `data/application_status.json` are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations. Saved jobs stay tracked for later review but are not auto-prepped unless explicitly selected.
+   - `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, `blocked`, and `saved` application statuses from both SQLite and `data/application_status.json` are excluded from future `prep-next-application` auto-selection, default digest actionable sections, and daily Telegram recommendations. Saved jobs stay tracked for later review but are not auto-prepped unless explicitly selected.
    - After Telegram status updates, run `git pull` locally before triage so your Mac has the latest `data/application_status.json` state.
 
 Telegram handoff requires:

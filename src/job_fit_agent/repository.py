@@ -13,7 +13,7 @@ from job_fit_agent.models import FitScore, JobPosting
 DB_PATH = Path("data/jobs.sqlite")
 
 VALID_STATUSES = {"new", "interested", "applying", "applied", "interviewing", "rejected", "archived"}
-VALID_APPLICATION_STATUSES = {"not_applied", "saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped"}
+VALID_APPLICATION_STATUSES = {"not_applied", "saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped", "blocked"}
 
 
 @dataclass
@@ -76,6 +76,7 @@ def initialize(db_path: Path = DB_PATH) -> None:
                 withdrawn_at TEXT,
                 skipped_at TEXT,
                 saved_at TEXT,
+                blocked_at TEXT,
                 updated_at TEXT,
                 application_notes TEXT DEFAULT ""
             )
@@ -118,7 +119,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute('ALTER TABLE jobs ADD COLUMN application_status TEXT DEFAULT "not_applied"')
         conn.execute('UPDATE jobs SET application_status = "not_applied" WHERE application_status IS NULL')
 
-    for timestamp_column in ("applied_at", "interviewing_at", "rejected_at", "offer_at", "withdrawn_at", "skipped_at", "saved_at", "updated_at"):
+    for timestamp_column in ("applied_at", "interviewing_at", "rejected_at", "offer_at", "withdrawn_at", "skipped_at", "saved_at", "blocked_at", "updated_at"):
         if timestamp_column not in columns:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {timestamp_column} TEXT")
     if "application_notes" not in columns:
@@ -336,6 +337,7 @@ def update_application_tracking(
     withdrawn_at: str | None = None,
     skipped_at: str | None = None,
     saved_at: str | None = None,
+    blocked_at: str | None = None,
     updated_at: str | None = None,
     application_notes: str | None = None,
     db_path: Path = DB_PATH,
@@ -364,6 +366,9 @@ def update_application_tracking(
     if saved_at is not None:
         assignments.append("saved_at = ?")
         values.append(saved_at)
+    if blocked_at is not None:
+        assignments.append("blocked_at = ?")
+        values.append(blocked_at)
     if updated_at is not None:
         assignments.append("updated_at = ?")
         values.append(updated_at)
@@ -386,7 +391,7 @@ def get_jobs_by_application_status(application_status: str, limit: int = 50, db_
             """
             SELECT * FROM jobs
             WHERE application_status = ?
-            ORDER BY COALESCE(updated_at, applied_at, interviewing_at, rejected_at, offer_at, withdrawn_at, skipped_at, saved_at, last_seen_at) DESC, score DESC
+            ORDER BY COALESCE(updated_at, applied_at, interviewing_at, rejected_at, offer_at, withdrawn_at, skipped_at, saved_at, blocked_at, last_seen_at) DESC, score DESC
             LIMIT ?
             """,
             (application_status, limit),

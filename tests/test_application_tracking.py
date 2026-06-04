@@ -428,3 +428,93 @@ def test_unapplied_high_fit_eligible_only_excludes_ineligible_and_review(tmp_pat
     assert "Eligible AI Solutions Engineer" in output
     assert "DACH Forward Deployed Engineer" not in output
     assert "North America Forward Deployed Engineer" not in output
+
+
+def test_blocked_command_with_job_id_updates_status_store_and_history(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/blocked-id", "Blocked ID PM")
+
+    main(["telegram-command", f"blocked {job_id} Ashby 90-day application limit, recruiter/manual review needed"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    store = json.loads((tmp_path / "data/application_status.json").read_text())
+    record = store["ashby:acme:blocked-id"]
+    assert result["success"] is True
+    assert result["new_status"] == "blocked"
+    assert result["note"] == "Ashby 90-day application limit, recruiter/manual review needed"
+    assert row is not None
+    assert row["application_status"] == "blocked"
+    assert row["blocked_at"]
+    assert row["application_notes"] == "Ashby 90-day application limit, recruiter/manual review needed"
+    assert record["application_status"] == "blocked"
+    assert record["blocked_at"]
+    assert record["note"] == "Ashby 90-day application limit, recruiter/manual review needed"
+    assert record["status_history"][-1] == {
+        "status": "blocked",
+        "timestamp": record["blocked_at"],
+        "note": "Ashby 90-day application limit, recruiter/manual review needed",
+        "identifier_used": str(job_id),
+    }
+
+
+def test_blocked_command_with_stable_key_updates_sqlite(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/blocked-stable", "Blocked Stable PM")
+
+    main(["telegram-command", "blocked ashby:acme:blocked-stable Ashby limit"])
+
+    result = json.loads(capsys.readouterr().out)
+    row = get_job_by_id(job_id)
+    assert result["success"] is True
+    assert result["stable_job_key"] == "ashby:acme:blocked-stable"
+    assert row is not None
+    assert row["application_status"] == "blocked"
+    assert row["blocked_at"]
+
+
+def test_prep_next_application_excludes_blocked_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    blocked_id = _insert("https://jobs.ashbyhq.com/acme/blocked-prep", "Blocked Prep PM")
+    open_id = _insert("https://jobs.ashbyhq.com/acme/open-after-blocked", "Open After Blocked PM")
+    update_application_tracking(blocked_id, "blocked", blocked_at="2026-06-04T00:00:00+00:00")
+
+    prep_next_application(dry_run=True)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job_id"] == open_id
+
+
+def test_unapplied_high_fit_excludes_blocked_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/blocked-unapplied", "Blocked Unapplied PM")
+    update_application_tracking(job_id, "blocked", blocked_at="2026-06-04T00:00:00+00:00")
+
+    main(["unapplied-high-fit"])
+
+    assert "Blocked Unapplied PM" not in capsys.readouterr().out
+
+
+def test_blocked_report_includes_blocked_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/acme/blocked-report", "Blocked Report PM")
+    update_application_tracking(
+        job_id,
+        "blocked",
+        blocked_at="2026-06-04T00:00:00+00:00",
+        application_notes="Ashby 90-day application limit, recruiter/manual review needed",
+    )
+
+    main(["blocked"])
+
+    output = capsys.readouterr().out
+    assert "Blocked, needs relationship strategy" in output
+    assert "Blocked Report PM" in output
+    assert "Ashby 90-day application limit" in output
+    assert "2026-06-04T00:00:00+00:00" in output
+    assert "Recruiter/manual review" in output
