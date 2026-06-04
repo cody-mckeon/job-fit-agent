@@ -343,3 +343,30 @@ def test_telegram_command_block_alias_updates_blocked_status(tmp_path, monkeypat
     assert result["success"] is True
     assert result["new_status"] == "blocked"
     assert row is not None and row["application_status"] == "blocked"
+
+
+def test_parser_parses_block_company_with_days_flag():
+    parsed = parse_telegram_command("block-company elevenlabs --days 90 Ashby 90-day application limit, recruiter/manual review only")
+    assert parsed.action == "block-company"
+    assert parsed.job_identifier == "elevenlabs"
+    assert parsed.days == 90
+    assert parsed.note == "Ashby 90-day application limit, recruiter/manual review only"
+
+
+def test_parser_parses_block_company_with_bare_days():
+    parsed = parse_telegram_command("block-company elevenlabs 90 Ashby 90-day application limit, recruiter/manual review only")
+    assert parsed.days == 90
+    assert parsed.note == "Ashby 90-day application limit, recruiter/manual review only"
+
+
+def test_telegram_command_supports_temporary_company_block(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+
+    main(["telegram-command", "block-company elevenlabs --days 90 Ashby 90-day application limit, recruiter/manual review only"])
+
+    result = json.loads(capsys.readouterr().out)
+    store = json.loads((tmp_path / "data/company_application_blocks.json").read_text())
+    assert result["success"] is True
+    assert store["elevenlabs"]["status"] == "blocked"
+    assert store["elevenlabs"]["expires_at"]

@@ -14,6 +14,8 @@ class TelegramStatusCommand:
     action: str
     job_identifier: str
     note: str = ""
+    days: int | None = None
+    expires_at: str | None = None
 
     @property
     def job_id(self) -> int | None:
@@ -23,6 +25,10 @@ class TelegramStatusCommand:
         payload: dict[str, object] = {"action": self.action, "job_identifier": self.job_identifier, "note": self.note}
         if self.job_id is not None:
             payload["job_id"] = self.job_id
+        if self.days is not None:
+            payload["days"] = self.days
+        if self.expires_at is not None:
+            payload["expires_at"] = self.expires_at
         return payload
 
 
@@ -114,6 +120,26 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
     if JOB_ID_RE.fullmatch(job_identifier) and int(job_identifier) <= 0:
         raise ValueError("Job id must be positive.")
 
+    days: int | None = None
+    expires_at: str | None = None
+    if action == "block-company":
+        if note_parts and note_parts[0] == "--days":
+            if len(note_parts) < 3:
+                raise ValueError("Missing company block days or reason.")
+            try:
+                days = int(note_parts[1])
+            except ValueError as exc:
+                raise ValueError("Company block days must be an integer.") from exc
+            note_parts = note_parts[2:]
+        elif note_parts and note_parts[0] == "--expires-at":
+            if len(note_parts) < 3:
+                raise ValueError("Missing company block expiration or reason.")
+            expires_at = note_parts[1]
+            note_parts = note_parts[2:]
+        elif note_parts and JOB_ID_RE.fullmatch(note_parts[0]) and len(note_parts) >= 2:
+            days = int(note_parts[0])
+            note_parts = note_parts[1:]
+
     note = " ".join(note_parts).strip()
     if action in {"applied", "save"} and note:
         raise ValueError("Ambiguous command text.")
@@ -124,4 +150,4 @@ def parse_telegram_command(text: str) -> TelegramStatusCommand:
     if action == "block-company" and not note:
         raise ValueError("Company block reason is required.")
 
-    return TelegramStatusCommand(action=action, job_identifier=job_identifier, note=note)
+    return TelegramStatusCommand(action=action, job_identifier=job_identifier, note=note, days=days, expires_at=expires_at)

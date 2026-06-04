@@ -12,7 +12,7 @@ import subprocess
 import sys
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, UTC, date, timedelta
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -1135,23 +1135,38 @@ def _company_application_block_records() -> dict[str, dict[str, Any]]:
         return {}
 
 
+def _parse_company_block_expiration(expires_at: str | None) -> date | None:
+    value = str(expires_at or "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _company_block_days_remaining(record: dict[str, Any], *, today: date | None = None) -> int | None:
+    expires_on = _parse_company_block_expiration(str(record.get("expires_at") or ""))
+    if expires_on is None:
+        return None
+    today = today or datetime.now(UTC).date()
+    return (expires_on - today).days
+
+
+def _is_company_block_record_active(record: dict[str, Any], *, today: date | None = None) -> bool:
+    if str(record.get("status", "")).lower() != "blocked":
+        return False
+    days_remaining = _company_block_days_remaining(record, today=today)
+    return days_remaining is None or days_remaining >= 0
+
+
 def _company_block_for_company(company: str) -> dict[str, Any] | None:
     key = normalize_company_key(company)
     if not key:
         return None
     record = _company_application_block_records().get(key)
-    if not record or str(record.get("status", "")).lower() != "blocked":
+    if not record or not _is_company_block_record_active(record):
         return None
-    expires_at = str(record.get("expires_at") or "").strip()
-    if expires_at:
-        try:
-            expires_dt = datetime.fromisoformat(expires_at)
-            if expires_dt.tzinfo is None:
-                expires_dt = expires_dt.replace(tzinfo=UTC)
-            if expires_dt <= datetime.now(UTC):
-                return None
-        except ValueError:
-            pass
     return record
 
 
@@ -1170,13 +1185,32 @@ def _is_company_blocked_for_application(job: dict[str, Any]) -> bool:
     return _company_block_for_job(job) is not None
 
 
-def block_company(company: str, reason: str, *, quiet: bool = False) -> dict[str, Any]:
+def _expiration_from_days(days: int) -> str:
+    if days < 0:
+        raise ValueError("--days must be zero or positive.")
+    return (datetime.now(UTC).date() + timedelta(days=days)).isoformat()
+
+
+def _validate_expiration_date(expires_at: str | None) -> str | None:
+    value = str(expires_at or "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError as exc:
+        raise ValueError("--expires-at must use YYYY-MM-DD.") from exc
+
+
+def block_company(company: str, reason: str, *, days: int | None = None, expires_at: str | None = None, quiet: bool = False) -> dict[str, Any]:
     company_value = str(company or "").strip()
     reason_value = str(reason or "").strip()
     if not company_value:
         raise ValueError("Company is required.")
     if not reason_value:
         raise ValueError("Company block reason is required.")
+    if days is not None and expires_at:
+        raise ValueError("Use either --days or --expires-at, not both.")
+    expires_at_value = _expiration_from_days(days) if days is not None else _validate_expiration_date(expires_at)
     key = normalize_company_key(company_value)
     timestamp = _utc_timestamp()
     records = load_company_application_blocks()
@@ -1184,14 +1218,17 @@ def block_company(company: str, reason: str, *, quiet: bool = False) -> dict[str
     history = existing.get("status_history")
     if not isinstance(history, list):
         history = []
-    history.append({"status": "blocked", "timestamp": timestamp, "reason": reason_value})
+    history_entry = {"status": "blocked", "timestamp": timestamp, "reason": reason_value}
+    if expires_at_value:
+        history_entry["expires_at"] = expires_at_value
+    history.append(history_entry)
     record = dict(existing)
     record.update({
         "company": company_value,
         "status": "blocked",
         "reason": reason_value,
         "blocked_at": timestamp,
-        "expires_at": existing.get("expires_at"),
+        "expires_at": expires_at_value,
         "strategy": "recruiter/manual review",
         "updated_at": timestamp,
         "status_history": history,
@@ -1201,8 +1238,42 @@ def block_company(company: str, reason: str, *, quiet: bool = False) -> dict[str
     if not quiet:
         print(f"Blocked company: {company_value}.")
         print(f"reason: {reason_value}")
+        if expires_at_value:
+            print(f"expires_at: {expires_at_value}")
         print("strategy: recruiter/manual review")
     return record
+
+
+def unblock_expired_company_blocks(*, quiet: bool = False) -> list[dict[str, Any]]:
+    records = load_company_application_blocks()
+    timestamp = _utc_timestamp()
+    expired: list[dict[str, Any]] = []
+    for key, record in records.items():
+        if str(record.get("status", "")).lower() != "blocked":
+            continue
+        days_remaining = _company_block_days_remaining(record)
+        if days_remaining is None or days_remaining >= 0:
+            continue
+        history = record.get("status_history")
+        if not isinstance(history, list):
+            history = []
+        history.append({"status": "expired", "timestamp": timestamp, "reason": "company block expiration elapsed"})
+        record["status"] = "expired"
+        record["expired_at"] = timestamp
+        record["updated_at"] = timestamp
+        record["status_history"] = history
+        records[key] = record
+        expired.append(dict(record))
+    if expired:
+        save_company_application_blocks(records)
+    if not quiet:
+        print(f"expired_company_blocks: {len(expired)}")
+        for record in expired:
+            print(f"company: {record.get('company', '')}")
+            print(f"expires_at: {record.get('expires_at', '')}")
+            print("status: expired")
+            print("-")
+    return expired
 
 
 def _persistent_status_for_stable_key(stable_job_key: str) -> dict[str, Any] | None:
@@ -1610,7 +1681,7 @@ def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
             updated = mark_blocked(identifier=parsed.job_identifier, reason=parsed.note, quiet=True)
             new_status = "blocked"
         elif parsed.action == "block-company":
-            updated = block_company(parsed.job_identifier, parsed.note, quiet=True)
+            updated = block_company(parsed.job_identifier, parsed.note, days=parsed.days, expires_at=parsed.expires_at, quiet=True)
             new_status = "blocked"
         elif parsed.action in {"rejected", "interviewing", "offer", "withdrawn"}:
             updated = _mark_application_status(parsed.action, identifier=parsed.job_identifier, note=parsed.note, quiet=True)
@@ -1723,13 +1794,24 @@ def _format_blocked_report_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _format_company_blocked_report_row(record: dict[str, Any]) -> dict[str, Any]:
+    days_remaining = _company_block_days_remaining(record)
+    effective_status = "blocked" if _is_company_block_record_active(record) else "expired"
+    if effective_status == "expired":
+        next_action = "Cooldown elapsed: unblock expired block, then review current roles before applying."
+    elif days_remaining is None:
+        next_action = "Recruiter/manual review: use relationship strategy before any additional application."
+    else:
+        next_action = "Wait for cooldown expiration or use recruiter/manual review for an exception."
     return {
         "company": record.get("company", ""),
         "title": "Company-level block",
         "url": "",
         "reason": record.get("reason", "none") or "none",
         "blocked_at": record.get("blocked_at", record.get("updated_at", "")),
-        "suggested_next_action": "Recruiter/manual review: use relationship strategy before any additional application.",
+        "expires_at": record.get("expires_at", "") or "",
+        "days_remaining": days_remaining,
+        "status": effective_status,
+        "suggested_next_action": next_action,
         "stable_job_key": "",
         "strategy": record.get("strategy", "recruiter/manual review"),
     }
@@ -1740,26 +1822,37 @@ def print_blocked_jobs(*, limit: int = 50, as_json: bool = False) -> None:
         rows = _rows_for_application_status("blocked", limit=limit)
     except sqlite3.Error:
         rows = []
-    formatted = [_format_blocked_report_row(row) for row in rows]
-    company_blocks = sorted(
-        (_format_company_blocked_report_row(record) for record in _company_application_block_records().values() if str(record.get("status", "")).lower() == "blocked"),
+    job_blocks = [_format_blocked_report_row(row) for row in rows]
+    company_rows = [_format_company_blocked_report_row(record) for record in _company_application_block_records().values()]
+    active_company_blocks = sorted(
+        (row for row in company_rows if row.get("status") == "blocked"),
         key=lambda row: str(row.get("blocked_at", "") or ""),
         reverse=True,
     )
-    formatted = (company_blocks + formatted)[:limit]
+    expired_company_blocks = sorted(
+        (row for row in company_rows if row.get("status") == "expired"),
+        key=lambda row: str(row.get("expires_at", "") or ""),
+        reverse=True,
+    )
+    formatted = (active_company_blocks + job_blocks + expired_company_blocks)[:limit]
     if as_json:
         print(json.dumps(formatted, indent=2))
         return
     print("Blocked, needs relationship strategy")
     if not formatted:
-        print("No blocked jobs.")
+        print("No blocked jobs or companies.")
         return
     for row in formatted:
         print(f"company: {row['company']}")
         print(f"title: {row['title']}")
+        if row.get("status"):
+            print(f"status: {row['status']}")
         print(f"url: {row['url']}")
         print(f"reason: {row['reason']}")
         print(f"blocked_at: {row['blocked_at']}")
+        if row.get("expires_at"):
+            print(f"expires_at: {row['expires_at']}")
+            print(f"days_remaining: {row['days_remaining']}")
         print(f"suggested_next_action: {row['suggested_next_action']}")
         if row.get("strategy"):
             print(f"strategy: {row['strategy']}")
@@ -3988,12 +4081,28 @@ def main(argv: list[str] | None = None) -> None:
 
     if command == "block-company":
         if len(args) < 3:
-            print('Usage: python -m job_fit_agent.main block-company <company> "<reason>"')
+            print('Usage: python -m job_fit_agent.main block-company <company> "<reason>" [--days <int> | --expires-at <YYYY-MM-DD>]')
             return
         try:
-            block_company(args[1], " ".join(args[2:]))
-        except ValueError as exc:
-            print(str(exc))
+            company = args[1]
+            remaining = list(args[2:])
+            days = None
+            expires_at = None
+            if "--days" in remaining:
+                idx = remaining.index("--days")
+                days = int(remaining[idx + 1])
+                del remaining[idx:idx + 2]
+            if "--expires-at" in remaining:
+                idx = remaining.index("--expires-at")
+                expires_at = remaining[idx + 1]
+                del remaining[idx:idx + 2]
+            block_company(company, " ".join(remaining), days=days, expires_at=expires_at)
+        except (ValueError, IndexError) as exc:
+            print(str(exc) if str(exc) else 'Usage: python -m job_fit_agent.main block-company <company> "<reason>" [--days <int> | --expires-at <YYYY-MM-DD>]')
+        return
+
+    if command == "unblock-expired":
+        unblock_expired_company_blocks()
         return
 
 
@@ -4345,6 +4454,7 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main block <job_id> "<reason>"')
     print('python -m job_fit_agent.main block-company <company> "<reason>"')
     print("python -m job_fit_agent.main blocked [--limit <n>] [--json]")
+    print("python -m job_fit_agent.main unblock-expired")
     print("python -m job_fit_agent.main applied <job_id>")
     print('python -m job_fit_agent.main skip <job_id> "<reason>"')
     print("python -m job_fit_agent.main save <job_id>")
