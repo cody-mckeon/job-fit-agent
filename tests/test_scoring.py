@@ -925,8 +925,8 @@ def test_geographic_eligibility_tightened_cases() -> None:
         ("San Francisco", "", "review", "Location requires manual review"),
         ("San Francisco", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
         ("In-Office", "", "ineligible", "In-office role outside Las Vegas/Nevada"),
-        ("SF, NY, SEA, Remote-US", "Remote", "eligible", "Remote US role matches target geography"),
-        ("San Francisco, US Remote", "Remote", "eligible", "Remote US role matches target geography"),
+        ("SF, NY, SEA, Remote-US", "Remote", "review", "Location requires manual review"),
+        ("San Francisco, US Remote", "Remote", "review", "Location requires manual review"),
         ("Las Vegas In-Office", "", "eligible", "Location aligns with target geography"),
         ("San Francisco, CA", "Onsite", "ineligible", "Onsite role outside Las Vegas/Nevada"),
         ("San Francisco, CA", "Hybrid", "ineligible", "Hybrid role outside Las Vegas/Nevada"),
@@ -1580,6 +1580,28 @@ def test_remote_us_city_role_with_noisy_apac_elsewhere_stays_review() -> None:
     assert "Remote role with US city/region constraint" in job.geographic_reason
     assert all("APAC" not in flag for flag in fit.red_flags)
 
+
+def test_customer_engineer_west_coast_structured_us_remote_is_geography_review_even_when_low_fit() -> None:
+    job = _job(
+        title="Customer Engineer (West Coast)",
+        location="San Francisco CA",
+        description="Customer support escalation work. Boilerplate mentions APAC data processing.",
+        workplace_type="Remote",
+    )
+    job.location_raw = "San Francisco CA"
+    job.normalized_country = "US"
+    job.normalized_state = "CA"
+    job.normalized_city = "San Francisco"
+    job.normalized_location_type = "remote"
+
+    fit = score_job(job, TARGET_PROFILE)
+
+    assert fit.classification == "low_fit"
+    assert fit.viability_level in {"review", "skip"}
+    assert job.geographic_eligibility == "review"
+    assert job.geographic_reason == "Remote role with US city/region constraint, requires review."
+    assert "International region detected: APAC" not in fit.red_flags
+    assert "Onsite or location-specific US role outside Las Vegas/Nevada" not in fit.red_flags
 
 def test_on_site_san_francisco_role_remains_ineligible() -> None:
     job = _job("Product Manager", location="San Francisco, CA", workplace_type="Onsite")

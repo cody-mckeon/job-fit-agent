@@ -2195,7 +2195,6 @@ def debug_geography(job_id: int) -> None:
 
     structured_text = " ".join(
         [
-            job.title,
             job.location,
             job.location_raw,
             job.workplace_type,
@@ -2205,13 +2204,20 @@ def debug_geography(job_id: int) -> None:
             job.normalized_location_type,
         ]
     )
+    title_text = job.title
     noisy_parts: list[str] = []
     for key in ("reasons", "red_flags", "viability_reasons"):
         noisy_parts.extend(_json_list_from_row(row, key))
     noisy_parts.extend(_row_text(row, key) for key in ("geographic_reason", "notes", "department", "employment_type", "team"))
     noisy_text = " ".join(noisy_parts)
     detected_international_terms = _non_us_terms_in_text(structured_text)
-    ignored_noisy_terms = [term for term in _non_us_terms_in_text(noisy_text) if term not in detected_international_terms]
+    ignored_noisy_terms = [
+        term
+        for term in _non_us_terms_in_text(f"{title_text} {noisy_text}")
+        if term not in detected_international_terms
+    ]
+    detected_location_terms = detect_geography_terms(structured_text)
+    detected_title_terms = [term for term in detect_geography_terms(title_text) if term not in detected_location_terms]
 
     print(json.dumps({
         "id": job_id,
@@ -2226,9 +2232,16 @@ def debug_geography(job_id: int) -> None:
         "normalized_city": job.normalized_city,
         "normalized_location_type": job.normalized_location_type,
         "workplace_type": job.workplace_type,
-        "detected_location_terms": detect_geography_terms(structured_text),
+        "detected_terms": {
+            "structured_location": detected_location_terms,
+            "title": detected_title_terms,
+            "structured_international": detected_international_terms,
+            "ignored_noisy": ignored_noisy_terms,
+        },
+        "detected_location_terms": detected_location_terms,
         "detected_international_terms": detected_international_terms,
         "ignored_noisy_terms": ignored_noisy_terms,
+        "geographic_eligibility": job.geographic_eligibility,
         "final_geographic_eligibility": job.geographic_eligibility,
         "geographic_reason": job.geographic_reason,
         "red_flags": fit.red_flags,
