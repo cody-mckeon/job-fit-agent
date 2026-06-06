@@ -1,8 +1,8 @@
 {
   "elevenlabs": {
-    "blocked_at": "2026-06-04T18:05:51.681015+00:00",
+    "blocked_at": "2026-06-06T22:26:02.223800+00:00",
     "company": "elevenlabs",
-    "expires_at": "2026-09-02",
+    "expires_at": "2026-09-04",
     "reason": "Ashby 90-day application limit, use recruiter/manual review strategy",
     "status": "blocked",
     "status_history": [
@@ -11,9 +11,21 @@
         "reason": "Ashby 90-day application limit, use recruiter/manual review strategy",
         "status": "blocked",
         "timestamp": "2026-06-04T18:05:51.681015+00:00"
+      },
+      {
+        "expires_at": "2026-09-04",
+        "reason": "Ashby 90-day application limit, use recruiter/manual review strategy",
+        "status": "blocked",
+        "timestamp": "2026-06-06T22:25:46.687375+00:00"
+      },
+      {
+        "expires_at": "2026-09-04",
+        "reason": "Ashby 90-day application limit, use recruiter/manual review strategy",
+        "status": "blocked",
+        "timestamp": "2026-06-06T22:26:02.223800+00:00"
       }
     ],
     "strategy": "recruiter/manual review",
-    "updated_at": "2026-06-04T18:05:51.681015+00:00"
+    "updated_at": "2026-06-06T22:26:02.223800+00:00"
   }
 }
