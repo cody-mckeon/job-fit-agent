@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from job_fit_agent.main import block_company, main
@@ -231,3 +232,125 @@ def test_existing_job_scoring_remains_unchanged():
 
     assert fit.total_score > 0
     assert fit.classification in {"high_fit", "near_fit", "low_fit"}
+
+
+def test_discovery_commands_exist_for_all_swim_lanes(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    for command in [
+        "discover-w2",
+        "discover-contracts",
+        "discover-rfps",
+        "discover-local-businesses",
+        "discover-relationships",
+    ]:
+        main([command, "--query", "AI workflow automation", "--location", "Las Vegas", "--limit", "1"])
+        payload = _record_from_output(capsys.readouterr().out)
+        assert payload["count"] == 1
+
+
+def test_source_file_import_creates_normalized_opportunities_without_duplicates(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "contracts.json"
+    source.write_text(json.dumps([
+        {
+            "title": "Intake workflow automation pilot",
+            "company": "Clinic Ops Group",
+            "url": "https://example.com/opportunities/intake-pilot",
+            "description": "Clear business problem: manual intake workflow needs automation. Buyer email is published.",
+            "contact": "ops@example.com",
+        }
+    ]))
+
+    main(["discover-contracts", "--source-file", str(source), "--limit", "10"])
+    first = _record_from_output(capsys.readouterr().out)
+    main(["discover-contracts", "--source-file", str(source), "--limit", "10"])
+    second = _record_from_output(capsys.readouterr().out)
+
+    stored = json.loads(Path("data/work_opportunities.json").read_text())
+    assert first["created"] == 1
+    assert second["created"] == 0
+    assert second["updated"] == 1
+    assert len(stored) == 1
+    record = stored[0]
+    assert record["opportunity_type"] == "contract_1099"
+    assert record["fit_score"] > 0
+    assert record["actionability_score"] > 0
+    assert record["urgency_score"] >= 0
+    assert record["recommended_next_action"]
+    assert record["qualification"]["buyer_reachable"] is True
+
+
+def test_rfp_with_close_deadline_gets_urgency(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    deadline = (datetime.now(UTC).date() + timedelta(days=2)).isoformat()
+    source = tmp_path / "rfps.json"
+    source.write_text(json.dumps([
+        {
+            "title": "AI operations workflow RFP",
+            "organization": "County Innovation Office",
+            "deadline": deadline,
+            "description": "Scope includes workflow automation and internal AI operations.",
+            "required_documents": ["proposal", "pricing"],
+        }
+    ]))
+
+    main(["discover-rfps", "--source-file", str(source)])
+    payload = _record_from_output(capsys.readouterr().out)
+    record = payload["opportunities"][0]
+
+    assert record["opportunity_type"] == "rfp"
+    assert record["urgency_score"] >= 90
+    assert record["priority"] == "high"
+    assert record["qualification"]["go_no_go"] == "go"
+
+
+def test_discovered_strong_local_contract_or_rfp_beats_weak_w2_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert_job("WeakCo", "Program Manager", score=38, classification="near_fit", viability="review")
+    source = tmp_path / "local.json"
+    source.write_text(json.dumps([
+        {
+            "title": "Restaurant back-office workflow automation pilot",
+            "business": "Downtown Hospitality Group",
+            "location": "Las Vegas",
+            "description": "Manual spreadsheet reporting and scheduling workflow pain. Owner reachable for a simple pilot.",
+            "owner": "Founder",
+            "fit_score": 88,
+            "actionability_score": 90,
+            "revenue_potential": "high",
+            "relationship_value": "high",
+        }
+    ]))
+    main(["discover-local-businesses", "--source-file", str(source), "--location", "Las Vegas"])
+    capsys.readouterr()
+
+    payload = opportunity_review()
+
+    assert payload["recommended_opportunity_type"] == "local_business"
+    assert payload["recommended_company"] == "Downtown Hospitality Group"
+
+
+def test_blocked_w2_company_can_still_appear_as_relationship_strategy_from_discovery(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    block_company("BlockedCo", "W2 application cooldown", expires_at="2099-12-31", quiet=True)
+    source = tmp_path / "w2.json"
+    source.write_text(json.dumps([
+        {
+            "title": "AI Agents Product Lead",
+            "company": "BlockedCo",
+            "url": "https://example.com/blockedco/ai-agents-product-lead",
+            "description": "AI agents and workflow automation role with a reachable hiring manager.",
+        }
+    ]))
+
+    main(["discover-w2", "--source-file", str(source)])
+    payload = _record_from_output(capsys.readouterr().out)
+    record = payload["opportunities"][0]
+
+    assert record["opportunity_type"] == "relationship"
+    assert record["status"] == "relationship_strategy"
+    assert record["qualification"]["converted_from_blocked_w2"] is True
+    assert "do not submit a W2 application" in record["recommended_next_action"]

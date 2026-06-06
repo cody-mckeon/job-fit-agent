@@ -98,6 +98,11 @@ Work Opportunity Engine commands:
 
 ```bash
 docker compose run --rm job-fit-agent python -m job_fit_agent.main work-opportunities
+docker compose run --rm job-fit-agent python -m job_fit_agent.main discover-w2 --source-file data/w2_seeds.json --limit 25
+docker compose run --rm job-fit-agent python -m job_fit_agent.main discover-contracts --source-file data/contracts.json --limit 25
+docker compose run --rm job-fit-agent python -m job_fit_agent.main discover-rfps --query "AI workflow automation RFP" --location "Nevada" --limit 10
+docker compose run --rm job-fit-agent python -m job_fit_agent.main discover-local-businesses --query "manual operations workflow pain" --location "Las Vegas" --limit 10
+docker compose run --rm job-fit-agent python -m job_fit_agent.main discover-relationships --source-file data/relationship_map.json --limit 25
 docker compose run --rm job-fit-agent python -m job_fit_agent.main add-work-opportunity --title "AI workflow automation pilot" --company "Local hospitality group" --type local_business --source manual --priority high --status qualify --why-fit "Operations workflow automation and AI agent deployment" --next-action "Research pain points and prepare diagnostic outreach"
 docker compose run --rm job-fit-agent python -m job_fit_agent.main add-rfp --title "AI operations workflow RFP" --organization "County Innovation Office" --deadline 2099-06-15 --source government --priority high --why-fit "Agent deployment and workflow automation for internal operations"
 docker compose run --rm job-fit-agent python -m job_fit_agent.main opportunity-review
@@ -106,7 +111,7 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-1099 <op
 docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-local-outreach <opportunity_id>
 ```
 
-Use this layer for all work Cody could pursue, not only W2 roles: 1099 contracts, fractional roles, RFPs, vendor opportunities, local business opportunities, warm intros, and manual leads from podcasts, LinkedIn, local events, or conversations. Records are durable in `data/work_opportunities.json`. `opportunity-review` compares W2 jobs, company-universe records, Opportunity Pipeline strategy, Work Opportunity Engine records, blocked companies, deadlines, relationship value, and fit score, then recommends the highest-leverage next action today. A W2 company cooldown does not automatically prevent separate 1099, RFP, vendor, or local-business strategy for that organization.
+Use this layer for all work Cody could pursue, not only W2 roles: 1099 contracts, fractional roles, RFPs, vendor opportunities, local business opportunities, relationship opportunities, and manual leads from podcasts, LinkedIn, local events, or conversations. Discovery commands support `--source-file`, `--query`, `--location`, and `--limit`; records are durable in `data/work_opportunities.json` with fit, actionability, urgency, revenue, relationship, and recommended-next-action fields. `opportunity-review` compares W2 jobs, company-universe records, Opportunity Pipeline strategy, Work Opportunity Engine records, blocked companies, deadlines, relationship value, urgency, actionability, revenue potential, and fit score, then recommends the highest-leverage next action today. A W2 company cooldown does not automatically prevent separate 1099, RFP, vendor, or local-business strategy for that organization.
 
 Opportunity Pipeline strategy commands:
 

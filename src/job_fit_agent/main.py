@@ -86,9 +86,11 @@ from job_fit_agent.repository import (
 from job_fit_agent.scoring import detect_geography_terms, score_job
 from job_fit_agent.telegram_commands import parse_telegram_command
 from job_fit_agent.work_opportunities import (
+    DISCOVERY_COMMANDS,
     WORK_SECTION_ORDER,
     add_rfp,
     add_work_opportunity,
+    discover_opportunities,
     grouped_work_opportunities,
     opportunity_review,
     prep_work_opportunity,
@@ -4179,6 +4181,8 @@ def print_work_opportunities() -> None:
             print(f"source: {row.get('source', '')}")
             print(f"priority: {row.get('priority', '')}")
             print(f"fit_score: {row.get('fit_score', '')}")
+            print(f"actionability_score: {row.get('actionability_score', '')}")
+            print(f"urgency_score: {row.get('urgency_score', '')}")
             print(f"revenue_potential: {row.get('revenue_potential', '')}")
             print(f"relationship_value: {row.get('relationship_value', '')}")
             if row.get("deadline"):
@@ -4377,6 +4381,26 @@ def main(argv: list[str] | None = None) -> None:
             print(usage)
             return
         print(json.dumps(record, indent=2))
+        return
+
+
+    if command in DISCOVERY_COMMANDS:
+        usage = f"Usage: python -m job_fit_agent.main {command} [--source-file <path>] [--query <text>] [--location <text>] [--limit <n>]"
+        try:
+            parsed = _parse_work_option_args(args[1:], {"--source-file", "--query", "--location", "--limit"})
+            limit = int(parsed.get("limit", "25"))
+            payload = discover_opportunities(
+                DISCOVERY_COMMANDS[command],
+                source_file=parsed.get("source_file"),
+                query=parsed.get("query", ""),
+                location=parsed.get("location", ""),
+                limit=limit,
+            )
+        except (ValueError, IndexError) as exc:
+            print(str(exc))
+            print(usage)
+            return
+        print(json.dumps(payload, indent=2))
         return
 
     if command == "opportunity-review":
@@ -4762,6 +4786,11 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main add-work-opportunity --title <title> --company <company> --type <type> --source <source> [--priority <priority>] [--status <status>]")
     print("python -m job_fit_agent.main add-rfp --title <title> --organization <organization> [--deadline <YYYY-MM-DD>]")
     print("python -m job_fit_agent.main opportunity-review")
+    print("python -m job_fit_agent.main discover-w2 [--source-file <path>] [--query <text>] [--location <text>] [--limit <n>]")
+    print("python -m job_fit_agent.main discover-contracts [--source-file <path>] [--query <text>] [--location <text>] [--limit <n>]")
+    print("python -m job_fit_agent.main discover-rfps [--source-file <path>] [--query <text>] [--location <text>] [--limit <n>]")
+    print("python -m job_fit_agent.main discover-local-businesses [--source-file <path>] [--query <text>] [--location <text>] [--limit <n>]")
+    print("python -m job_fit_agent.main discover-relationships [--source-file <path>] [--query <text>] [--location <text>] [--limit <n>]")
     print("python -m job_fit_agent.main prep-rfp <opportunity_id>")
     print("python -m job_fit_agent.main prep-1099 <opportunity_id>")
     print("python -m job_fit_agent.main prep-local-outreach <opportunity_id>")
