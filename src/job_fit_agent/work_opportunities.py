@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import re
@@ -22,6 +23,7 @@ VALID_OPPORTUNITY_TYPES = {
     "rfp",
     "vendor_opportunity",
     "local_business",
+    "relationship",
     "warm_intro",
     "manual_lead",
 }
@@ -36,6 +38,11 @@ VALID_WORK_SOURCES = {
     "local",
     "government",
     "referral",
+    "source_file",
+    "search_seed",
+    "rfp_portal",
+    "vendor_portal",
+    "relationship_map",
     "other",
 }
 VALID_WORK_STATUSES = {
@@ -97,6 +104,25 @@ PREP_FILES = (
 )
 
 
+DISCOVERY_COMMANDS = {
+    "discover-w2": "w2_job",
+    "discover-contracts": "contract_1099",
+    "discover-rfps": "rfp",
+    "discover-local-businesses": "local_business",
+    "discover-relationships": "relationship",
+}
+
+LANE_QUALIFICATION_RULES = {
+    "w2_job": ("role fit", "geography", "company block status", "application channel"),
+    "contract_1099": ("clear business problem", "short implementation cycle", "AI/workflow automation fit", "buyer reachable", "delivery risk"),
+    "fractional": ("clear business problem", "short implementation cycle", "AI/workflow automation fit", "buyer reachable", "delivery risk"),
+    "rfp": ("deadline", "eligibility", "required documents", "scope fit", "proposal complexity", "go/no-go"),
+    "vendor_opportunity": ("clear business problem", "short implementation cycle", "AI/workflow automation fit", "buyer reachable", "delivery risk"),
+    "local_business": ("likely workflow pain", "local relevance", "reachable decision maker", "simple pilot opportunity"),
+    "relationship": ("relevance", "warmth", "reason to reach out", "potential opportunity path"),
+}
+
+
 def utc_timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -153,9 +179,26 @@ def _validate_choice(field: str, value: str, valid: set[str]) -> str:
     return normalized
 
 
+def _dedupe_key(title: str, company: str, opportunity_type: str, url: str = "") -> str:
+    """Return a stable identity key for discovered or manually-added opportunities."""
+    url_key = str(url or "").strip().lower()
+    if url_key:
+        return f"url:{url_key}"
+    digest = hashlib.sha1(f"{opportunity_type}|{company.strip().lower()}|{title.strip().lower()}".encode()).hexdigest()[:16]
+    return f"opp:{digest}"
+
+
 def _opportunity_id(title: str, company: str, opportunity_type: str, source: str, created_at: str) -> str:
     digest = hashlib.sha1(f"{title}|{company}|{opportunity_type}|{source}|{created_at}".encode()).hexdigest()[:12]
     return f"work-{digest}"
+
+
+def _bounded_int(value: Any, default: int = 0) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, min(100, parsed))
 
 
 def normalize_work_opportunity(record: dict[str, Any]) -> dict[str, Any]:
@@ -170,22 +213,33 @@ def normalize_work_opportunity(record: dict[str, Any]) -> dict[str, Any]:
         opportunity_type = "manual_lead"
     if source not in VALID_WORK_SOURCES:
         source = "other"
+    if opportunity_type == "warm_intro":
+        opportunity_type = "relationship"
+    url = str(record.get("url") or "")
+    recommended_next_action = str(record.get("recommended_next_action") or record.get("next_action") or "")
+    actionability_score = _bounded_int(record.get("actionability_score"), 0)
+    urgency_score = _bounded_int(record.get("urgency_score"), 0)
     return {
         "opportunity_id": str(record.get("opportunity_id") or _opportunity_id(title, company, opportunity_type, source, created_at)),
+        "dedupe_key": str(record.get("dedupe_key") or _dedupe_key(title, company, opportunity_type, url)),
         "title": title,
         "company": company,
         "opportunity_type": opportunity_type,
         "source": source,
         "source_detail": str(record.get("source_detail") or ""),
-        "url": str(record.get("url") or ""),
+        "url": url,
         "status": str(record.get("status") or "research").strip().lower() if str(record.get("status") or "research").strip().lower() in VALID_WORK_STATUSES else "research",
         "priority": str(record.get("priority") or "medium").strip().lower() if str(record.get("priority") or "medium").strip().lower() in VALID_WORK_PRIORITIES else "medium",
-        "fit_score": int(record.get("fit_score") or 0),
+        "fit_score": _bounded_int(record.get("fit_score"), 0),
+        "actionability_score": actionability_score,
+        "urgency_score": urgency_score,
         "revenue_potential": str(record.get("revenue_potential") or "unknown").strip().lower() if str(record.get("revenue_potential") or "unknown").strip().lower() in VALID_REVENUE_POTENTIALS else "unknown",
         "relationship_value": str(record.get("relationship_value") or "medium").strip().lower() if str(record.get("relationship_value") or "medium").strip().lower() in VALID_RELATIONSHIP_VALUES else "medium",
         "deadline": str(record.get("deadline") or ""),
         "blocked_until": str(record.get("blocked_until") or ""),
-        "next_action": str(record.get("next_action") or ""),
+        "next_action": recommended_next_action,
+        "recommended_next_action": recommended_next_action,
+        "qualification": record.get("qualification") if isinstance(record.get("qualification"), dict) else {},
         "why_fit": str(record.get("why_fit") or ""),
         "risks": str(record.get("risks") or ""),
         "notes": str(record.get("notes") or ""),
@@ -219,9 +273,33 @@ def add_work_opportunity(**kwargs: Any) -> dict[str, Any]:
         "updated_at": now,
     })
     records = load_work_opportunities()
-    records.append(record)
+    existing_idx = _find_existing_opportunity_index(records, record)
+    if existing_idx is None:
+        records.append(record)
+    else:
+        existing = records[existing_idx]
+        record["opportunity_id"] = existing.get("opportunity_id", record["opportunity_id"])
+        record["created_at"] = existing.get("created_at", record["created_at"])
+        records[existing_idx] = normalize_work_opportunity({**existing, **record, "updated_at": now})
+        record = records[existing_idx]
     save_work_opportunities(records)
     return record
+
+
+def _find_existing_opportunity_index(records: list[dict[str, Any]], record: dict[str, Any]) -> int | None:
+    key = str(record.get("dedupe_key") or "")
+    for idx, existing in enumerate(records):
+        if key and str(existing.get("dedupe_key") or "") == key:
+            return idx
+        if record.get("url") and str(existing.get("url") or "").strip().lower() == str(record.get("url") or "").strip().lower():
+            return idx
+        if (
+            str(existing.get("opportunity_type") or "") == str(record.get("opportunity_type") or "")
+            and str(existing.get("company") or "").strip().lower() == str(record.get("company") or "").strip().lower()
+            and str(existing.get("title") or "").strip().lower() == str(record.get("title") or "").strip().lower()
+        ):
+            return idx
+    return None
 
 
 def add_rfp(**kwargs: Any) -> dict[str, Any]:
@@ -318,6 +396,8 @@ def _work_candidate_score(record: dict[str, Any]) -> int:
     if status == "blocked" or _blocked_until_active(record):
         return -900
     score = int(record.get("fit_score") or 0)
+    score += int(record.get("actionability_score") or 0) // 2
+    score += int(record.get("urgency_score") or 0) // 2
     score += {"high": 35, "medium": 18, "low": 0}.get(str(record.get("priority", "medium")), 0)
     score += {"pursue": 32, "proposal_needed": 30, "qualify": 18, "relationship_strategy": 16, "research": 6}.get(status, 0)
     score += {"high": 28, "medium": 12, "low": 0, "unknown": 4}.get(str(record.get("revenue_potential", "unknown")), 0)
@@ -460,3 +540,215 @@ def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]
     for filename, body in file_bodies.items():
         (folder / filename).write_text(body, encoding="utf-8")
     return {"opportunity_id": opportunity_id, "prep_kind": prep_kind, "folder": str(folder), "files": [str(folder / filename) for filename in PREP_FILES]}
+
+
+def _load_discovery_source_file(source_file: str | Path) -> list[dict[str, Any]]:
+    """Load discovery seed records from JSON, YAML, JSONL, or CSV."""
+    path = Path(source_file)
+    if not path.exists():
+        raise ValueError(f"Source file not found: {source_file}")
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        with path.open(newline="", encoding="utf-8") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    if suffix in {".jsonl", ".ndjson"}:
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        return []
+    if suffix in {".yaml", ".yml"}:
+        try:
+            import yaml
+        except ImportError as exc:  # pragma: no cover - dependency is present in this project
+            raise ValueError("YAML source files require PyYAML.") from exc
+        payload = yaml.safe_load(text)
+    else:
+        payload = json.loads(text)
+    if isinstance(payload, dict):
+        payload = payload.get("opportunities") or payload.get("items") or payload.get("records") or [payload]
+    if not isinstance(payload, list):
+        raise ValueError("Discovery source file must contain a list, or a dict with opportunities/items/records.")
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _text_has_any(text: str, terms: tuple[str, ...]) -> bool:
+    normalized = text.lower()
+    return any(term in normalized for term in terms)
+
+
+def _qualification_from_record(lane: str, record: dict[str, Any], query: str = "", location: str = "") -> dict[str, Any]:
+    text = " ".join(str(record.get(key, "")) for key in ("title", "company", "description", "why_fit", "notes", "source_detail", "application_channel", "documents", "contact", "url"))
+    deadline = str(record.get("deadline") or record.get("due_date") or "")
+    company = str(record.get("company") or record.get("organization") or record.get("business") or "")
+    qualification: dict[str, Any] = {"rules": list(LANE_QUALIFICATION_RULES.get(lane, ())), "lane": lane}
+    if lane == "w2_job":
+        qualification.update({
+            "role_fit": _text_has_any(text, TARGET_LANE_TERMS + ("product manager", "program manager", "solutions", "implementation")),
+            "geography": bool(record.get("location") or location or "remote" in text.lower()),
+            "company_block_status": "blocked" if _is_company_block_active(company) else "clear",
+            "application_channel": str(record.get("application_channel") or record.get("source") or record.get("url") or "unknown"),
+        })
+    elif lane in {"contract_1099", "fractional", "vendor_opportunity"}:
+        qualification.update({
+            "clear_business_problem": _text_has_any(text, ("problem", "pain", "need", "improve", "automate", "workflow", "operations", "process")),
+            "short_implementation_cycle": _text_has_any(text, ("pilot", "quick", "30 day", "60 day", "sprint", "short", "implementation")),
+            "ai_workflow_automation_fit": _text_has_any(text, TARGET_LANE_TERMS),
+            "buyer_reachable": bool(record.get("contact") or record.get("email") or record.get("buyer") or record.get("url")),
+            "delivery_risk": str(record.get("delivery_risk") or record.get("risk") or "medium"),
+        })
+    elif lane == "rfp":
+        days = None
+        parsed_deadline = _parse_date(deadline)
+        if parsed_deadline:
+            days = (parsed_deadline - datetime.now(UTC).date()).days
+        complexity = str(record.get("proposal_complexity") or ("high" if _text_has_any(text, ("bond", "insurance", "certification", "security", "multi-year")) else "medium"))
+        qualification.update({
+            "deadline": deadline,
+            "days_until_deadline": days,
+            "eligibility": str(record.get("eligibility") or "needs_review"),
+            "required_documents": record.get("required_documents") or record.get("documents") or [],
+            "scope_fit": _text_has_any(text, TARGET_LANE_TERMS),
+            "proposal_complexity": complexity,
+            "go_no_go": "go" if parsed_deadline and days is not None and days >= 0 and complexity != "high" else "review",
+        })
+    elif lane == "local_business":
+        qualification.update({
+            "likely_workflow_pain": _text_has_any(text, ("manual", "workflow", "operations", "scheduling", "intake", "reporting", "spreadsheet", "automation", "process")),
+            "local_relevance": bool(location and location.lower() in text.lower()) or bool(record.get("location")),
+            "reachable_decision_maker": bool(record.get("owner") or record.get("contact") or record.get("email") or record.get("url")),
+            "simple_pilot_opportunity": _text_has_any(text, ("pilot", "quick", "simple", "workflow", "intake", "reporting", "automation")),
+        })
+    elif lane == "relationship":
+        qualification.update({
+            "relevance": _text_has_any(text, TARGET_LANE_TERMS) or bool(query and query.lower() in text.lower()),
+            "warmth": str(record.get("warmth") or record.get("relationship_warmth") or "medium"),
+            "reason_to_reach_out": str(record.get("reason_to_reach_out") or record.get("reason") or query or "Share a relevant update and ask for perspective."),
+            "potential_opportunity_path": str(record.get("potential_opportunity_path") or record.get("opportunity_path") or "Explore intro, advice, contract, vendor, or W2 path."),
+        })
+    return qualification
+
+
+def _score_discovered_record(lane: str, record: dict[str, Any], qualification: dict[str, Any]) -> dict[str, Any]:
+    text = " ".join(str(record.get(key, "")) for key in ("title", "company", "description", "why_fit", "notes", "source_detail"))
+    fit_score = _bounded_int(record.get("fit_score"), 35 + min(45, sum(1 for term in TARGET_LANE_TERMS if term in text.lower()) * 8))
+    actionability_score = _bounded_int(record.get("actionability_score"), 45)
+    urgency_score = _bounded_int(record.get("urgency_score"), 20)
+    revenue_potential = str(record.get("revenue_potential") or "medium").lower()
+    relationship_value = str(record.get("relationship_value") or "medium").lower()
+
+    if lane == "w2_job":
+        actionability_score = 75 if qualification.get("application_channel") != "unknown" and qualification.get("company_block_status") == "clear" else 25
+        revenue_potential = record.get("revenue_potential") or "medium"
+    elif lane in {"contract_1099", "fractional", "vendor_opportunity"}:
+        actionability_score = 70 if qualification.get("buyer_reachable") else 45
+        revenue_potential = record.get("revenue_potential") or "high"
+    elif lane == "rfp":
+        days = qualification.get("days_until_deadline")
+        if isinstance(days, int):
+            urgency_score = 95 if 0 <= days <= 2 else 82 if days <= 7 else 55 if days <= 14 else 25
+        actionability_score = 70 if qualification.get("go_no_go") == "go" else 45
+        revenue_potential = record.get("revenue_potential") or "high"
+    elif lane == "local_business":
+        actionability_score = 75 if qualification.get("reachable_decision_maker") else 50
+        revenue_potential = record.get("revenue_potential") or "medium"
+    elif lane == "relationship":
+        actionability_score = 70 if qualification.get("reason_to_reach_out") else 40
+        relationship_value = record.get("relationship_value") or "high"
+        revenue_potential = record.get("revenue_potential") or "unknown"
+
+    return {
+        "fit_score": fit_score,
+        "actionability_score": actionability_score,
+        "urgency_score": urgency_score,
+        "revenue_potential": revenue_potential if revenue_potential in VALID_REVENUE_POTENTIALS else "medium",
+        "relationship_value": relationship_value if relationship_value in VALID_RELATIONSHIP_VALUES else "medium",
+    }
+
+
+def _default_next_action(lane: str, company: str, title: str, qualification: dict[str, Any]) -> str:
+    if lane == "w2_job":
+        if qualification.get("company_block_status") == "blocked":
+            return f"Use {company} as a relationship strategy; do not submit a W2 application while the company block is active."
+        return f"Confirm geography and application channel, then prepare the W2 application for {title}."
+    if lane == "rfp":
+        return f"Check deadline, eligibility, required documents, and make a go/no-go decision for {title}."
+    if lane in {"contract_1099", "fractional", "vendor_opportunity"}:
+        return f"Find the buyer and send a concise AI/workflow automation diagnostic note to {company}."
+    if lane == "local_business":
+        return f"Identify the decision maker and propose a simple workflow automation pilot for {company}."
+    if lane == "relationship":
+        return f"Reach out to {company} with a specific reason and ask for the next relevant conversation."
+    return f"Qualify {title} with {company}."
+
+
+def normalize_discovered_opportunity(raw: dict[str, Any], lane: str, query: str = "", location: str = "") -> dict[str, Any]:
+    """Normalize one discovery hit into the Work Opportunity Engine schema."""
+    title = str(raw.get("title") or raw.get("name") or raw.get("role") or raw.get("opportunity") or query or f"{lane.replace('_', ' ').title()} opportunity").strip()
+    company = str(raw.get("company") or raw.get("organization") or raw.get("business") or raw.get("account") or raw.get("person") or "Unknown organization").strip()
+    source = str(raw.get("source") or "source_file").strip().lower()
+    if source not in VALID_WORK_SOURCES:
+        source = "other"
+    opportunity_type = lane
+    qualification = _qualification_from_record(lane, {**raw, "title": title, "company": company}, query=query, location=location)
+    status = str(raw.get("status") or "qualify").lower()
+    if lane == "rfp":
+        status = str(raw.get("status") or "proposal_needed").lower()
+    if lane == "relationship":
+        status = str(raw.get("status") or "relationship_strategy").lower()
+    if lane == "w2_job" and qualification.get("company_block_status") == "blocked":
+        opportunity_type = "relationship"
+        status = "relationship_strategy"
+        qualification["converted_from_blocked_w2"] = True
+    scores = _score_discovered_record(lane, raw, qualification)
+    default_action_lane = lane if qualification.get("converted_from_blocked_w2") else opportunity_type
+    next_action = str(raw.get("recommended_next_action") or raw.get("next_action") or _default_next_action(default_action_lane, company, title, qualification))
+    description = str(raw.get("description") or raw.get("summary") or "")
+    why_fit = str(raw.get("why_fit") or description or query or "Discovered through structured swim-lane discovery.")
+    return normalize_work_opportunity({
+        **raw,
+        "title": title,
+        "company": company,
+        "opportunity_type": opportunity_type,
+        "source": source,
+        "source_detail": str(raw.get("source_detail") or query or location or "structured discovery"),
+        "url": str(raw.get("url") or raw.get("link") or ""),
+        "deadline": str(raw.get("deadline") or raw.get("due_date") or ""),
+        "status": status if status in VALID_WORK_STATUSES else "qualify",
+        "priority": str(raw.get("priority") or ("high" if scores["urgency_score"] >= 80 or scores["fit_score"] >= 70 else "medium")),
+        "recommended_next_action": next_action,
+        "next_action": next_action,
+        "why_fit": why_fit,
+        "notes": str(raw.get("notes") or ""),
+        "qualification": qualification,
+        **scores,
+    })
+
+
+def discover_opportunities(lane: str, source_file: str | Path | None = None, query: str = "", location: str = "", limit: int = 25) -> dict[str, Any]:
+    """Import or seed discovered opportunities for one swim lane."""
+    if lane not in VALID_OPPORTUNITY_TYPES or lane == "manual_lead":
+        raise ValueError(f"Invalid discovery lane: {lane}")
+    raw_items = _load_discovery_source_file(source_file) if source_file else []
+    if not raw_items and (query or location):
+        raw_items = [{"title": query or f"{lane.replace('_', ' ').title()} discovery seed", "company": location or "Discovery seed", "source": "search_seed", "source_detail": query, "location": location}]
+    selected = raw_items[: max(0, limit)]
+    records = load_work_opportunities()
+    created = 0
+    updated = 0
+    normalized: list[dict[str, Any]] = []
+    now = utc_timestamp()
+    for item in selected:
+        candidate = normalize_discovered_opportunity(item, lane, query=query, location=location)
+        existing_idx = _find_existing_opportunity_index(records, candidate)
+        if existing_idx is None:
+            created += 1
+            records.append(candidate)
+            normalized.append(candidate)
+            continue
+        existing = records[existing_idx]
+        merged = normalize_work_opportunity({**existing, **candidate, "opportunity_id": existing.get("opportunity_id"), "created_at": existing.get("created_at"), "updated_at": now})
+        records[existing_idx] = merged
+        updated += 1
+        normalized.append(merged)
+    save_work_opportunities(records)
+    return {"lane": lane, "created": created, "updated": updated, "count": len(normalized), "opportunities": normalized}

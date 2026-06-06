@@ -316,12 +316,17 @@ Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.m
 
 ## Work Opportunity Engine
 
-The Work Opportunity Engine expands the ecosystem beyond W2 applications. It tracks W2 jobs, 1099 contract work, fractional roles, RFPs, vendor opportunities, local business opportunities, warm intros, and manual leads from podcasts, LinkedIn, local events, or conversations in `data/work_opportunities.json`.
+The Work Opportunity Engine expands the ecosystem beyond W2 applications. It tracks W2 jobs, 1099 contract work, fractional roles, RFPs, vendor opportunities, local business opportunities, relationship opportunities, and manual leads from podcasts, LinkedIn, local events, or conversations in `data/work_opportunities.json`.
 
-Cody's target lane remains deploying AI agents inside organizations, workflow automation, AI operations, product systems, technical implementation, product analytics, internal AI transformation, and agent-enabled business process improvement. `opportunity-review` compares Work Opportunity Engine records against W2 jobs, the company universe, Opportunity Pipeline strategy, blocked companies, deadlines, relationship value, and fit score so it can recommend the highest-leverage action today instead of always preferring W2 jobs.
+Cody's target lane remains deploying AI agents inside organizations, workflow automation, AI operations, product systems, technical implementation, product analytics, internal AI transformation, and agent-enabled business process improvement. `opportunity-review` compares Work Opportunity Engine records against W2 jobs, the company universe, Opportunity Pipeline strategy, blocked companies, deadlines, relationship value, urgency, actionability, revenue potential, and fit score so it can recommend the highest-leverage action today instead of always preferring W2 jobs.
 
 ```bash
 python -m job_fit_agent.main work-opportunities
+python -m job_fit_agent.main discover-w2 --source-file data/w2_seeds.json --limit 25
+python -m job_fit_agent.main discover-contracts --source-file data/contracts.json --limit 25
+python -m job_fit_agent.main discover-rfps --query "AI workflow automation RFP" --location "Nevada" --limit 10
+python -m job_fit_agent.main discover-local-businesses --query "manual operations workflow pain" --location "Las Vegas" --limit 10
+python -m job_fit_agent.main discover-relationships --source-file data/relationship_map.json --limit 25
 python -m job_fit_agent.main add-work-opportunity \
   --title "AI workflow automation pilot" \
   --company "Local hospitality group" \
@@ -344,6 +349,8 @@ python -m job_fit_agent.main prep-rfp <opportunity_id>
 python -m job_fit_agent.main prep-1099 <opportunity_id>
 python -m job_fit_agent.main prep-local-outreach <opportunity_id>
 ```
+
+The discovery commands accept `--source-file <path>`, `--query <text>`, `--location <text>`, and `--limit <n>`, then normalize found items into `data/work_opportunities.json` with `fit_score`, `actionability_score`, `revenue_potential`, `relationship_value`, `urgency_score`, and `recommended_next_action`. Lane-specific qualification checks cover W2 role/geography/block/channel, contract business problem/cycle/AI fit/buyer/risk, RFP deadline/eligibility/documents/scope/complexity/go-no-go, local workflow pain/relevance/decision-maker/pilot, and relationship relevance/warmth/reach-out reason/opportunity path.
 
 `work-opportunities` groups durable records into Pursue now, Proposal needed, Relationship strategy, Research / qualify, Blocked, Submitted / waiting, Won, and Lost / skipped. The prep commands create markdown folders under `applications/work_opportunities/` with an opportunity brief, qualification checklist, proposed solution outline, risks, outreach note, and next steps. Company-level W2 blocks suppress direct W2 recommendations, but they do not automatically block separate RFP, vendor, 1099, or local-business strategies for the same organization.
 
