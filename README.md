@@ -200,6 +200,14 @@ Setup steps:
 3. Obtain the chat ID (for groups, use the negative group ID format).
 4. Set `enabled: true` in `config/notifications.yaml` and run the pipeline.
 
+Telegram is also a command-and-control channel. The GitHub Actions workflow `.github/workflows/process-telegram-commands.yml` can run manually or every 30 minutes to poll `getUpdates`, execute supported status commands, write durable state to `data/application_status.json`, `data/company_application_blocks.json`, and `data/telegram_processed_updates.json`, and commit those changes back to the repository. Local/manual polling uses the same command:
+
+```bash
+python -m job_fit_agent.main process-telegram-updates
+```
+
+Supported Telegram reply commands are `applied <job_identifier>`, `rejected <job_identifier>`, `interviewing <job_identifier>`, `offer <job_identifier>`, `withdrawn <job_identifier>`, `save <job_identifier>`, `skip <job_identifier> <reason>`, `blocked <job_identifier> <reason>`, and `block-company <company> <reason>`. Prefer the stable key shown in application package messages, such as `greenhouse:stripe:922`; mobile aliases such as `stripe-product-marketing-manager-growth` are also supported when they resolve uniquely.
+
 ## Application workflow lifecycle
 
 Each job in SQLite has a workflow status to track progress from discovery to close-out. Application lifecycle decisions (`not_applied`, `saved`, `applied`, `interviewing`, `rejected`, `offer`, `withdrawn`, `skipped`, and `blocked`) are also persisted in the tracked `data/application_status.json` file keyed by stable job key. Company-level application cooldowns/blocks are persisted in `data/company_application_blocks.json` so Ashby-style company limits can suppress every related role until a recruiter/manual-review strategy is available or the temporary block expires. The separate Opportunity Pipeline persists company-centered strategy in `data/opportunity_pipeline.json`; it consumes job scores and application state, but it does not replace or overwrite the Ashby/Greenhouse/Lever job scoring engine. Treat these durable JSON files as the shareable source of truth for application and strategy status; `data/jobs.sqlite` row ids are runtime/local implementation details and are not reliable across Cody's Mac, Telegram, and GitHub Actions.

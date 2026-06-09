@@ -61,3 +61,19 @@ def test_workflow_does_not_require_jobs_sqlite_to_change():
     text = Path(".github/workflows/job-status-command.yml").read_text()
     assert "git add data/jobs.sqlite" not in text
     assert "data/jobs.sqlite is not tracked" not in text
+
+
+def test_process_telegram_commands_workflow_exists():
+    assert Path(".github/workflows/process-telegram-commands.yml").exists()
+
+
+def test_process_telegram_commands_workflow_polls_and_commits_data_files():
+    text = Path(".github/workflows/process-telegram-commands.yml").read_text()
+    assert "workflow_dispatch:" in text
+    assert "cron:" in text
+    assert "contents: write" in text
+    assert "python -m job_fit_agent.main process-telegram-updates" in text
+    assert "TELEGRAM_BOT_TOKEN" in text
+    assert "TELEGRAM_CHAT_ID" in text
+    assert "git add data/application_status.json data/company_application_blocks.json data/telegram_processed_updates.json" in text
+    assert 'git commit -m "Process Telegram status commands"' in text
