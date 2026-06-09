@@ -1,5 +1,24 @@
 {
-  "last_update_id": null,
-  "processed_update_ids": [],
-  "processed_updates": []
+  "last_update_id": 462866258,
+  "processed_update_ids": [
+    462866258
+  ],
+  "processed_updates": [
+    {
+      "command": "applied greenhouse:stripe:922",
+      "processed_at": "2026-06-09T18:17:01.409784+00:00",
+      "result": {
+        "company": "stripe",
+        "job_id": null,
+        "message": "Marked applied by stable key: greenhouse:stripe:922. Job details will be enriched when rediscovered.",
+        "new_status": "applied",
+        "note": "",
+        "stable_job_key": "greenhouse:stripe:922",
+        "success": true,
+        "title": null,
+        "warning": "Job was not found in local SQLite, but status was recorded by stable key."
+      },
+      "update_id": 462866258
+    }
+  ]
 }
