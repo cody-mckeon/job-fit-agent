@@ -63,5 +63,33 @@
     "updated_at": "2026-06-02T17:37:37.118708+00:00",
     "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "withdrawn_at": null
+  },
+  "greenhouse:stripe:922": {
+    "application_status": "applied",
+    "applied_at": "2026-06-09T16:52:16.511405+00:00",
+    "blocked_at": null,
+    "company": "stripe",
+    "external_job_id": "922",
+    "identifier_used": "greenhouse:stripe:922",
+    "interviewing_at": null,
+    "note": "",
+    "offer_at": null,
+    "rejected_at": null,
+    "saved_at": null,
+    "skipped_at": null,
+    "source": "greenhouse",
+    "stable_job_key": "greenhouse:stripe:922",
+    "status_history": [
+      {
+        "identifier_used": "greenhouse:stripe:922",
+        "note": "",
+        "status": "applied",
+        "timestamp": "2026-06-09T16:52:16.511405+00:00"
+      }
+    ],
+    "title": null,
+    "updated_at": "2026-06-09T16:52:16.511405+00:00",
+    "url": null,
+    "withdrawn_at": null
   }
 }
