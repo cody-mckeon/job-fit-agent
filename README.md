@@ -206,7 +206,7 @@ Telegram is also a command-and-control channel. The GitHub Actions workflow `.gi
 python -m job_fit_agent.main process-telegram-updates
 ```
 
-Supported Telegram reply commands are `applied <job_identifier>`, `rejected <job_identifier>`, `interviewing <job_identifier>`, `offer <job_identifier>`, `withdrawn <job_identifier>`, `save <job_identifier>`, `skip <job_identifier> <reason>`, `blocked <job_identifier> <reason>`, and `block-company <company> <reason>`. Prefer the stable key shown in application package messages, such as `greenhouse:stripe:922`; mobile aliases such as `stripe-product-marketing-manager-growth` are also supported when they resolve uniquely.
+Supported Telegram reply commands are `applied <job_identifier>`, `rejected <job_identifier>`, `interviewing <job_identifier>`, `offer <job_identifier>`, `withdrawn <job_identifier>`, `save <job_identifier>`, `skip <job_identifier> <reason>`, `blocked <job_identifier> <reason>`, and `block-company <company> <reason>`. Prefer the stable key shown in application package messages, such as `greenhouse:stripe:7914005`; mobile aliases such as `stripe-product-marketing-manager-growth` are also supported when they resolve uniquely.
 
 ## Application workflow lifecycle
 
@@ -222,6 +222,15 @@ Valid statuses:
 - `archived`
 
 New jobs default to `new`. Re-scores update scoring fields but preserve your existing workflow status. Application lifecycle records keep `applied_at`, `interviewing_at`, `rejected_at`, `offer_at`, `withdrawn_at`, `skipped_at`, `saved_at`, `blocked_at`, `updated_at`, `note`, and `status_history` in `data/application_status.json`. Rejected jobs remain tracked for learning and analytics, but they are no longer active pipeline work.
+
+Stable job identity rules:
+
+- Stable job keys are source-native and deterministic; they never use local SQLite row ids.
+- Greenhouse keys use `greenhouse:<company_slug>:<gh_jid>` (for example `greenhouse:stripe:7914005` from `https://stripe.com/jobs/search?gh_jid=7914005`).
+- Ashby keys use `ashby:<company_slug>:<ashby_uuid>` and Lever keys use `lever:<company_slug>:<posting_id_or_slug>`.
+- Unknown/custom jobs use `job:<company_slug>:<deterministic_hash>` based on source, URL, title, and company.
+- Telegram status commands resolve canonical stable keys first, then mobile aliases, URLs, source-native external ids, and only then legacy/local row ids. If a Greenhouse key looks like an unstable local row id or mismatches company/source URL identity, the command fails safely without marking a job.
+- Run `python -m job_fit_agent.main migrate-stable-job-keys` to migrate old durable status keys when records include source URLs such as Greenhouse `gh_jid` links. Use `python -m job_fit_agent.main debug-job-identity <identifier_or_url>` to inspect the canonical key and Telegram accept/reject decision.
 
 Mark lifecycle outcomes with stable keys when possible:
 

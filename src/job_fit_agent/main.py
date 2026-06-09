@@ -14,7 +14,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, UTC, date, timedelta
 from typing import Any, Protocol
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from pathlib import Path
 
@@ -87,6 +87,13 @@ from job_fit_agent.repository import (
     upsert_job,
 )
 from job_fit_agent.scoring import detect_geography_terms, score_job
+from job_fit_agent.stable_identity import (
+    build_stable_job_key,
+    extract_external_job_id,
+    infer_source_from_url,
+    normalize_company_slug,
+    validate_stable_job_key,
+)
 from job_fit_agent.telegram_commands import parse_telegram_command
 from job_fit_agent.work_opportunities import (
     DISCOVERY_COMMANDS,
@@ -351,9 +358,15 @@ def parse_job_url(job_url: str) -> ParsedJobUrl:
     for source, pattern in patterns:
         match = re.match(pattern, job_url)
         if match:
-            return ParsedJobUrl(source=source, company=match.group(1), job_id=match.group(2), original_url=job_url)
+            return ParsedJobUrl(source=source, company=normalize_company_slug(match.group(1)), job_id=match.group(2), original_url=job_url)
+    parsed = urlparse(job_url)
+    gh_jid = parse_qs(parsed.query).get("gh_jid", [""])[0]
+    if gh_jid:
+        host_parts = parsed.netloc.lower().split(".")
+        company = host_parts[-2] if len(host_parts) >= 2 else "company"
+        return ParsedJobUrl(source="greenhouse", company=normalize_company_slug(company), job_id=gh_jid, original_url=job_url)
     raise ValueError(
-        "Unsupported job URL. Expected Ashby, Greenhouse, or Lever URL patterns."
+        "Unsupported job URL. Expected Ashby, Greenhouse, Lever, or Greenhouse gh_jid URL patterns."
     )
 
 
@@ -1113,25 +1126,21 @@ def _utc_timestamp() -> str:
 
 
 def _stable_job_key_for_url(job_url: str) -> str:
+    source = infer_source_from_url(job_url) or "job"
     parsed = parse_job_url(job_url)
-    return f"{parsed.source}:{parsed.company}:{parsed.job_id}"
+    return build_stable_job_key({"source": source, "company": parsed.company, "url": job_url})
 
 
 def _stable_job_key_for_job(job: dict[str, Any]) -> str:
-    try:
-        return _stable_job_key_for_url(str(safe_row_value(job, "url", "")))
-    except ValueError:
-        source = _mobile_slug(str(safe_row_value(job, "source", "job") or "job"))
-        company = _mobile_slug(str(safe_row_value(job, "company", "company") or "company"))
-        job_id = str(safe_row_value(job, "id", "") or _mobile_alias_suffix_for_job(job))
-        return f"{source}:{company}:{job_id}"
+    return build_stable_job_key(job)
 
 
 def _external_job_id_for_job(job: dict[str, Any]) -> str:
-    try:
-        return parse_job_url(str(safe_row_value(job, "url", ""))).job_id
-    except ValueError:
-        return str(safe_row_value(job, "id", "") or "")
+    return extract_external_job_id(
+        str(safe_row_value(job, "source", "") or infer_source_from_url(str(safe_row_value(job, "url", "") or "")) or "job"),
+        str(safe_row_value(job, "url", "") or ""),
+        safe_row_value(job, "payload", None),
+    )
 
 
 def _looks_like_stable_job_key(identifier: str) -> bool:
@@ -1474,13 +1483,10 @@ def _mobile_alias_base_for_job(job: dict[str, Any]) -> str:
 
 
 def _mobile_alias_suffix_for_job(job: dict[str, Any]) -> str:
-    try:
-        parsed = parse_job_url(str(safe_row_value(job, "url", "")))
-        if parsed.job_id:
-            return _mobile_slug(parsed.job_id)[:6] or str(safe_row_value(job, "id", ""))
-    except ValueError:
-        pass
-    stable = str(safe_row_value(job, "url", "")) or str(safe_row_value(job, "id", ""))
+    external_id = _external_job_id_for_job(job)
+    if external_id:
+        return _mobile_slug(external_id)[:6] or "job"
+    stable = str(safe_row_value(job, "url", "")) or _stable_job_key_for_job(job)
     return hashlib.sha1(stable.encode("utf-8")).hexdigest()[:6]
 
 
@@ -1507,28 +1513,67 @@ def _job_matches_stable_key(job: dict[str, Any], identifier: str) -> bool:
         return False
 
 
+def _stable_key_mismatch_message(identifier: str, rows: list[dict[str, Any]]) -> str | None:
+    try:
+        source, company, external_id = parse_stable_job_key(identifier)
+    except ValueError:
+        return None
+    company_matches = [
+        row for row in rows
+        if str(safe_row_value(row, "source", "") or infer_source_from_url(str(safe_row_value(row, "url", "") or "")) or "").lower() == source
+        and normalize_company_slug(str(safe_row_value(row, "company", "") or "")) == company
+    ]
+    if company_matches:
+        candidate_keys = sorted({_stable_job_key_for_job(row) for row in company_matches})
+        if source == "greenhouse" and external_id.isdigit():
+            suggestions = ", ".join(candidate_keys[:3])
+            suffix = f" Suggested canonical key(s): {suggestions}." if suggestions else ""
+            return (
+                "Unstable or mismatched Greenhouse identifier. This looks like a local row id, not gh_jid, "
+                "or it does not match a known canonical job." + suffix
+            )
+        return "Stable job key does not match a known canonical job for that company/source."
+    return None
+
+
+def _validate_identifier_matches_job(identifier: str, job: dict[str, Any]) -> None:
+    if _looks_like_stable_job_key(identifier):
+        warnings = validate_stable_job_key(job, identifier)
+        if warnings:
+            raise ValueError("Identifier/job mismatch: " + "; ".join(warnings))
+
+
+def _resolve_source_external_id(token: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    matches = [row for row in rows if _external_job_id_for_job(row) == token]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError("Source-native external id matched multiple jobs; use the canonical stable job key.")
+    return None
+
+
 def _resolve_job_identifier(identifier: str) -> dict[str, Any]:
     token = identifier.strip()
     if not token:
         raise ValueError("Job identifier is required.")
-    if token.isdigit():
-        row = get_job_by_id(int(token))
-        if row is None:
-            raise ValueError("Job not found.")
-        return dict(row)
-    if token.startswith(("http://", "https://")):
-        row = get_job_by_url(token)
-        if row is None:
-            raise ValueError("Job not found.")
-        return dict(row)
 
     rows = _recent_jobs_for_alias_lookup()
-    stable_matches = [row for row in rows if _job_matches_stable_key(row, token)]
-    if len(stable_matches) == 1:
-        return stable_matches[0]
-    if len(stable_matches) > 1:
-        raise ValueError("Stable job key matched multiple jobs; use the job URL or numeric id.")
 
+    # 1. Canonical stable job key.  Do not fall through to local row ids when a
+    # source-shaped key mismatches; that is exactly the unsafe case.
+    if _looks_like_stable_job_key(token):
+        stable_matches = [row for row in rows if _job_matches_stable_key(row, token)]
+        if len(stable_matches) == 1:
+            _validate_identifier_matches_job(token, stable_matches[0])
+            return stable_matches[0]
+        if len(stable_matches) > 1:
+            raise ValueError("Stable job key matched multiple jobs; use the job URL.")
+        mismatch_message = _stable_key_mismatch_message(token, rows)
+        if mismatch_message:
+            raise ValueError(mismatch_message)
+        raise ValueError("Job not found.")
+
+    # 2. Mobile command alias.
     alias_matches = [row for row in rows if mobile_command_alias_for_job(row, rows) == token]
     if len(alias_matches) == 1:
         return alias_matches[0]
@@ -1540,6 +1585,27 @@ def _resolve_job_identifier(identifier: str) -> dict[str, Any]:
         return base_matches[0]
     if len(base_matches) > 1:
         raise ValueError("Alias matched multiple jobs. Use the stable fallback command from Telegram.")
+
+    # 3. URL.
+    if token.startswith(("http://", "https://")):
+        row = get_job_by_url(token)
+        if row is None:
+            raise ValueError("Job not found.")
+        return dict(row)
+
+    # 4. Source-native external id such as a Greenhouse gh_jid.
+    external_match = _resolve_source_external_id(token, rows)
+    if external_match is not None:
+        return external_match
+
+    # 5. Legacy/local SQLite id fallback.  CLI --job-id reaches get_job_by_id
+    # directly; this fallback is retained for older mobile commands/tests but is
+    # intentionally last after all stable/source-native identifiers.
+    if token.isdigit():
+        row = get_job_by_id(int(token))
+        if row is None:
+            raise ValueError("Job not found.")
+        return dict(row)
 
     raise ValueError("Job not found.")
 
@@ -1568,7 +1634,12 @@ def _mark_application_status(
         stable_job_key = identifier
         job = _row_for_stable_key(stable_job_key)
         if job is None:
+            mismatch_message = _stable_key_mismatch_message(stable_job_key, _recent_jobs_for_alias_lookup())
+            if mismatch_message:
+                raise ValueError(mismatch_message)
             warning = "Job was not found in local SQLite, but status was recorded by stable key."
+        else:
+            _validate_identifier_matches_job(stable_job_key, job)
     else:
         job = _resolve_job_for_application_command(job_id, url or identifier)
         stable_job_key = _stable_job_key_for_job(job)
@@ -1918,6 +1989,148 @@ def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
         }
     except Exception as exc:
         return {"success": False, "message": str(exc) or "Job status command failed."}
+
+
+def _merge_application_status_records(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(existing)
+    for key, value in incoming.items():
+        if key == "status_history":
+            continue
+        if value not in (None, "", []):
+            if key not in merged or merged.get(key) in (None, "", []):
+                merged[key] = value
+            elif key in {"updated_at", "applied_at", "interviewing_at", "rejected_at", "offer_at", "withdrawn_at", "skipped_at", "saved_at", "blocked_at"}:
+                merged[key] = max(str(merged.get(key) or ""), str(value or "")) or value
+            elif key == "note" and str(value) not in str(merged.get(key) or ""):
+                merged[key] = "; ".join(part for part in [str(merged.get(key) or ""), str(value)] if part)
+    history: list[Any] = []
+    seen: set[str] = set()
+    for record in (existing, incoming):
+        items = record.get("status_history")
+        if isinstance(items, list):
+            for item in items:
+                marker = json.dumps(item, sort_keys=True, default=str)
+                if marker not in seen:
+                    history.append(item)
+                    seen.add(marker)
+    if history:
+        merged["status_history"] = history
+    return merged
+
+
+def migrate_stable_job_keys(path: Path | None = None) -> dict[str, Any]:
+    path = path or Path("data/application_status.json")
+    records = load_application_status(path)
+    backup_path = path.with_suffix(path.suffix + ".bak")
+    summary = {"scanned": len(records), "migrated": 0, "duplicates_merged": 0, "unchanged": 0, "backup_path": str(backup_path), "records_written": 0}
+    if not records:
+        print(json.dumps(summary, indent=2))
+        return summary
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    backup_path.write_text(path.read_text() if path.exists() else json.dumps(records, indent=2), encoding="utf-8")
+    migrated: dict[str, dict[str, Any]] = {}
+    seen_url_status: dict[tuple[str, str], str] = {}
+
+    for key, record in records.items():
+        new_key = key
+        record = dict(record)
+        url = str(record.get("url") or "")
+        try:
+            source, company, external_id = parse_stable_job_key(key)
+        except ValueError:
+            source, company, external_id = "", normalize_company_slug(str(record.get("company") or "company")), ""
+        if source == "greenhouse":
+            gh_jid = extract_external_job_id("greenhouse", url, record.get("payload"))
+            if gh_jid and gh_jid != external_id:
+                new_key = f"greenhouse:{company}:{gh_jid}"
+                summary["migrated"] += 1
+        else:
+            canonical = build_stable_job_key(record)
+            if canonical.startswith(("ashby:", "lever:", "job:")) and canonical != key:
+                new_key = canonical
+                summary["migrated"] += 1
+        record["stable_job_key"] = new_key
+        try:
+            source, company, external_id = parse_stable_job_key(new_key)
+            record["source"] = record.get("source") or source
+            record["company"] = record.get("company") or company
+            record["external_job_id"] = external_id
+        except ValueError:
+            pass
+        url_status = (str(record.get("url") or ""), str(record.get("application_status") or ""))
+        duplicate_key = seen_url_status.get(url_status) if url_status[0] and url_status[1] else None
+        target_key = duplicate_key or new_key
+        if duplicate_key:
+            summary["duplicates_merged"] += 1
+        elif new_key in migrated:
+            summary["duplicates_merged"] += 1
+            target_key = new_key
+        else:
+            seen_url_status[url_status] = new_key
+        if target_key in migrated:
+            migrated[target_key] = _merge_application_status_records(migrated[target_key], record)
+        else:
+            migrated[target_key] = record
+        if new_key == key and not duplicate_key:
+            summary["unchanged"] += 1
+
+    save_application_status(migrated, path)
+    summary["records_written"] = len(migrated)
+    print(json.dumps(summary, indent=2))
+    return summary
+
+
+def debug_job_identity(identifier_or_url: str) -> dict[str, Any]:
+    initialize()
+    token = str(identifier_or_url or "").strip()
+    warnings: list[str] = []
+    resolved = False
+    job: dict[str, Any] | None = None
+    would_accept = False
+    try:
+        job = _resolve_job_identifier(token)
+        resolved = True
+        would_accept = True
+    except ValueError as exc:
+        warnings.append(str(exc))
+        if _looks_like_stable_job_key(token):
+            try:
+                source, company, external_id = parse_stable_job_key(token)
+                if source == "greenhouse" and external_id.isdigit():
+                    warnings.append("Unstable or mismatched Greenhouse identifier. This looks like a local row id, not gh_jid.")
+            except ValueError:
+                pass
+        elif token.startswith(("http://", "https://")):
+            try:
+                parsed = parse_job_url(token)
+                job = {"source": parsed.source, "company": parsed.company, "url": token, "title": ""}
+            except ValueError:
+                pass
+    if job is None and _looks_like_stable_job_key(token):
+        try:
+            source, company, external_id = parse_stable_job_key(token)
+            job = {"source": source, "company": company, "url": build_url_for_stable_key(source, company, external_id) or "", "title": "", "stable_job_key": token}
+        except ValueError:
+            job = None
+    canonical = _stable_job_key_for_job(job) if job else ""
+    source_external_id = _external_job_id_for_job(job) if job else ""
+    payload = {
+        "input": token,
+        "resolved": resolved,
+        "local_job_id": safe_row_value(job, "id", None) if job else None,
+        "source": safe_row_value(job, "source", "") if job else "",
+        "company": safe_row_value(job, "company", "") if job else "",
+        "title": safe_row_value(job, "title", "") if job else "",
+        "url": safe_row_value(job, "url", "") if job else "",
+        "source_external_id": source_external_id,
+        "canonical_stable_job_key": canonical,
+        "mobile_command_alias": mobile_command_alias_for_job(job) if job and resolved else "",
+        "warnings": warnings,
+        "would_accept_telegram_command": would_accept,
+    }
+    print(json.dumps(payload, indent=2))
+    return payload
 
 
 def print_applied_jobs(*, limit: int = 50, as_json: bool = False) -> None:
@@ -4472,6 +4685,20 @@ def main(argv: list[str] | None = None) -> None:
             mark_applied(job_id=selected_job_id, url=selected_url, note=note)
         except (ValueError, IndexError) as exc:
             print(str(exc) if str(exc) else "Usage: python -m job_fit_agent.main mark-applied (--job-id <id> | --url <job_url>) [--note <note>]")
+        return
+
+    if command == "migrate-stable-job-keys":
+        try:
+            migrate_stable_job_keys()
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            print(json.dumps({"success": False, "message": str(exc)}))
+        return
+
+    if command == "debug-job-identity":
+        if len(args) != 2:
+            print('Usage: python -m job_fit_agent.main debug-job-identity <identifier_or_url>')
+            return
+        debug_job_identity(args[1])
         return
 
     if command == "mark-skipped":

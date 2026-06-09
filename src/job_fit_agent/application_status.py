@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from job_fit_agent.stable_identity import parse_stable_job_key_value
+
 APPLICATION_STATUS_PATH = Path("data/application_status.json")
 COMPANY_APPLICATION_BLOCKS_PATH = Path("data/company_application_blocks.json")
 APPLICATION_STATUSES = {"not_applied", "saved", "applied", "interviewing", "rejected", "offer", "withdrawn", "skipped", "blocked"}
@@ -43,10 +45,7 @@ def save_application_status(records: dict[str, dict[str, Any]], path: Path = APP
 
 def parse_stable_job_key(stable_job_key: str) -> tuple[str, str, str]:
     """Return source, company, and external job id parsed from a stable job key."""
-    parts = stable_job_key.strip().split(":", 2)
-    if len(parts) != 3 or not all(parts):
-        raise ValueError("Stable job key must use source:company:external_job_id.")
-    return parts[0], parts[1], parts[2]
+    return parse_stable_job_key_value(stable_job_key)
 
 
 def build_url_for_stable_key(source: str, company: str, external_job_id: str) -> str | None:

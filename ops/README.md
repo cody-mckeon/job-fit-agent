@@ -334,3 +334,8 @@ Limitations:
 - GitHub Actions startup means confirmations are delayed.
 - The command workflow can only update jobs present in the persisted job database.
 - If the runtime uses artifacts/caches instead of a committed `data/jobs.sqlite`, keep the command workflow aligned with that persistence pattern rather than adding a second state store.
+
+
+## Stable job identifiers
+
+Telegram and GitHub Actions must use source-native stable job keys rather than local SQLite row ids. Greenhouse messages should send commands like `applied greenhouse:stripe:7914005`, where `7914005` is the `gh_jid` from the job URL, not a local `jobs.id`. If status data was created before this rule, run `python -m job_fit_agent.main migrate-stable-job-keys` before processing Telegram commands. To troubleshoot a command or URL, run `python -m job_fit_agent.main debug-job-identity <identifier_or_url>` and confirm `would_accept_telegram_command` is true.
