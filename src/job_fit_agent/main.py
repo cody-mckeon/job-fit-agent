@@ -18,6 +18,9 @@ from urllib.parse import urlparse
 
 from pathlib import Path
 
+TELEGRAM_PROCESSED_UPDATES_PATH = Path("data/telegram_processed_updates.json")
+TELEGRAM_GET_UPDATES_TIMEOUT_SECONDS = 10
+
 import requests
 import yaml
 from bs4 import BeautifulSoup
@@ -1406,6 +1409,8 @@ def _write_application_status_record(
     record["note"] = note or ""
     record["updated_at"] = timestamp
     record["identifier_used"] = identifier_used
+    if _is_duplicate_application_status_history(existing, application_status, note, identifier_used):
+        return record
     history = record.get("status_history")
     if not isinstance(history, list):
         history = []
@@ -1682,6 +1687,200 @@ def _status_result_message(action: str, job: dict[str, Any], note: str = "") -> 
     suffix = f" Note: {note}" if note else ""
     return f"Marked {label} as {job.get('application_status', action)}.{suffix}"
 
+
+def _is_duplicate_application_status_history(
+    existing: dict[str, Any], application_status: str, note: str | None, identifier_used: str
+) -> bool:
+    """Return True when a status command would only duplicate the current durable state."""
+    if str(existing.get("application_status", "")).lower() != application_status:
+        return False
+    if str(existing.get("note") or "") != str(note or ""):
+        return False
+    history = existing.get("status_history")
+    if not isinstance(history, list) or not history:
+        return False
+    last = history[-1]
+    if not isinstance(last, dict):
+        return False
+    return (
+        str(last.get("status", "")).lower() == application_status
+        and str(last.get("note") or "") == str(note or "")
+        and str(last.get("identifier_used") or "") == str(identifier_used or "")
+    )
+
+
+def _load_telegram_processed_updates(path: Path = TELEGRAM_PROCESSED_UPDATES_PATH) -> dict[str, Any]:
+    if not path.exists():
+        return {"last_update_id": None, "processed_update_ids": [], "processed_updates": []}
+    raw = json.loads(path.read_text())
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid Telegram processed update store: {path}")
+    processed_ids = raw.get("processed_update_ids")
+    processed_updates = raw.get("processed_updates")
+    if not isinstance(processed_ids, list):
+        processed_ids = []
+    if not isinstance(processed_updates, list):
+        processed_updates = []
+    last_update_id = raw.get("last_update_id")
+    if not isinstance(last_update_id, int):
+        last_update_id = int(last_update_id) if str(last_update_id).isdigit() else None
+    return {
+        "last_update_id": last_update_id,
+        "processed_update_ids": [int(update_id) for update_id in processed_ids if str(update_id).isdigit()],
+        "processed_updates": [dict(item) for item in processed_updates if isinstance(item, dict)],
+    }
+
+
+def _save_telegram_processed_updates(store: dict[str, Any], path: Path = TELEGRAM_PROCESSED_UPDATES_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    processed_updates = store.get("processed_updates") if isinstance(store.get("processed_updates"), list) else []
+    processed_ids = store.get("processed_update_ids") if isinstance(store.get("processed_update_ids"), list) else []
+    payload = {
+        "last_update_id": store.get("last_update_id"),
+        "processed_update_ids": sorted({int(update_id) for update_id in processed_ids if str(update_id).isdigit()}),
+        "processed_updates": sorted(
+            [dict(item) for item in processed_updates if isinstance(item, dict)],
+            key=lambda item: int(item.get("update_id", 0)),
+        ),
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _telegram_update_message(update: dict[str, Any]) -> dict[str, Any] | None:
+    for key in ("message", "edited_message", "channel_post", "edited_channel_post"):
+        value = update.get(key)
+        if isinstance(value, dict):
+            return value
+    return None
+
+
+def _telegram_message_text(message: dict[str, Any]) -> str:
+    value = message.get("text") or message.get("caption") or ""
+    return str(value).strip()
+
+
+def _telegram_message_chat_id(message: dict[str, Any]) -> str:
+    chat = message.get("chat")
+    if not isinstance(chat, dict):
+        return ""
+    value = chat.get("id")
+    return str(value) if value is not None else ""
+
+
+def _telegram_get_updates(bot_token: str, *, offset: int | None = None) -> list[dict[str, Any]]:
+    params: dict[str, Any] = {
+        "timeout": TELEGRAM_GET_UPDATES_TIMEOUT_SECONDS,
+        "allowed_updates": json.dumps(["message", "edited_message"]),
+    }
+    if offset is not None:
+        params["offset"] = offset
+    response = requests.get(
+        f"https://api.telegram.org/bot{bot_token}/getUpdates",
+        params=params,
+        timeout=TELEGRAM_GET_UPDATES_TIMEOUT_SECONDS + 5,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        description = payload.get("description") if isinstance(payload, dict) else "invalid Telegram response"
+        raise RuntimeError(f"Telegram getUpdates failed: {description}")
+    result = payload.get("result", [])
+    if not isinstance(result, list):
+        raise RuntimeError("Telegram getUpdates returned an invalid result list.")
+    return [dict(item) for item in result if isinstance(item, dict)]
+
+
+def _send_telegram_process_confirmation(text: str, bot_token: str, chat_id: str) -> None:
+    if bot_token and chat_id:
+        send_message_with_credentials(text=text, bot_token=bot_token, chat_id=chat_id)
+    else:
+        print(text)
+
+
+def process_telegram_updates(*, bot_token: str | None = None, chat_id: str | None = None) -> dict[str, Any]:
+    """Poll Telegram updates, execute supported commands once, and persist processed update metadata."""
+    bot_token = bot_token if bot_token is not None else os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = chat_id if chat_id is not None else os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not bot_token:
+        raise ValueError("TELEGRAM_BOT_TOKEN is required.")
+    if not chat_id:
+        raise ValueError("TELEGRAM_CHAT_ID is required.")
+
+    store = _load_telegram_processed_updates()
+    processed_ids = {int(update_id) for update_id in store.get("processed_update_ids", []) if str(update_id).isdigit()}
+    last_update_id = store.get("last_update_id")
+    offset = int(last_update_id) + 1 if isinstance(last_update_id, int) else None
+    updates = _telegram_get_updates(bot_token, offset=offset)
+
+    processed_entries = list(store.get("processed_updates", []))
+    command_results: list[dict[str, Any]] = []
+    max_update_id = int(last_update_id) if isinstance(last_update_id, int) else None
+
+    for update in updates:
+        update_id_raw = update.get("update_id")
+        if update_id_raw is None:
+            continue
+        update_id = int(update_id_raw)
+        max_update_id = update_id if max_update_id is None else max(max_update_id, update_id)
+        if update_id in processed_ids:
+            continue
+        message = _telegram_update_message(update)
+        if message is None or _telegram_message_chat_id(message) != str(chat_id):
+            continue
+        command_text = _telegram_message_text(message)
+        if not command_text:
+            continue
+        try:
+            parse_telegram_command(command_text)
+        except ValueError as exc:
+            first_word = command_text.split(maxsplit=1)[0].lower() if command_text.split() else ""
+            known_prefixes = {
+                "applied", "/applied", "rejected", "/rejected", "reject", "/reject",
+                "interviewing", "/interviewing", "interview", "/interview", "offer", "/offer",
+                "withdrawn", "/withdrawn", "withdraw", "/withdraw", "save", "/save",
+                "saved", "/saved", "skip", "/skip", "blocked", "/blocked", "block", "/block",
+                "block-company", "/block-company", "mark",
+            }
+            if first_word not in known_prefixes:
+                continue
+            result = {"success": False, "message": str(exc) or "Command failed."}
+        else:
+            result = execute_telegram_status_command(command_text)
+
+        processed_at = _utc_timestamp()
+        entry = {
+            "update_id": update_id,
+            "processed_at": processed_at,
+            "command": command_text,
+            "result": result,
+        }
+        processed_entries.append(entry)
+        processed_ids.add(update_id)
+        command_results.append(entry)
+        confirmation = (
+            result.get("message", "Command completed.")
+            if result.get("success")
+            else f"Command failed: {result.get('message', 'unknown error')}"
+        )
+        _send_telegram_process_confirmation(str(confirmation), bot_token, chat_id)
+
+    if max_update_id is not None:
+        store["last_update_id"] = max_update_id
+    store["processed_update_ids"] = sorted(processed_ids)
+    store["processed_updates"] = processed_entries
+    _save_telegram_processed_updates(store)
+
+    if not command_results:
+        _send_telegram_process_confirmation("No new commands found", bot_token, chat_id)
+
+    return {
+        "success": True,
+        "updates_seen": len(updates),
+        "commands_processed": len(command_results),
+        "last_update_id": store.get("last_update_id"),
+        "results": command_results,
+        "message": "No new commands found" if not command_results else f"Processed {len(command_results)} Telegram command(s).",
+    }
 
 def execute_telegram_status_command(command_text: str) -> dict[str, Any]:
     try:
@@ -4529,6 +4728,13 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(execute_telegram_status_command(args[1]), indent=2))
         return
 
+    if command == "process-telegram-updates":
+        try:
+            print(json.dumps(process_telegram_updates(), indent=2))
+        except Exception as exc:
+            print(json.dumps({"success": False, "message": str(exc) or "Telegram update processing failed."}, indent=2))
+        return
+
     if command == "run":
         run_pipeline()
         return
@@ -4780,6 +4986,7 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main skip <job_id> "<reason>"')
     print("python -m job_fit_agent.main save <job_id>")
     print('python -m job_fit_agent.main telegram-command "applied 19"')
+    print("python -m job_fit_agent.main process-telegram-updates")
     print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main work-opportunities")

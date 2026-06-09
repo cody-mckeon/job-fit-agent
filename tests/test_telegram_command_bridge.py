@@ -370,3 +370,118 @@ def test_telegram_command_supports_temporary_company_block(tmp_path, monkeypatch
     assert result["success"] is True
     assert store["elevenlabs"]["status"] == "blocked"
     assert store["elevenlabs"]["expires_at"]
+
+class _FakeTelegramResponse:
+    def __init__(self, payload):
+        self._payload = payload
+    def raise_for_status(self):
+        return None
+    def json(self):
+        return self._payload
+
+
+def _telegram_update(update_id: int, text: str, chat_id: str = "123") -> dict:
+    return {"update_id": update_id, "message": {"chat": {"id": chat_id}, "text": text}}
+
+
+def test_process_telegram_updates_parses_applied_update(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    job_id = _insert("https://jobs.ashbyhq.com/linear/process-applied", "Process Applied PM")
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": [_telegram_update(101, "applied ashby:linear:process-applied")]}))
+
+    result = job_main.process_telegram_updates()
+
+    row = get_job_by_id(job_id)
+    store = json.loads((tmp_path / "data/telegram_processed_updates.json").read_text())
+    assert result["commands_processed"] == 1
+    assert row is not None and row["application_status"] == "applied"
+    assert store["last_update_id"] == 101
+    assert store["processed_update_ids"] == [101]
+    assert store["processed_updates"][0]["command"] == "applied ashby:linear:process-applied"
+    assert sent == ["Marked applied: linear Process Applied PM."]
+
+
+def test_process_telegram_updates_ignores_non_command_messages(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": [_telegram_update(102, "thanks!")]}))
+
+    result = job_main.process_telegram_updates()
+
+    store = json.loads((tmp_path / "data/telegram_processed_updates.json").read_text())
+    assert result["commands_processed"] == 0
+    assert store["last_update_id"] == 102
+    assert store["processed_update_ids"] == []
+    assert sent == ["No new commands found"]
+
+
+def test_process_telegram_updates_ignores_already_processed_update_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert("https://jobs.ashbyhq.com/linear/already-processed", "Already Processed PM")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(exist_ok=True)
+    (data_dir / "telegram_processed_updates.json").write_text(json.dumps({"last_update_id": 99, "processed_update_ids": [100], "processed_updates": []}) + "\n")
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": [_telegram_update(100, "applied ashby:linear:already-processed")]}))
+
+    result = job_main.process_telegram_updates()
+
+    store = json.loads((tmp_path / "data/telegram_processed_updates.json").read_text())
+    assert result["commands_processed"] == 0
+    assert store["processed_update_ids"] == [100]
+    assert sent == ["No new commands found"]
+
+
+def test_process_telegram_updates_supports_stable_key_and_mobile_alias(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    stable_id = _insert("https://jobs.ashbyhq.com/linear/stable-process", "Stable Process PM")
+    alias_id = _insert("https://jobs.ashbyhq.com/linear/mobile-process", "Mobile Process PM")
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": [
+        _telegram_update(201, "applied ashby:linear:stable-process"),
+        _telegram_update(202, "save linear-mobile-process-pm"),
+    ]}))
+
+    result = job_main.process_telegram_updates()
+
+    stable = get_job_by_id(stable_id)
+    alias = get_job_by_id(alias_id)
+    assert result["commands_processed"] == 2
+    assert stable is not None and stable["application_status"] == "applied"
+    assert alias is not None and alias["application_status"] == "saved"
+
+
+def test_process_telegram_updates_no_duplicate_history_on_rerun(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert("https://jobs.ashbyhq.com/linear/no-duplicate", "No Duplicate PM")
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": [_telegram_update(301, "applied ashby:linear:no-duplicate")]}))
+
+    first = job_main.process_telegram_updates()
+    second = job_main.process_telegram_updates()
+
+    application_store = json.loads((tmp_path / "data/application_status.json").read_text())
+    assert first["commands_processed"] == 1
+    assert second["commands_processed"] == 0
+    assert len(application_store["ashby:linear:no-duplicate"]["status_history"]) == 1
