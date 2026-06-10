@@ -1,7 +1,8 @@
 {
-  "last_update_id": 462866258,
+  "last_update_id": 462866259,
   "processed_update_ids": [
-    462866258
+    462866258,
+    462866259
   ],
   "processed_updates": [
     {
@@ -19,6 +20,22 @@
         "warning": "Job was not found in local SQLite, but status was recorded by stable key."
       },
       "update_id": 462866258
+    },
+    {
+      "command": "applied greenhouse:stripe:7812965",
+      "processed_at": "2026-06-10T19:14:03.884587+00:00",
+      "result": {
+        "company": "stripe",
+        "job_id": null,
+        "message": "Marked applied by stable key: greenhouse:stripe:7812965. Job details will be enriched when rediscovered.",
+        "new_status": "applied",
+        "note": "",
+        "stable_job_key": "greenhouse:stripe:7812965",
+        "success": true,
+        "title": null,
+        "warning": "Job was not found in local SQLite, but status was recorded by stable key."
+      },
+      "update_id": 462866259
     }
   ]
 }
