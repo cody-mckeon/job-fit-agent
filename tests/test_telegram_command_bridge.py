@@ -424,6 +424,37 @@ def test_process_telegram_updates_ignores_non_command_messages(tmp_path, monkeyp
     assert sent == ["No new commands found"]
 
 
+def test_process_telegram_updates_quiet_if_empty_sends_no_message(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": []}))
+
+    result = job_main.process_telegram_updates(quiet_if_empty=True)
+
+    assert result["commands_processed"] == 0
+    assert sent == []
+    assert "No new commands found" in capsys.readouterr().out
+
+
+def test_process_telegram_updates_failed_command_sends_error(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main.requests, "get", lambda *args, **kwargs: _FakeTelegramResponse({"ok": True, "result": [_telegram_update(103, "skip 999 Not relevant")]}))
+
+    result = job_main.process_telegram_updates(quiet_if_empty=True)
+
+    assert result["commands_processed"] == 1
+    assert sent and sent[0].startswith("Command failed:")
+
+
 def test_process_telegram_updates_ignores_already_processed_update_id(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     initialize()

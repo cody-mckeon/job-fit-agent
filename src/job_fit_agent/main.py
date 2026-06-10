@@ -1868,7 +1868,13 @@ def _send_telegram_process_confirmation(text: str, bot_token: str, chat_id: str)
         print(text)
 
 
-def process_telegram_updates(*, bot_token: str | None = None, chat_id: str | None = None) -> dict[str, Any]:
+def process_telegram_updates(
+    *,
+    bot_token: str | None = None,
+    chat_id: str | None = None,
+    quiet_if_empty: bool = False,
+    notify_empty: bool | None = None,
+) -> dict[str, Any]:
     """Poll Telegram updates, execute supported commands once, and persist processed update metadata."""
     bot_token = bot_token if bot_token is not None else os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = chat_id if chat_id is not None else os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -1942,7 +1948,12 @@ def process_telegram_updates(*, bot_token: str | None = None, chat_id: str | Non
     _save_telegram_processed_updates(store)
 
     if not command_results:
-        _send_telegram_process_confirmation("No new commands found", bot_token, chat_id)
+        empty_message = "No new commands found"
+        should_notify_empty = notify_empty if notify_empty is not None else not quiet_if_empty
+        if should_notify_empty:
+            _send_telegram_process_confirmation(empty_message, bot_token, chat_id)
+        else:
+            print(empty_message)
 
     return {
         "success": True,
@@ -4956,8 +4967,10 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if command == "process-telegram-updates":
+        quiet_if_empty = "--quiet-if-empty" in args[1:]
+        notify_empty = True if "--notify-empty" in args[1:] else None
         try:
-            print(json.dumps(process_telegram_updates(), indent=2))
+            print(json.dumps(process_telegram_updates(quiet_if_empty=quiet_if_empty, notify_empty=notify_empty), indent=2))
         except Exception as exc:
             print(json.dumps({"success": False, "message": str(exc) or "Telegram update processing failed."}, indent=2))
         return

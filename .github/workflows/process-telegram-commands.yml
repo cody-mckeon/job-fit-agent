@@ -30,7 +30,12 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m job_fit_agent.main process-telegram-updates
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python -m job_fit_agent.main process-telegram-updates --quiet-if-empty
+          else
+            python -m job_fit_agent.main process-telegram-updates --notify-empty
+          fi
 
       - name: Commit processed Telegram status changes
         run: |
