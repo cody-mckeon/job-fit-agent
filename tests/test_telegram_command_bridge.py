@@ -516,3 +516,91 @@ def test_process_telegram_updates_no_duplicate_history_on_rerun(tmp_path, monkey
     assert first["commands_processed"] == 1
     assert second["commands_processed"] == 0
     assert len(application_store["ashby:linear:no-duplicate"]["status_history"]) == 1
+
+
+def test_process_telegram_updates_cli_help_does_not_poll(monkeypatch, capsys):
+    monkeypatch.setattr(
+        job_main,
+        "_telegram_get_updates",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not poll Telegram")),
+    )
+
+    main(["process-telegram-updates", "--help"])
+
+    output = capsys.readouterr().out.strip()
+    assert output == "Usage: python -m job_fit_agent.main process-telegram-updates [--quiet-if-empty] [--notify-empty]"
+
+
+def test_process_telegram_updates_cli_unknown_flag_errors_without_polling(monkeypatch, capsys):
+    monkeypatch.setattr(
+        job_main,
+        "_telegram_get_updates",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not poll Telegram")),
+    )
+
+    try:
+        main(["process-telegram-updates", "--fake-flag"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("unknown flag should exit with an error")
+
+    output = capsys.readouterr().out
+    assert "Unknown argument for process-telegram-updates: --fake-flag" in output
+
+
+def test_process_telegram_updates_cli_quiet_if_empty_sends_no_message(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main, "_telegram_get_updates", lambda *args, **kwargs: [])
+
+    main(["process-telegram-updates", "--quiet-if-empty"])
+
+    assert sent == []
+    output = capsys.readouterr().out
+    assert "No new commands found" in output
+    payload = json.loads(output.splitlines()[-1] if output.splitlines()[-1].startswith("{") else output[output.index("{"):])
+    assert payload["commands_processed"] == 0
+
+
+def test_process_telegram_updates_cli_both_empty_flags_prefers_notify(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main, "_telegram_get_updates", lambda *args, **kwargs: [])
+
+    main(["process-telegram-updates", "--quiet-if-empty", "--notify-empty"])
+
+    assert sent == ["No new commands found"]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["commands_processed"] == 0
+
+
+def test_process_telegram_updates_cli_notify_empty_sends_message(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    sent = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setattr(job_main, "send_message_with_credentials", lambda text, bot_token, chat_id: sent.append(text))
+    monkeypatch.setattr(job_main, "_telegram_get_updates", lambda *args, **kwargs: [])
+
+    main(["process-telegram-updates", "--notify-empty"])
+
+    assert sent == ["No new commands found"]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["commands_processed"] == 0
+
+
+def test_top_level_help_includes_process_telegram_update_flags(capsys):
+    main(["--help"])
+
+    output = capsys.readouterr().out
+    assert "python -m job_fit_agent.main process-telegram-updates [--quiet-if-empty] [--notify-empty]" in output

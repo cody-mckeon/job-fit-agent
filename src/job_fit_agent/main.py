@@ -1868,6 +1868,29 @@ def _send_telegram_process_confirmation(text: str, bot_token: str, chat_id: str)
         print(text)
 
 
+PROCESS_TELEGRAM_UPDATES_USAGE = (
+    "Usage: python -m job_fit_agent.main process-telegram-updates "
+    "[--quiet-if-empty] [--notify-empty]"
+)
+
+
+def _parse_process_telegram_updates_args(tokens: list[str]) -> dict[str, bool] | None:
+    if "--help" in tokens:
+        print(PROCESS_TELEGRAM_UPDATES_USAGE)
+        return None
+
+    supported_flags = {"--quiet-if-empty", "--notify-empty"}
+    for token in tokens:
+        if token not in supported_flags:
+            print(f"Unknown argument for process-telegram-updates: {token}")
+            raise SystemExit(2)
+
+    return {
+        "quiet_if_empty": "--quiet-if-empty" in tokens,
+        "notify_empty": "--notify-empty" in tokens,
+    }
+
+
 def process_telegram_updates(
     *,
     bot_token: str | None = None,
@@ -4967,8 +4990,11 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if command == "process-telegram-updates":
-        quiet_if_empty = "--quiet-if-empty" in args[1:]
-        notify_empty = True if "--notify-empty" in args[1:] else None
+        parsed = _parse_process_telegram_updates_args(args[1:])
+        if parsed is None:
+            return
+        quiet_if_empty = parsed["quiet_if_empty"]
+        notify_empty = True if parsed["notify_empty"] else None
         try:
             print(json.dumps(process_telegram_updates(quiet_if_empty=quiet_if_empty, notify_empty=notify_empty), indent=2))
         except Exception as exc:
@@ -5226,7 +5252,7 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main skip <job_id> "<reason>"')
     print("python -m job_fit_agent.main save <job_id>")
     print('python -m job_fit_agent.main telegram-command "applied 19"')
-    print("python -m job_fit_agent.main process-telegram-updates")
+    print("python -m job_fit_agent.main process-telegram-updates [--quiet-if-empty] [--notify-empty]")
     print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main work-opportunities")
