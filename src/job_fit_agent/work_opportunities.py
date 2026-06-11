@@ -94,14 +94,41 @@ WORK_SECTION_ORDER = (
     ("lost_skipped", "Lost / skipped"),
 )
 
-PREP_FILES = (
-    "opportunity_brief.md",
-    "qualification_checklist.md",
-    "proposed_solution_outline.md",
-    "risks.md",
-    "outreach_note.md",
-    "next_steps.md",
-)
+PREP_FILE_SETS = {
+    "rfp": (
+        "rfp_summary.md",
+        "go_no_go_checklist.md",
+        "required_documents.md",
+        "proposal_outline.md",
+        "questions_to_ask.md",
+        "risks.md",
+        "next_steps.md",
+        # Backward-compatible general prep artifacts.
+        "opportunity_brief.md",
+        "proposed_solution_outline.md",
+    ),
+    "1099": (
+        "opportunity_brief.md",
+        "qualification_checklist.md",
+        "scope_hypothesis.md",
+        "pricing_hypothesis.md",
+        "outreach_note.md",
+        "risks.md",
+        "next_steps.md",
+        # Backward-compatible general prep artifact.
+        "proposed_solution_outline.md",
+    ),
+    "local_outreach": (
+        "business_profile.md",
+        "pain_hypothesis.md",
+        "ai_pilot_idea.md",
+        "diagnostic_offer.md",
+        "outreach_note.md",
+        "follow_up_sequence.md",
+        # Risk capture remains useful for local outreach and preserves the prior CLI contract.
+        "risks.md",
+    ),
+}
 
 
 DISCOVERY_COMMANDS = {
@@ -110,6 +137,34 @@ DISCOVERY_COMMANDS = {
     "discover-rfps": "rfp",
     "discover-local-businesses": "local_business",
     "discover-relationships": "relationship",
+}
+
+LANE_DEFAULTS = {
+    "contract_1099": {
+        "status": "qualify",
+        "next_action": "qualify buyer, scope, budget, timeline, and delivery risk",
+    },
+    "fractional": {
+        "status": "qualify",
+        "next_action": "qualify buyer, scope, budget, timeline, and delivery risk",
+    },
+    "vendor_opportunity": {
+        "status": "qualify",
+        "next_action": "qualify buyer, scope, budget, timeline, and delivery risk",
+    },
+    "rfp": {
+        "status": "qualify",
+        "deadline_status": "proposal_needed",
+        "next_action": "run go/no-go checklist and review submission requirements",
+    },
+    "local_business": {
+        "status": "qualify",
+        "next_action": "research pain points and prepare diagnostic outreach",
+    },
+    "relationship": {
+        "status": "relationship_strategy",
+        "next_action": "draft outreach and define reason to connect",
+    },
 }
 
 LANE_QUALIFICATION_RULES = {
@@ -248,6 +303,17 @@ def normalize_work_opportunity(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _lane_default_status(opportunity_type: str, deadline: Any = "") -> str:
+    defaults = LANE_DEFAULTS.get(opportunity_type, {})
+    if opportunity_type == "rfp" and str(deadline or "").strip():
+        return str(defaults.get("deadline_status") or defaults.get("status") or "qualify")
+    return str(defaults.get("status") or "research")
+
+
+def _lane_default_next_action(opportunity_type: str) -> str:
+    return str(LANE_DEFAULTS.get(opportunity_type, {}).get("next_action") or "")
+
+
 def add_work_opportunity(**kwargs: Any) -> dict[str, Any]:
     """Create and persist one Work Opportunity Engine record."""
     title = str(kwargs.get("title") or "").strip()
@@ -258,17 +324,27 @@ def add_work_opportunity(**kwargs: Any) -> dict[str, Any]:
         raise ValueError("company is required.")
     opportunity_type = _validate_choice("opportunity_type", str(kwargs.get("opportunity_type") or kwargs.get("type") or "manual_lead"), VALID_OPPORTUNITY_TYPES)
     source = _validate_choice("source", str(kwargs.get("source") or "manual"), VALID_WORK_SOURCES)
-    status = _validate_choice("status", str(kwargs.get("status") or "research"), VALID_WORK_STATUSES)
+    status = _validate_choice("status", str(kwargs.get("status") or _lane_default_status(opportunity_type, kwargs.get("deadline"))), VALID_WORK_STATUSES)
     priority = _validate_choice("priority", str(kwargs.get("priority") or "medium"), VALID_WORK_PRIORITIES)
+    normalized_input = {**kwargs, "title": title, "company": company, "opportunity_type": opportunity_type}
+    qualification = kwargs.get("qualification")
+    if not isinstance(qualification, dict) or not qualification:
+        qualification = _qualification_from_record(opportunity_type, normalized_input)
+    scores = _score_discovered_record(opportunity_type, normalized_input, qualification)
     now = utc_timestamp()
+    next_action = str(kwargs.get("recommended_next_action") or kwargs.get("next_action") or _lane_default_next_action(opportunity_type))
     record = normalize_work_opportunity({
         **kwargs,
+        **{key: kwargs.get(key, value) for key, value in scores.items()},
         "title": title,
         "company": company,
         "opportunity_type": opportunity_type,
         "source": source,
         "status": status,
         "priority": priority,
+        "next_action": next_action,
+        "recommended_next_action": next_action,
+        "qualification": qualification,
         "created_at": now,
         "updated_at": now,
     })
@@ -304,19 +380,22 @@ def _find_existing_opportunity_index(records: list[dict[str, Any]], record: dict
 
 def add_rfp(**kwargs: Any) -> dict[str, Any]:
     """Create an RFP work opportunity."""
-    status = "proposal_needed" if kwargs.get("deadline") else "qualify"
+    deadline = kwargs.get("deadline") or ""
+    status = str(kwargs.get("status") or _lane_default_status("rfp", deadline))
     return add_work_opportunity(
         title=kwargs.get("title"),
-        company=kwargs.get("organization"),
+        company=kwargs.get("organization") or kwargs.get("company"),
         opportunity_type="rfp",
         source=kwargs.get("source") or "government",
         source_detail=kwargs.get("source_detail") or "",
         url=kwargs.get("url") or "",
-        deadline=kwargs.get("deadline") or "",
+        deadline=deadline,
         priority=kwargs.get("priority") or "medium",
         status=status,
         why_fit=kwargs.get("why_fit") or "",
         notes=kwargs.get("notes") or "",
+        next_action=kwargs.get("next_action") or _lane_default_next_action("rfp"),
+        required_documents=kwargs.get("required_documents") or kwargs.get("documents") or [],
     )
 
 
@@ -516,6 +595,11 @@ def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]
     record = get_work_opportunity(opportunity_id)
     folder = Path("applications") / "work_opportunities" / f"{_slugify(str(record.get('company') or 'company'))}_{_slugify(str(record.get('title') or 'opportunity'))}_{opportunity_id}"
     folder.mkdir(parents=True, exist_ok=True)
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    required_docs = qualification.get("required_documents") or []
+    if isinstance(required_docs, str):
+        required_docs = [required_docs]
+    docs_body = "\n".join(f"- [ ] {doc}" for doc in required_docs) or "- [ ] Proposal narrative\n- [ ] Pricing / budget\n- [ ] Eligibility or vendor forms\n- [ ] Submission portal/account requirements"
     context = {
         "kind": prep_kind,
         "title": record.get("title", ""),
@@ -529,21 +613,52 @@ def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]
         "risks": record.get("risks", ""),
         "notes": record.get("notes", ""),
     }
+    common_brief = f"- Type: {context['opportunity_type']}\n- Company/organization: {context['company']}\n- Title: {context['title']}\n- Source: {context['source']}\n- URL: {context['url']}\n- Deadline: {context['deadline']}\n\n## Why fit\n{context['why_fit']}\n"
     file_bodies = {
-        "opportunity_brief.md": f"# Opportunity brief\n\n- Type: {context['opportunity_type']}\n- Company/organization: {context['company']}\n- Title: {context['title']}\n- Source: {context['source']}\n- URL: {context['url']}\n- Deadline: {context['deadline']}\n\n## Why fit\n{context['why_fit']}\n",
-        "qualification_checklist.md": "# Qualification checklist\n\n- [ ] Confirm business problem and decision maker.\n- [ ] Confirm Cody's AI agent deployment lane fit.\n- [ ] Confirm budget, timing, and procurement path.\n- [ ] Confirm next concrete action Cody can take today.\n",
+        "rfp_summary.md": f"# RFP summary\n\n{common_brief}\n## Submission posture\nRun a go/no-go review before drafting and confirm eligibility, required documents, proposal complexity, scope fit, and deadline.\n",
+        "go_no_go_checklist.md": "# Go/no-go checklist\n\n- [ ] Deadline leaves enough time to submit a quality response.\n- [ ] Cody is eligible to submit or can partner with an eligible vendor.\n- [ ] Scope matches AI agents, workflow automation, AI operations, product systems, or product analytics.\n- [ ] Required documents are feasible.\n- [ ] Proposal complexity is proportional to likely revenue and relationship value.\n",
+        "required_documents.md": f"# Required documents\n\n{docs_body}\n",
+        "proposal_outline.md": "# Proposal outline\n\n1. Executive summary\n2. Understanding of workflow pain and desired outcome\n3. AI agent / automation implementation approach\n4. Delivery plan and timeline\n5. Relevant experience and operating model\n6. Pricing / assumptions\n7. Risks, dependencies, and questions\n",
+        "questions_to_ask.md": "# Questions to ask\n\n- What workflow or operational bottleneck matters most?\n- Who owns implementation and acceptance?\n- What systems, data, and access are in scope?\n- Are vendor eligibility, insurance, or security requirements negotiable?\n",
+        "opportunity_brief.md": f"# Opportunity brief\n\n{common_brief}",
+        "qualification_checklist.md": "# Qualification checklist\n\n- [ ] Confirm workflow pain and business owner.\n- [ ] Confirm Cody's AI agent deployment lane fit.\n- [ ] Confirm budget, timing, and procurement path.\n- [ ] Confirm buyer reachability and delivery risk.\n- [ ] Confirm next concrete action Cody can take today.\n",
         "proposed_solution_outline.md": f"# Proposed solution outline\n\nFrame a {prep_kind} solution around AI agents, workflow automation, AI operations, product systems, technical implementation, analytics, and measurable business-process improvement.\n",
-        "risks.md": f"# Risks\n\n{context['risks'] or 'Add delivery, procurement, relationship, deadline, and scope risks before submitting or outreaching.'}\n",
+        "scope_hypothesis.md": "# Scope hypothesis\n\nDraft a small, concrete implementation scope: target workflow, users, systems, data inputs, agent/automation behavior, success metric, and out-of-scope items.\n",
+        "pricing_hypothesis.md": "# Pricing hypothesis\n\nDefine likely pilot, fixed-scope, or advisory pricing with assumptions about timeline, access, implementation risk, and expected revenue potential.\n",
+        "business_profile.md": f"# Business profile\n\n{common_brief}\n## Local relevance\nSummarize location, decision maker, operations model, current systems, and why this business is likely to have workflow pain.\n",
+        "pain_hypothesis.md": "# Pain hypothesis\n\nList likely manual workflows, reporting gaps, scheduling/intake bottlenecks, customer follow-up misses, or operational handoffs that AI agents could improve.\n",
+        "ai_pilot_idea.md": "# AI pilot idea\n\nPropose one simple pilot with a clear user, trigger, workflow, data source, output, review step, and success metric.\n",
+        "diagnostic_offer.md": "# Diagnostic offer\n\nOffer a short diagnostic conversation and workflow teardown that identifies one automation pilot Cody can scope quickly.\n",
         "outreach_note.md": f"# Outreach note\n\nDraft a concise note for {context['company']} about {context['title']} and the target workflow or AI operations problem Cody can help diagnose.\n",
+        "follow_up_sequence.md": "# Follow-up sequence\n\n1. Initial diagnostic offer\n2. Value-add follow-up with a concrete workflow hypothesis\n3. Short proof-of-concept suggestion\n4. Close-loop note asking for the right decision maker\n",
+        "risks.md": f"# Risks\n\n{context['risks'] or 'Add delivery, procurement, relationship, deadline, scope, data-access, and buyer-availability risks before submitting or outreaching.'}\n",
         "next_steps.md": f"# Next steps\n\n{context['next_action'] or 'Define the next action, owner, and deadline.'}\n",
     }
-    for filename, body in file_bodies.items():
-        (folder / filename).write_text(body, encoding="utf-8")
-    return {"opportunity_id": opportunity_id, "prep_kind": prep_kind, "folder": str(folder), "files": [str(folder / filename) for filename in PREP_FILES]}
+    filenames = PREP_FILE_SETS.get(prep_kind, PREP_FILE_SETS["1099"])
+    for filename in filenames:
+        (folder / filename).write_text(file_bodies[filename], encoding="utf-8")
+    return {"opportunity_id": opportunity_id, "prep_kind": prep_kind, "folder": str(folder), "files": [str(folder / filename) for filename in filenames]}
+
+
+def _record_from_text_line(line: str) -> dict[str, Any] | None:
+    text = line.strip().lstrip("-*").strip()
+    if not text or text.startswith("#"):
+        return None
+    url_match = re.search(r"https?://\S+", text)
+    url = url_match.group(0).rstrip(").,;") if url_match else ""
+    if url:
+        text = text.replace(url_match.group(0), "").strip(" -—|,;")
+    parts = [part.strip() for part in re.split(r"\s+(?:[-—|]|::)\s+", text) if part.strip()]
+    if len(parts) >= 2:
+        company, title = parts[0], parts[1]
+        description = " - ".join(parts[2:])
+    else:
+        company, title, description = "Unknown organization", text, ""
+    return {"company": company, "title": title, "description": description, "url": url, "source": "source_file"}
 
 
 def _load_discovery_source_file(source_file: str | Path) -> list[dict[str, Any]]:
-    """Load discovery seed records from JSON, YAML, JSONL, or CSV."""
+    """Load discovery seed records from CSV, JSON, JSONL, YAML, Markdown, or plain text."""
     path = Path(source_file)
     if not path.exists():
         raise ValueError(f"Source file not found: {source_file}")
@@ -556,6 +671,8 @@ def _load_discovery_source_file(source_file: str | Path) -> list[dict[str, Any]]
     text = path.read_text(encoding="utf-8")
     if not text.strip():
         return []
+    if suffix in {".md", ".markdown", ".txt", ".text"}:
+        return [record for line in text.splitlines() if (record := _record_from_text_line(line))]
     if suffix in {".yaml", ".yml"}:
         try:
             import yaml
@@ -670,14 +787,8 @@ def _default_next_action(lane: str, company: str, title: str, qualification: dic
         if qualification.get("company_block_status") == "blocked":
             return f"Use {company} as a relationship strategy; do not submit a W2 application while the company block is active."
         return f"Confirm geography and application channel, then prepare the W2 application for {title}."
-    if lane == "rfp":
-        return f"Check deadline, eligibility, required documents, and make a go/no-go decision for {title}."
-    if lane in {"contract_1099", "fractional", "vendor_opportunity"}:
-        return f"Find the buyer and send a concise AI/workflow automation diagnostic note to {company}."
-    if lane == "local_business":
-        return f"Identify the decision maker and propose a simple workflow automation pilot for {company}."
-    if lane == "relationship":
-        return f"Reach out to {company} with a specific reason and ask for the next relevant conversation."
+    if lane in LANE_DEFAULTS:
+        return _lane_default_next_action(lane)
     return f"Qualify {title} with {company}."
 
 

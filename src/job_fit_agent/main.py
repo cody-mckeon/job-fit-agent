@@ -4797,9 +4797,9 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if command == "add-work-opportunity":
-        usage = "Usage: python -m job_fit_agent.main add-work-opportunity --title <title> --company <company> --type <type> --source <source> [--source-detail <detail>] [--url <url>] [--priority <high|medium|low>] [--status <status>] [--why-fit <text>] [--deadline <YYYY-MM-DD>] [--next-action <text>] [--notes <text>]"
+        usage = "Usage: python -m job_fit_agent.main add-work-opportunity --title <title> --company <company> --type <type> --source <source> [--source-detail <detail>] [--url <url>] [--priority <high|medium|low>] [--status <status>] [--fit-score <0-100>] [--actionability-score <0-100>] [--urgency-score <0-100>] [--revenue-potential <unknown|low|medium|high>] [--relationship-value <low|medium|high>] [--why-fit <text>] [--deadline <YYYY-MM-DD>] [--blocked-until <YYYY-MM-DD>] [--next-action <text>] [--risks <text>] [--notes <text>]"
         try:
-            parsed = _parse_work_option_args(args[1:], {"--title", "--company", "--type", "--source", "--source-detail", "--url", "--priority", "--status", "--why-fit", "--deadline", "--next-action", "--notes"})
+            parsed = _parse_work_option_args(args[1:], {"--title", "--company", "--type", "--source", "--source-detail", "--url", "--priority", "--status", "--fit-score", "--actionability-score", "--urgency-score", "--revenue-potential", "--relationship-value", "--why-fit", "--deadline", "--blocked-until", "--next-action", "--risks", "--notes"})
             record = add_work_opportunity(
                 title=parsed.get("title"),
                 company=parsed.get("company"),
@@ -4808,10 +4808,17 @@ def main(argv: list[str] | None = None) -> None:
                 source_detail=parsed.get("source_detail", ""),
                 url=parsed.get("url", ""),
                 priority=parsed.get("priority", "medium"),
-                status=parsed.get("status", "research"),
+                status=parsed.get("status"),
                 why_fit=parsed.get("why_fit", ""),
                 deadline=parsed.get("deadline", ""),
+                blocked_until=parsed.get("blocked_until", ""),
+                fit_score=parsed.get("fit_score"),
+                actionability_score=parsed.get("actionability_score"),
+                urgency_score=parsed.get("urgency_score"),
+                revenue_potential=parsed.get("revenue_potential", "unknown"),
+                relationship_value=parsed.get("relationship_value", "medium"),
                 next_action=parsed.get("next_action", ""),
+                risks=parsed.get("risks", ""),
                 notes=parsed.get("notes", ""),
             )
         except ValueError as exc:
