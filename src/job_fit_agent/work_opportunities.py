@@ -256,6 +256,97 @@ def _bounded_int(value: Any, default: int = 0) -> int:
     return max(0, min(100, parsed))
 
 
+LOCAL_BUSINESS_FIT_TERMS = (
+    "ai",
+    "agent",
+    "agent deployment",
+    "workflow",
+    "workflow automation",
+    "automation",
+    "reporting",
+    "intake",
+    "vendor coordination",
+    "operations",
+    "hospitality",
+    "customer support",
+    "lead follow-up",
+    "crm",
+    "scheduling",
+    "internal tools",
+    "process improvement",
+    "pilot",
+)
+
+LOCAL_BUSINESS_PAIN_TERMS = (
+    "pain",
+    "manual",
+    "workflow",
+    "reporting",
+    "intake",
+    "vendor",
+    "scheduling",
+    "customer support",
+    "lead follow-up",
+    "crm",
+    "operations",
+    "spreadsheet",
+    "bottleneck",
+    "handoff",
+    "process",
+)
+
+
+def _flatten_text(value: Any) -> str:
+    if isinstance(value, dict):
+        parts: list[str] = []
+        for key, nested in value.items():
+            parts.append(str(key))
+            parts.append(_flatten_text(nested))
+        return " ".join(parts)
+    if isinstance(value, (list, tuple, set)):
+        return " ".join(_flatten_text(item) for item in value)
+    return str(value or "")
+
+
+def _opportunity_scoring_text(record: dict[str, Any], qualification: dict[str, Any] | None = None) -> str:
+    """Collect all durable opportunity fields that should influence scoring."""
+    fields = (
+        "title",
+        "company",
+        "opportunity_type",
+        "source",
+        "source_detail",
+        "why_fit",
+        "notes",
+        "next_action",
+        "recommended_next_action",
+        "description",
+        "summary",
+        "contact",
+        "email",
+        "owner",
+        "url",
+    )
+    text_parts = [_flatten_text(record.get(field)) for field in fields]
+    text_parts.append(_flatten_text(qualification if qualification is not None else record.get("qualification")))
+    return " ".join(part for part in text_parts if part).lower()
+
+
+def _term_score(text: str, terms: tuple[str, ...], points: int, cap: int) -> int:
+    return min(cap, sum(points for term in terms if term in text))
+
+
+def _has_truthy_qualification(qualification: dict[str, Any], key: str) -> bool:
+    value = qualification.get(key)
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "yes", "y", "1", "go", "clear"}
+    return bool(value)
+
+
+def _score_priority(priority: Any) -> int:
+    return {"high": 18, "medium": 8, "low": 0}.get(str(priority or "").strip().lower(), 0)
+
+
 def normalize_work_opportunity(record: dict[str, Any]) -> dict[str, Any]:
     """Return a full Work Opportunity Engine record with all durable fields."""
     now = utc_timestamp()
@@ -335,7 +426,7 @@ def add_work_opportunity(**kwargs: Any) -> dict[str, Any]:
     next_action = str(kwargs.get("recommended_next_action") or kwargs.get("next_action") or _lane_default_next_action(opportunity_type))
     record = normalize_work_opportunity({
         **kwargs,
-        **{key: kwargs.get(key, value) for key, value in scores.items()},
+        **scores,
         "title": title,
         "company": company,
         "opportunity_type": opportunity_type,
@@ -523,7 +614,7 @@ def _company_universe_count() -> int:
 
 def opportunity_review() -> dict[str, Any]:
     """Recommend Cody's highest-leverage next opportunity across products."""
-    work = load_work_opportunities()
+    work = [score_work_opportunity(record) for record in load_work_opportunities()]
     best_work = None
     if work:
         ranked_work = sorted(work, key=_work_candidate_score, reverse=True)
@@ -746,27 +837,56 @@ def _qualification_from_record(lane: str, record: dict[str, Any], query: str = "
 
 
 def _score_discovered_record(lane: str, record: dict[str, Any], qualification: dict[str, Any]) -> dict[str, Any]:
-    text = " ".join(str(record.get(key, "")) for key in ("title", "company", "description", "why_fit", "notes", "source_detail"))
-    fit_score = _bounded_int(record.get("fit_score"), 35 + min(45, sum(1 for term in TARGET_LANE_TERMS if term in text.lower()) * 8))
-    actionability_score = _bounded_int(record.get("actionability_score"), 45)
-    urgency_score = _bounded_int(record.get("urgency_score"), 20)
+    """Score a work opportunity from current durable fields instead of stale saved scores."""
+    text = _opportunity_scoring_text(record, qualification)
+    fit_score = 35 + _term_score(text, TARGET_LANE_TERMS, 8, 45)
+    actionability_score = 35 + _score_priority(record.get("priority"))
+    urgency_score = 0
     revenue_potential = str(record.get("revenue_potential") or "medium").lower()
     relationship_value = str(record.get("relationship_value") or "medium").lower()
+
+    if str(record.get("source_detail") or "").strip():
+        actionability_score += 10
+    if str(record.get("next_action") or record.get("recommended_next_action") or "").strip():
+        actionability_score += 12
+    if str(record.get("company") or record.get("organization") or record.get("business") or "").strip():
+        actionability_score += 8
+    if str(record.get("url") or record.get("contact") or record.get("email") or record.get("owner") or record.get("buyer") or "").strip():
+        actionability_score += 10
 
     if lane == "w2_job":
         actionability_score = 75 if qualification.get("application_channel") != "unknown" and qualification.get("company_block_status") == "clear" else 25
         revenue_potential = record.get("revenue_potential") or "medium"
     elif lane in {"contract_1099", "fractional", "vendor_opportunity"}:
-        actionability_score = 70 if qualification.get("buyer_reachable") else 45
+        if qualification.get("buyer_reachable"):
+            actionability_score += 15
+        if qualification.get("clear_business_problem"):
+            actionability_score += 10
+        if qualification.get("short_implementation_cycle"):
+            actionability_score += 8
         revenue_potential = record.get("revenue_potential") or "high"
     elif lane == "rfp":
         days = qualification.get("days_until_deadline")
         if isinstance(days, int):
-            urgency_score = 95 if 0 <= days <= 2 else 82 if days <= 7 else 55 if days <= 14 else 25
+            urgency_score = 95 if 0 <= days <= 2 else 82 if days <= 7 else 55 if days <= 14 else 25 if days >= 0 else 0
         actionability_score = 70 if qualification.get("go_no_go") == "go" else 45
+        if str(record.get("source_detail") or "").strip():
+            actionability_score += 5
+        if str(record.get("url") or "").strip():
+            actionability_score += 5
         revenue_potential = record.get("revenue_potential") or "high"
     elif lane == "local_business":
-        actionability_score = 75 if qualification.get("reachable_decision_maker") else 50
+        fit_score = 25 + _term_score(text, LOCAL_BUSINESS_FIT_TERMS, 7, 65)
+        if _has_truthy_qualification(qualification, "likely_workflow_pain"):
+            actionability_score += 15
+        if _has_truthy_qualification(qualification, "simple_pilot_opportunity"):
+            actionability_score += 12
+        if _has_truthy_qualification(qualification, "local_relevance"):
+            actionability_score += 8
+        if _has_truthy_qualification(qualification, "reachable_decision_maker"):
+            actionability_score += 12
+        if _text_has_any(text, LOCAL_BUSINESS_PAIN_TERMS):
+            actionability_score += 10
         revenue_potential = record.get("revenue_potential") or "medium"
     elif lane == "relationship":
         actionability_score = 70 if qualification.get("reason_to_reach_out") else 40
@@ -774,12 +894,39 @@ def _score_discovered_record(lane: str, record: dict[str, Any], qualification: d
         revenue_potential = record.get("revenue_potential") or "unknown"
 
     return {
-        "fit_score": fit_score,
-        "actionability_score": actionability_score,
-        "urgency_score": urgency_score,
+        "fit_score": _bounded_int(fit_score, 0),
+        "actionability_score": _bounded_int(actionability_score, 0),
+        "urgency_score": _bounded_int(urgency_score, 0),
         "revenue_potential": revenue_potential if revenue_potential in VALID_REVENUE_POTENTIALS else "medium",
         "relationship_value": relationship_value if relationship_value in VALID_RELATIONSHIP_VALUES else "medium",
     }
+
+
+def score_work_opportunity(record: dict[str, Any]) -> dict[str, Any]:
+    """Recompute all derived Work Opportunity Engine fields from the current record."""
+    normalized = normalize_work_opportunity(record)
+    lane = str(normalized.get("opportunity_type") or "manual_lead")
+    qualification = normalized.get("qualification") if isinstance(normalized.get("qualification"), dict) else {}
+    if not qualification:
+        qualification = _qualification_from_record(lane, normalized)
+    scores = _score_discovered_record(lane, normalized, qualification)
+    next_action = str(normalized.get("recommended_next_action") or normalized.get("next_action") or _default_next_action(lane, str(normalized.get("company") or ""), str(normalized.get("title") or ""), qualification))
+    return normalize_work_opportunity({
+        **normalized,
+        **scores,
+        "qualification": qualification,
+        "next_action": next_action,
+        "recommended_next_action": next_action,
+        "updated_at": utc_timestamp(),
+    })
+
+
+def rescore_work_opportunities(path: Path = WORK_OPPORTUNITIES_PATH) -> dict[str, Any]:
+    """Recompute and persist derived fields for all durable work opportunities."""
+    records = load_work_opportunities(path)
+    rescored = [score_work_opportunity(record) for record in records]
+    save_work_opportunities(rescored, path)
+    return {"rescored": len(rescored), "path": str(path)}
 
 
 def _default_next_action(lane: str, company: str, title: str, qualification: dict[str, Any]) -> str:

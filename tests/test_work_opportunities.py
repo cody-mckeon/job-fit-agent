@@ -415,3 +415,111 @@ def test_prep_commands_create_lane_specific_expected_files(tmp_path, monkeypatch
         payload = _record_from_output(capsys.readouterr().out)
         folder = Path(payload["folder"])
         assert expected_files.issubset({path.name for path in folder.iterdir()})
+
+
+def test_local_hospitality_ai_workflow_pilot_scores_after_add(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    record = add_work_opportunity(
+        title="AI workflow automation pilot",
+        company="Local hospitality group",
+        opportunity_type="local_business",
+        source="local",
+        source_detail="Las Vegas business opportunity",
+        priority="high",
+        next_action="Research pain points and prepare diagnostic outreach",
+        why_fit="Potential AI agent deployment for reporting, vendor coordination, and intake workflows",
+        qualification={
+            "likely_workflow_pain": True,
+            "simple_pilot_opportunity": True,
+        },
+    )
+
+    assert record["fit_score"] > 0
+    assert record["actionability_score"] > 0
+    assert record["urgency_score"] == 0
+
+
+def test_rescore_work_opportunities_updates_existing_stale_zero_records(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    Path("data").mkdir()
+    old_updated_at = "2024-01-01T00:00:00+00:00"
+    Path("data/work_opportunities.json").write_text(json.dumps([
+        {
+            "opportunity_id": "work-stale-local",
+            "dedupe_key": "opp:stale-local",
+            "title": "AI workflow automation pilot",
+            "company": "Local hospitality group",
+            "opportunity_type": "local_business",
+            "source": "local",
+            "source_detail": "Las Vegas business opportunity",
+            "priority": "high",
+            "status": "qualify",
+            "next_action": "Research pain points and prepare diagnostic outreach",
+            "recommended_next_action": "Research pain points and prepare diagnostic outreach",
+            "why_fit": "Potential AI agent deployment for reporting, vendor coordination, and intake workflows",
+            "qualification": {"likely_workflow_pain": True, "simple_pilot_opportunity": True},
+            "fit_score": 0,
+            "actionability_score": 0,
+            "urgency_score": 0,
+            "revenue_potential": "unknown",
+            "relationship_value": "medium",
+            "created_at": old_updated_at,
+            "updated_at": old_updated_at,
+        }
+    ]))
+
+    main(["rescore-work-opportunities"])
+
+    payload = _record_from_output(capsys.readouterr().out)
+    stored = json.loads(Path("data/work_opportunities.json").read_text())
+    assert payload["rescored"] == 1
+    assert stored[0]["fit_score"] > 0
+    assert stored[0]["actionability_score"] > 0
+    assert stored[0]["updated_at"] != old_updated_at
+
+
+def test_opportunity_review_uses_rescored_zero_value_records(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    initialize()
+    _insert_job("WeakCo", "Program Manager", score=38, classification="near_fit", viability="review")
+    Path("data").mkdir(exist_ok=True)
+    Path("data/work_opportunities.json").write_text(json.dumps([
+        {
+            "opportunity_id": "work-stale-local",
+            "dedupe_key": "opp:stale-local",
+            "title": "AI workflow automation pilot",
+            "company": "Local hospitality group",
+            "opportunity_type": "local_business",
+            "source": "local",
+            "source_detail": "Las Vegas business opportunity",
+            "priority": "high",
+            "status": "qualify",
+            "next_action": "Research pain points and prepare diagnostic outreach",
+            "why_fit": "Potential AI agent deployment for reporting, vendor coordination, and intake workflows",
+            "qualification": {"likely_workflow_pain": True, "simple_pilot_opportunity": True},
+            "fit_score": 0,
+            "actionability_score": 0,
+            "urgency_score": 0,
+        }
+    ]))
+
+    payload = opportunity_review()
+
+    assert payload["recommended_opportunity_type"] == "local_business"
+    assert payload["recommended_opportunity_id"] == "work-stale-local"
+
+
+def test_rfp_example_still_scores_positively_without_deadline_urgency(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    record = add_rfp(
+        title="AI workflow automation RFP",
+        organization="County Innovation Office",
+        source="government",
+        why_fit="RFP scope includes AI agent deployment and workflow automation for internal operations.",
+    )
+
+    assert record["fit_score"] > 0
+    assert record["actionability_score"] > 0
+    assert record["urgency_score"] == 0
