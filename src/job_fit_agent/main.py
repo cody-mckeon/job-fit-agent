@@ -104,6 +104,7 @@ from job_fit_agent.work_opportunities import (
     grouped_work_opportunities,
     opportunity_review,
     prep_work_opportunity,
+    rescore_work_opportunities,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -4870,6 +4871,12 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(payload, indent=2))
         return
 
+
+    if command == "rescore-work-opportunities":
+        payload = rescore_work_opportunities()
+        print(json.dumps(payload, indent=2))
+        return
+
     if command == "opportunity-review":
         print_opportunity_review()
         return
@@ -5263,6 +5270,7 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main applied [--limit <n>] [--json]")
     print("python -m job_fit_agent.main rescore")
     print("python -m job_fit_agent.main work-opportunities")
+    print("python -m job_fit_agent.main rescore-work-opportunities")
     print("python -m job_fit_agent.main add-work-opportunity --title <title> --company <company> --type <type> --source <source> [--priority <priority>] [--status <status>]")
     print("python -m job_fit_agent.main add-rfp --title <title> --organization <organization> [--deadline <YYYY-MM-DD>]")
     print("python -m job_fit_agent.main opportunity-review")
