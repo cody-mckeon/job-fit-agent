@@ -354,3 +354,64 @@ def test_blocked_w2_company_can_still_appear_as_relationship_strategy_from_disco
     assert record["status"] == "relationship_strategy"
     assert record["qualification"]["converted_from_blocked_w2"] is True
     assert "do not submit a W2 application" in record["recommended_next_action"]
+
+
+def test_lane_default_status_and_next_actions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    contract = add_work_opportunity(title="Ops automation", company="Studio", opportunity_type="contract_1099", source="manual")
+    local = add_work_opportunity(title="Back office pilot", company="Cafe", opportunity_type="local_business", source="local")
+    relationship = add_work_opportunity(title="AI ops intro", company="Former colleague", opportunity_type="relationship", source="referral")
+
+    assert contract["status"] == "qualify"
+    assert contract["next_action"] == "qualify buyer, scope, budget, timeline, and delivery risk"
+    assert local["status"] == "qualify"
+    assert local["next_action"] == "research pain points and prepare diagnostic outreach"
+    assert relationship["status"] == "relationship_strategy"
+    assert relationship["next_action"] == "draft outreach and define reason to connect"
+
+
+def test_csv_import_for_contract_rfp_and_local_business(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    for command, expected_type in [
+        ("discover-contracts", "contract_1099"),
+        ("discover-rfps", "rfp"),
+        ("discover-local-businesses", "local_business"),
+    ]:
+        source = tmp_path / f"{command}.csv"
+        source.write_text(f"title,company,description,url,deadline\nAI workflow pilot,Ops Group,workflow automation buyer reachable,https://example.com/{command}/pilot,2099-06-15\n")
+        main([command, "--source-file", str(source)])
+        payload = _record_from_output(capsys.readouterr().out)
+        assert payload["created"] == 1
+        assert payload["opportunities"][0]["opportunity_type"] == expected_type
+
+
+def test_markdown_source_file_import(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "leads.md"
+    source.write_text("- Clinic Ops Group - Intake workflow automation pilot - Manual intake pain https://example.com/intake\n")
+
+    main(["discover-contracts", "--source-file", str(source)])
+    payload = _record_from_output(capsys.readouterr().out)
+
+    assert payload["created"] == 1
+    assert payload["opportunities"][0]["company"] == "Clinic Ops Group"
+    assert payload["opportunities"][0]["url"] == "https://example.com/intake"
+
+
+def test_prep_commands_create_lane_specific_expected_files(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rfp = add_rfp(title="Automation RFP", organization="City Office", deadline="2099-06-15")
+    contract = add_work_opportunity(title="Ops automation contract", company="Studio", opportunity_type="contract_1099", source="manual")
+    local = add_work_opportunity(title="Local AI reporting lead", company="Restaurant Group", opportunity_type="local_business", source="local")
+
+    expectations = [
+        ("prep-rfp", rfp["opportunity_id"], {"rfp_summary.md", "go_no_go_checklist.md", "required_documents.md", "proposal_outline.md", "questions_to_ask.md", "risks.md", "next_steps.md"}),
+        ("prep-1099", contract["opportunity_id"], {"opportunity_brief.md", "qualification_checklist.md", "scope_hypothesis.md", "pricing_hypothesis.md", "outreach_note.md", "risks.md", "next_steps.md"}),
+        ("prep-local-outreach", local["opportunity_id"], {"business_profile.md", "pain_hypothesis.md", "ai_pilot_idea.md", "diagnostic_offer.md", "outreach_note.md", "follow_up_sequence.md"}),
+    ]
+    for command, opportunity_id, expected_files in expectations:
+        main([command, opportunity_id])
+        payload = _record_from_output(capsys.readouterr().out)
+        folder = Path(payload["folder"])
+        assert expected_files.issubset({path.name for path in folder.iterdir()})
