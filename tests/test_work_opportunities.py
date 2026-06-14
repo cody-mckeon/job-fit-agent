@@ -230,9 +230,49 @@ def test_prep_rfp_creates_decision_grade_artifacts(tmp_path, monkeypatch, capsys
     assert "licenses, insurance, certifications" in questions
     assert "## Current scores" in summary
     assert "## Immediate next action" in summary
+    assert "Initial posture: Viable, needs RFP package review" in summary
+    assert "Qualification: {" not in summary
+    assert '"go_no_go": "go"' not in summary
+    assert "## Preliminary recommendation: Need More Info" in go_no_go
+    assert "## Preliminary recommendation: Go" not in go_no_go
     assert "Download RFP package and verify required forms." in summary
     assert "1. Open/review RFP URL or source package" in next_steps
     assert "7. If pursue, create proposal draft" in next_steps
+
+
+def test_rfp_summary_and_checklist_do_not_conflict_with_unknown_documents(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    opp = add_rfp(
+        title="AI workflow automation RFP",
+        organization="County Innovation Office",
+        url="https://example.com/rfp",
+        deadline="2099-06-15",
+        source_detail="County procurement portal",
+        why_fit="Scope mentions workflow automation and AI operations.",
+        qualification={
+            "deadline": "2099-06-15",
+            "days_until_deadline": 9999,
+            "eligibility": "needs_review",
+            "required_documents": [],
+            "scope_fit": True,
+            "proposal_complexity": "medium",
+            "go_no_go": "go",
+        },
+    )
+
+    main(["prep-rfp", opp["opportunity_id"]])
+
+    payload = _record_from_output(capsys.readouterr().out)
+    folder = Path(payload["folder"])
+    summary = (folder / "rfp_summary.md").read_text()
+    go_no_go = (folder / "go_no_go_checklist.md").read_text()
+
+    assert "Qualification: {" not in summary
+    assert "Initial posture:" in summary
+    assert "Initial posture: Viable, needs RFP package review" in summary
+    assert "Initial posture: Go" not in summary
+    assert "## Preliminary recommendation: Need More Info" in go_no_go
+    assert "## Preliminary recommendation: Go" not in go_no_go
 
 def test_prep_1099_creates_contract_prep_folder(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
@@ -344,7 +384,7 @@ def test_rfp_with_close_deadline_gets_urgency(tmp_path, monkeypatch, capsys):
     assert record["opportunity_type"] == "rfp"
     assert record["urgency_score"] >= 90
     assert record["priority"] == "high"
-    assert record["qualification"]["go_no_go"] == "go"
+    assert record["qualification"]["go_no_go"] == "review"
 
 
 def test_discovered_strong_local_contract_or_rfp_beats_weak_w2_job(tmp_path, monkeypatch, capsys):
