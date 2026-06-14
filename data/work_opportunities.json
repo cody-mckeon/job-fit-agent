@@ -1,6 +1,6 @@
 [
   {
-    "actionability_score": 70,
+    "actionability_score": 80,
     "blocked_until": "",
     "company": "Example Public Agency",
     "created_at": "2026-06-11T19:58:16.327412+00:00",
@@ -38,19 +38,19 @@
     "source_detail": "Test RFP entry",
     "status": "proposal_needed",
     "title": "AI automation services RFP test",
-    "updated_at": "2026-06-11T19:58:16.327412+00:00",
+    "updated_at": "2026-06-14T19:24:49.498601+00:00",
     "urgency_score": 25,
     "url": "https://example.com/rfp",
     "why_fit": "Potential AI workflow automation proposal opportunity"
   },
   {
-    "actionability_score": 0,
+    "actionability_score": 100,
     "blocked_until": "",
     "company": "Local hospitality group",
     "created_at": "2026-06-11T19:58:06.108235+00:00",
     "deadline": "",
     "dedupe_key": "opp:cab9fda3f9999cff",
-    "fit_score": 0,
+    "fit_score": 90,
     "next_action": "Research pain points and prepare diagnostic outreach",
     "notes": "",
     "opportunity_id": "work-4efd12eaf034",
@@ -77,7 +77,7 @@
     "source_detail": "Las Vegas business opportunity",
     "status": "qualify",
     "title": "AI workflow automation pilot",
-    "updated_at": "2026-06-11T19:58:06.108235+00:00",
+    "updated_at": "2026-06-14T19:24:49.498664+00:00",
     "urgency_score": 0,
     "url": "",
     "why_fit": "Potential AI agent deployment for reporting, vendor coordination, and intake workflows"
