@@ -1,1 +1,85 @@
-[]
+[
+  {
+    "actionability_score": 70,
+    "blocked_until": "",
+    "company": "Example Public Agency",
+    "created_at": "2026-06-11T19:58:16.327412+00:00",
+    "deadline": "2026-07-15",
+    "dedupe_key": "url:https://example.com/rfp",
+    "fit_score": 59,
+    "next_action": "run go/no-go checklist and review submission requirements",
+    "notes": "Test only",
+    "opportunity_id": "work-826cf6ab20e3",
+    "opportunity_type": "rfp",
+    "priority": "high",
+    "qualification": {
+      "days_until_deadline": 34,
+      "deadline": "2026-07-15",
+      "eligibility": "needs_review",
+      "go_no_go": "go",
+      "lane": "rfp",
+      "proposal_complexity": "medium",
+      "required_documents": [],
+      "rules": [
+        "deadline",
+        "eligibility",
+        "required documents",
+        "scope fit",
+        "proposal complexity",
+        "go/no-go"
+      ],
+      "scope_fit": true
+    },
+    "recommended_next_action": "run go/no-go checklist and review submission requirements",
+    "relationship_value": "medium",
+    "revenue_potential": "high",
+    "risks": "",
+    "source": "manual",
+    "source_detail": "Test RFP entry",
+    "status": "proposal_needed",
+    "title": "AI automation services RFP test",
+    "updated_at": "2026-06-11T19:58:16.327412+00:00",
+    "urgency_score": 25,
+    "url": "https://example.com/rfp",
+    "why_fit": "Potential AI workflow automation proposal opportunity"
+  },
+  {
+    "actionability_score": 0,
+    "blocked_until": "",
+    "company": "Local hospitality group",
+    "created_at": "2026-06-11T19:58:06.108235+00:00",
+    "deadline": "",
+    "dedupe_key": "opp:cab9fda3f9999cff",
+    "fit_score": 0,
+    "next_action": "Research pain points and prepare diagnostic outreach",
+    "notes": "",
+    "opportunity_id": "work-4efd12eaf034",
+    "opportunity_type": "local_business",
+    "priority": "high",
+    "qualification": {
+      "lane": "local_business",
+      "likely_workflow_pain": true,
+      "local_relevance": false,
+      "reachable_decision_maker": false,
+      "rules": [
+        "likely workflow pain",
+        "local relevance",
+        "reachable decision maker",
+        "simple pilot opportunity"
+      ],
+      "simple_pilot_opportunity": true
+    },
+    "recommended_next_action": "Research pain points and prepare diagnostic outreach",
+    "relationship_value": "medium",
+    "revenue_potential": "unknown",
+    "risks": "",
+    "source": "manual",
+    "source_detail": "Las Vegas business opportunity",
+    "status": "qualify",
+    "title": "AI workflow automation pilot",
+    "updated_at": "2026-06-11T19:58:06.108235+00:00",
+    "urgency_score": 0,
+    "url": "",
+    "why_fit": "Potential AI agent deployment for reporting, vendor coordination, and intake workflows"
+  }
+]
