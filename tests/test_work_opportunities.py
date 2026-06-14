@@ -192,6 +192,48 @@ def test_prep_rfp_creates_proposal_prep_folder(tmp_path, monkeypatch, capsys):
     assert (folder / "proposed_solution_outline.md").exists()
 
 
+
+def test_prep_rfp_creates_decision_grade_artifacts(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    opp = add_rfp(
+        title="AI workflow automation RFP",
+        organization="County Innovation Office",
+        url="https://example.com/rfp",
+        deadline="2099-06-15",
+        source="government",
+        source_detail="County procurement portal",
+        priority="high",
+        why_fit="Scope mentions workflow automation, AI operations, and internal process improvement.",
+        notes="Need to verify portal registration, data access, integrations, and insurance.",
+        next_action="Download RFP package and verify required forms.",
+    )
+
+    main(["prep-rfp", opp["opportunity_id"]])
+
+    payload = _record_from_output(capsys.readouterr().out)
+    folder = Path(payload["folder"])
+    risks = (folder / "risks.md").read_text()
+    go_no_go = (folder / "go_no_go_checklist.md").read_text()
+    required_documents = (folder / "required_documents.md").read_text()
+    questions = (folder / "questions_to_ask.md").read_text()
+    summary = (folder / "rfp_summary.md").read_text()
+    next_steps = (folder / "next_steps.md").read_text()
+
+    assert "Add delivery, procurement, relationship" not in risks
+    assert "Deadline risk" in risks
+    assert "Data access/security risk" in risks
+    assert "## Preliminary recommendation:" in go_no_go
+    assert "### Scope Fit" in go_no_go
+    assert "Business entity information — Status: Unknown" in required_documents
+    assert "portal registration — Status: Unknown" in required_documents
+    assert "What data can be accessed?" in questions
+    assert "licenses, insurance, certifications" in questions
+    assert "## Current scores" in summary
+    assert "## Immediate next action" in summary
+    assert "Download RFP package and verify required forms." in summary
+    assert "1. Open/review RFP URL or source package" in next_steps
+    assert "7. If pursue, create proposal draft" in next_steps
+
 def test_prep_1099_creates_contract_prep_folder(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     opp = add_work_opportunity(title="Ops automation contract", company="Studio", opportunity_type="contract_1099", source="manual")
