@@ -681,36 +681,161 @@ def get_work_opportunity(opportunity_id: str) -> dict[str, Any]:
     raise ValueError(f"Work opportunity not found: {opportunity_id}")
 
 
+def _display_value(value: Any) -> str:
+    """Return a markdown-safe display value without pretending missing details are known."""
+    if value is None:
+        return "Unknown"
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(str(item) for item in value if str(item).strip()) or "Unknown"
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True) if value else "Unknown"
+    text = str(value).strip()
+    return text or "Unknown"
+
+
+def _score_value(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        mapping = {"low": 25, "medium": 50, "high": 75}
+        return mapping.get(str(value).strip().lower(), 0)
+
+
+def _rfp_preliminary_recommendation(record: dict[str, Any]) -> str:
+    fit_score = _score_value(record.get("fit_score"))
+    actionability_score = _score_value(record.get("actionability_score"))
+    deadline = str(record.get("deadline") or "").strip()
+    risks = str(record.get("risks") or "").lower()
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    if "ineligible" in risks or "not eligible" in risks or qualification.get("eligible") is False:
+        return "No-Go"
+    if not deadline or fit_score == 0 or actionability_score == 0:
+        return "Need More Info"
+    if fit_score >= 65 and actionability_score >= 45:
+        return "Go"
+    return "Need More Info"
+
+
+def _rfp_factor_status(record: dict[str, Any], factor: str) -> tuple[str, str, str]:
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    notes = str(record.get("notes") or "")
+    risks = str(record.get("risks") or "")
+    why_fit = str(record.get("why_fit") or "")
+    deadline = str(record.get("deadline") or "").strip()
+    factor_data = qualification.get(factor) if isinstance(qualification, dict) else None
+    joined = " ".join([notes, risks, why_fit, _display_value(factor_data)]).lower()
+    if factor == "scope fit":
+        status = "Clear" if why_fit else "Unknown"
+        note = why_fit or "RFP scope has not yet been mapped to Cody's AI operations lane."
+        verify = "Confirm the requested workflow, users, systems, and AI/automation outcomes in the RFP package."
+    elif factor == "deadline feasibility":
+        status = "Clear" if deadline else "Unknown"
+        note = f"Submission deadline: {_display_value(deadline)}."
+        verify = "Verify the exact due date, time zone, question deadline, and whether there are mandatory meetings."
+    elif factor == "eligibility":
+        status = "Risk" if any(word in joined for word in ("ineligible", "license required", "certification required")) else ("Clear" if factor_data else "Unknown")
+        note = _display_value(factor_data)
+        verify = "Confirm vendor eligibility, required licenses, insurance, certifications, and prior public-sector requirements."
+    elif factor == "required documents":
+        docs = qualification.get("required_documents") or []
+        status = "Clear" if docs else "Unknown"
+        note = _display_value(docs)
+        verify = "Download the RFP package and list every required attachment, form, certificate, and portal step."
+    elif factor == "procurement complexity":
+        status = "Risk" if any(word in joined for word in ("portal", "sam.gov", "bond", "mandatory")) else "Unknown"
+        note = risks or notes or "Procurement path and submission mechanics are not fully known."
+        verify = "Check portal registration, addenda, Q&A rules, mandatory conferences, and signature/submission requirements."
+    elif factor == "relationship access":
+        status = "Clear" if _score_value(record.get("relationship_value")) >= 60 else "Unknown"
+        note = f"Relationship value score: {record.get('relationship_value') or 0}."
+        verify = "Identify buyer contacts, warm introductions, incumbent vendors, and whether clarifying questions are allowed."
+    elif factor == "delivery feasibility":
+        status = "Risk" if any(word in joined for word in ("capacity", "complex", "enterprise", "integration")) else "Unknown"
+        note = notes or "Delivery scope, timeline, team expectations, and implementation dependencies need confirmation."
+        verify = "Validate implementation timeline, required staffing, data access, security reviews, and support obligations."
+    else:
+        status = "Clear" if _score_value(record.get("revenue_potential")) >= 60 or _score_value(record.get("relationship_value")) >= 60 else "Unknown"
+        note = f"Revenue potential: {record.get('revenue_potential') or 0}; strategic relationship value: {record.get('relationship_value') or 0}."
+        verify = "Confirm budget range, contract size, renewal potential, strategic account value, and cost to bid."
+    return status, note, verify
+
+
+def _build_rfp_go_no_go(record: dict[str, Any]) -> str:
+    factors = ["scope fit", "deadline feasibility", "eligibility", "required documents", "procurement complexity", "relationship access", "delivery feasibility", "revenue/strategic value"]
+    lines = ["# Go/no-go checklist", "", f"## Preliminary recommendation: {_rfp_preliminary_recommendation(record)}", "", "Use this as a first-pass decision aid, then update it after reviewing the full RFP package.", "", "## Decision factors", ""]
+    for factor in factors:
+        status, note, verify = _rfp_factor_status(record, factor)
+        lines.extend([f"### {factor.title()}", f"- Status: {status}", f"- Notes: {note}", f"- What to verify next: {verify}", ""])
+    return "\n".join(lines)
+
+
+def _build_rfp_required_documents(record: dict[str, Any]) -> str:
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    known_docs = {str(doc).lower() for doc in (qualification.get("required_documents") or [])}
+    docs = [
+        "Business entity information", "W-9 or tax form", "certificate of insurance", "business license",
+        "references/case studies", "proposal document", "pricing sheet", "implementation timeline",
+        "security/privacy statement", "accessibility/compliance statement if applicable", "signed forms",
+        "portal registration", "unknown requirements from RFP package",
+    ]
+    lines = ["# Required documents", "", "Mark items as Clear only after the RFP package explicitly confirms them.", ""]
+    for doc in docs:
+        status = "Clear" if doc.lower() in known_docs else "Unknown"
+        lines.append(f"- [ ] {doc} — Status: {status}")
+    return "\n".join(lines) + "\n"
+
+
+def _risk_level(record: dict[str, Any], risk: str) -> str:
+    text = " ".join(str(record.get(k) or "") for k in ("risks", "notes", "qualification", "deadline", "url")).lower()
+    if risk == "Deadline risk":
+        return "Low" if record.get("deadline") else "Unknown"
+    if risk == "Scope ambiguity risk":
+        return "Low" if record.get("why_fit") else "Unknown"
+    if risk == "Buyer access risk":
+        return "Low" if _score_value(record.get("relationship_value")) >= 60 else "Unknown"
+    if risk == "Pricing risk":
+        return "Low" if _score_value(record.get("revenue_potential")) >= 60 else "Unknown"
+    if any(word in text for word in ("risk", "unknown", "unclear", "complex", "portal", "insurance", "security", "data", "integration", "incumbent")):
+        return "Medium"
+    return "Unknown"
+
+
+def _build_rfp_risks(record: dict[str, Any]) -> str:
+    risk_info = {
+        "Deadline risk": ("A late or misunderstood deadline can make the bid non-responsive.", "Verify due date, time zone, Q&A deadline, addenda, and mandatory meeting dates."),
+        "Eligibility/procurement risk": ("Vendor registrations, licenses, insurance, or public-sector requirements can block submission.", "Confirm eligibility rules, required registrations, and whether Cody needs a prime or subcontractor partner."),
+        "Scope ambiguity risk": ("Unclear workflow scope can lead to a weak proposal or under-scoped delivery plan.", "Map the RFP requirements to a specific workflow, users, systems, deliverables, and acceptance criteria."),
+        "Data access/security risk": ("AI operations work depends on safe access to systems, data, permissions, and governance constraints.", "Ask what data is available, what cannot leave buyer systems, and what security/privacy statements are required."),
+        "Integration risk": ("Unknown systems and APIs can expand timeline and cost.", "Identify source systems, integration methods, owners, sandbox availability, and technical constraints."),
+        "Buyer access risk": ("Limited access reduces ability to clarify pain, success criteria, and evaluation priorities.", "Find the procurement contact, program owner, warm intro path, and allowed question process."),
+        "Delivery capacity risk": ("The response may imply delivery obligations beyond Cody's solo capacity or current partner bench.", "Estimate staffing, timeline, support needs, and partner/subcontractor needs before committing."),
+        "Pricing risk": ("Without budget or contract-size clarity, Cody may over-invest in a low-value bid or underprice delivery.", "Confirm budget range, pricing format, contract term, reimbursable costs, and assumptions."),
+        "No incumbent relationship risk": ("An incumbent or known vendor may have context and trust advantages.", "Research prior awards, current vendors, relationship paths, and differentiators for an AI operations pilot."),
+    }
+    lines = ["# Risks", ""]
+    if record.get("risks"):
+        lines.extend([f"## Opportunity-record risk notes", str(record.get("risks")), ""])
+    for name, (why, mitigation) in risk_info.items():
+        lines.extend([f"## {name}", f"- Risk level: {_risk_level(record, name)}", f"- Why it matters: {why}", f"- Mitigation / next step: {mitigation}", ""])
+    return "\n".join(lines)
+
+
 def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]:
     """Create markdown prep files for an RFP, 1099, or local outreach opportunity."""
     record = get_work_opportunity(opportunity_id)
     folder = Path("applications") / "work_opportunities" / f"{_slugify(str(record.get('company') or 'company'))}_{_slugify(str(record.get('title') or 'opportunity'))}_{opportunity_id}"
     folder.mkdir(parents=True, exist_ok=True)
-    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
-    required_docs = qualification.get("required_documents") or []
-    if isinstance(required_docs, str):
-        required_docs = [required_docs]
-    docs_body = "\n".join(f"- [ ] {doc}" for doc in required_docs) or "- [ ] Proposal narrative\n- [ ] Pricing / budget\n- [ ] Eligibility or vendor forms\n- [ ] Submission portal/account requirements"
-    context = {
-        "kind": prep_kind,
-        "title": record.get("title", ""),
-        "company": record.get("company", ""),
-        "opportunity_type": record.get("opportunity_type", ""),
-        "source": record.get("source", ""),
-        "url": record.get("url", ""),
-        "deadline": record.get("deadline", ""),
-        "why_fit": record.get("why_fit", ""),
-        "next_action": record.get("next_action", ""),
-        "risks": record.get("risks", ""),
-        "notes": record.get("notes", ""),
-    }
-    common_brief = f"- Type: {context['opportunity_type']}\n- Company/organization: {context['company']}\n- Title: {context['title']}\n- Source: {context['source']}\n- URL: {context['url']}\n- Deadline: {context['deadline']}\n\n## Why fit\n{context['why_fit']}\n"
+    context = {key: _display_value(record.get(key)) for key in ("title", "company", "opportunity_type", "source", "source_detail", "url", "deadline", "priority", "fit_score", "actionability_score", "urgency_score", "revenue_potential", "relationship_value", "why_fit", "notes", "risks", "qualification", "next_action", "status")}
+    common_brief = f"- Type: {context['opportunity_type']}\n- Company/organization: {context['company']}\n- Title: {context['title']}\n- Source: {context['source']}\n- Source detail: {context['source_detail']}\n- URL: {context['url']}\n- Deadline: {context['deadline']}\n\n## Why fit\n{context['why_fit']}\n"
+    rfp_summary = f"# RFP summary\n\n## Opportunity\n{context['title']}\n\n## Buyer / agency\n{context['company']}\n\n## Source\n- Source: {context['source']}\n- Source detail: {context['source_detail']}\n- URL: {context['url']}\n\n## Deadline\n{context['deadline']}\n\n## Why this may fit Cody's AI operations lane\n{context['why_fit']}\n\n## Current scores\n- Priority: {context['priority']}\n- Fit score: {context['fit_score']}\n- Actionability score: {context['actionability_score']}\n- Urgency score: {context['urgency_score']}\n- Revenue potential: {context['revenue_potential']}\n- Relationship value: {context['relationship_value']}\n\n## Current status\n- Status: {context['status']}\n- Notes: {context['notes']}\n- Qualification: {context['qualification']}\n- Risks: {context['risks']}\n\n## Immediate next action\n{context['next_action']}\n"
     file_bodies = {
-        "rfp_summary.md": f"# RFP summary\n\n{common_brief}\n## Submission posture\nRun a go/no-go review before drafting and confirm eligibility, required documents, proposal complexity, scope fit, and deadline.\n",
-        "go_no_go_checklist.md": "# Go/no-go checklist\n\n- [ ] Deadline leaves enough time to submit a quality response.\n- [ ] Cody is eligible to submit or can partner with an eligible vendor.\n- [ ] Scope matches AI agents, workflow automation, AI operations, product systems, or product analytics.\n- [ ] Required documents are feasible.\n- [ ] Proposal complexity is proportional to likely revenue and relationship value.\n",
-        "required_documents.md": f"# Required documents\n\n{docs_body}\n",
-        "proposal_outline.md": "# Proposal outline\n\n1. Executive summary\n2. Understanding of workflow pain and desired outcome\n3. AI agent / automation implementation approach\n4. Delivery plan and timeline\n5. Relevant experience and operating model\n6. Pricing / assumptions\n7. Risks, dependencies, and questions\n",
-        "questions_to_ask.md": "# Questions to ask\n\n- What workflow or operational bottleneck matters most?\n- Who owns implementation and acceptance?\n- What systems, data, and access are in scope?\n- Are vendor eligibility, insurance, or security requirements negotiable?\n",
+        "rfp_summary.md": rfp_summary,
+        "go_no_go_checklist.md": _build_rfp_go_no_go(record),
+        "required_documents.md": _build_rfp_required_documents(record),
+        "proposal_outline.md": "# Proposal outline\n\n1. Executive summary\n2. Understanding of the agency/business workflow pain\n3. Proposed AI operations solution\n4. Agent/workflow automation architecture\n5. Implementation phases\n6. Analytics, measurement, and success criteria\n7. Change management and adoption plan\n8. Security, data access, and governance assumptions\n9. Relevant experience/projects\n10. Pricing and assumptions\n11. Risks and dependencies\n12. Questions / clarifications\n",
+        "questions_to_ask.md": "# Questions to ask\n\n- What workflow or process is the buyer trying to improve?\n- What systems/tools need to be integrated?\n- What data can be accessed?\n- Who owns the process internally?\n- What does success look like?\n- Are vendors required to have licenses, insurance, certifications, or prior public-sector work?\n- Is subcontracting allowed?\n- What is the budget range?\n- What is the evaluation rubric?\n- Are there mandatory meetings or portal registrations?\n",
+        "risks.md": _build_rfp_risks(record),
+        "next_steps.md": "# Next steps\n\n1. Open/review RFP URL or source package\n2. Verify deadline and submission portal\n3. Confirm eligibility and required documents\n4. Run go/no-go decision\n5. Identify missing answers/questions\n6. Decide whether to pursue, partner, or skip\n7. If pursue, create proposal draft\n",
         "opportunity_brief.md": f"# Opportunity brief\n\n{common_brief}",
         "qualification_checklist.md": "# Qualification checklist\n\n- [ ] Confirm workflow pain and business owner.\n- [ ] Confirm Cody's AI agent deployment lane fit.\n- [ ] Confirm budget, timing, and procurement path.\n- [ ] Confirm buyer reachability and delivery risk.\n- [ ] Confirm next concrete action Cody can take today.\n",
         "proposed_solution_outline.md": f"# Proposed solution outline\n\nFrame a {prep_kind} solution around AI agents, workflow automation, AI operations, product systems, technical implementation, analytics, and measurable business-process improvement.\n",
@@ -722,9 +847,10 @@ def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]
         "diagnostic_offer.md": "# Diagnostic offer\n\nOffer a short diagnostic conversation and workflow teardown that identifies one automation pilot Cody can scope quickly.\n",
         "outreach_note.md": f"# Outreach note\n\nDraft a concise note for {context['company']} about {context['title']} and the target workflow or AI operations problem Cody can help diagnose.\n",
         "follow_up_sequence.md": "# Follow-up sequence\n\n1. Initial diagnostic offer\n2. Value-add follow-up with a concrete workflow hypothesis\n3. Short proof-of-concept suggestion\n4. Close-loop note asking for the right decision maker\n",
-        "risks.md": f"# Risks\n\n{context['risks'] or 'Add delivery, procurement, relationship, deadline, scope, data-access, and buyer-availability risks before submitting or outreaching.'}\n",
-        "next_steps.md": f"# Next steps\n\n{context['next_action'] or 'Define the next action, owner, and deadline.'}\n",
     }
+    if prep_kind != "rfp":
+        file_bodies["risks.md"] = f"# Risks\n\n{record.get('risks') or 'Add delivery, procurement, relationship, deadline, scope, data-access, and buyer-availability risks before submitting or outreaching.'}\n"
+        file_bodies["next_steps.md"] = f"# Next steps\n\n{record.get('next_action') or 'Define the next action, owner, and deadline.'}\n"
     filenames = PREP_FILE_SETS.get(prep_kind, PREP_FILE_SETS["1099"])
     for filename in filenames:
         (folder / filename).write_text(file_bodies[filename], encoding="utf-8")
