@@ -874,6 +874,171 @@ def _build_rfp_risks(record: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+
+def _local_context(record: dict[str, Any]) -> dict[str, str]:
+    return {key: _display_value(record.get(key)) for key in (
+        "title", "company", "opportunity_type", "source", "source_detail", "priority", "fit_score",
+        "actionability_score", "relationship_value", "revenue_potential", "why_fit", "notes",
+        "qualification", "next_action",
+    )}
+
+def _is_hospitality_local(record: dict[str, Any]) -> bool:
+    text = _flatten_text(record).lower()
+    return any(term in text for term in ("hospitality", "restaurant", "hotel", "resort", "dining", "event", "guest", "group booking", "venue"))
+
+def _build_local_business_profile(record: dict[str, Any]) -> str:
+    c = _local_context(record)
+    known = [
+        f"Target is {c['company']} for {c['title']}.",
+        f"Source is {c['source']} / {c['source_detail']}.",
+        f"Fit rationale: {c['why_fit']}.",
+        f"Notes: {c['notes']}.",
+        f"Qualification: {c['qualification']}.",
+    ]
+    unknown = [
+        "Economic buyer and day-to-day workflow owner",
+        "Current systems used for intake, CRM, scheduling, reporting, and task routing",
+        "Volume of requests, missed follow-ups, and manager/admin time spent",
+        "Data access, integration constraints, budget, and urgency",
+    ]
+    return "\n".join([
+        "# Business profile", "",
+        "## Company / target", c["company"], "",
+        "## Opportunity", f"- Title: {c['title']}", f"- Type: {c['opportunity_type']}", "",
+        "## Source", f"- Source: {c['source']}", f"- Source detail: {c['source_detail']}", "",
+        "## Why this business may be relevant",
+        f"This appears relevant to Cody's lane because the record points to {c['why_fit']}. The best angle is a practical workflow-improvement conversation around intake, follow-up, reporting, coordination, or internal AI operations rather than a broad AI pitch.", "",
+        "## Current scores", f"- Priority: {c['priority']}", f"- Fit score: {c['fit_score']}", f"- Actionability score: {c['actionability_score']}", "",
+        "## Relationship/revenue context", f"- Relationship value: {c['relationship_value']}", f"- Revenue potential: {c['revenue_potential']}", "",
+        "## What is known", *(f"- {item}" for item in known), "",
+        "## What is unknown", *(f"- {item}" for item in unknown), "",
+        "## Recommended next action", c["next_action"], "",
+    ])
+
+def _build_local_pain_hypothesis(record: dict[str, Any]) -> str:
+    hospitality = _is_hospitality_local(record)
+    base = [
+        ("Guest inquiry intake", "Inbound calls, forms, DMs, and emails may be split across people/tools.", "Ask where inquiries arrive, who triages them, and how many require repeat follow-up."),
+        ("Missed follow-up", "Slow responses can lose revenue and create extra manager work.", "Ask for examples of leads or requests that went cold because ownership was unclear."),
+        ("Manual status reporting", "Managers may spend time assembling weekly updates instead of acting on exceptions.", "Ask what reports are manually built each week and who waits on them."),
+        ("Disconnected systems", "CRM, inboxes, spreadsheets, calendars, POS, and task tools may not share context.", "Ask which systems must be checked before answering a customer or internal request."),
+        ("Internal task routing", "Requests can stall when the next owner is ambiguous.", "Ask how work moves from intake to owner to completion today."),
+    ]
+    hospitality_items = [
+        ("Event/group booking handoffs", "Group business often needs fast handoff between sales, ops, kitchen, rooms, and finance.", "Ask how group/private event inquiries move from first contact to quote, contract, and ops handoff."),
+        ("Restaurant/private dining inquiries", "Private dining requests can be high-value but repetitive to qualify.", "Ask what details are repeatedly collected before a manager can respond."),
+        ("Vendor coordination", "Local operators often coordinate repairs, supplies, entertainment, staffing, and service vendors manually.", "Ask which vendor requests create the most chasing, reminders, or unclear status."),
+        ("Marketing/reporting requests", "Marketing and operations teams may need recurring numbers, event details, and promotions status.", "Ask what weekly numbers or updates are pulled by hand for owners or managers."),
+        ("Repetitive manager/admin work", "Managers may be stuck copying details, reminders, and summaries between tools.", "Ask what admin work a manager repeats three or more times per week."),
+    ]
+    items = hospitality_items + base if hospitality else base
+    lines = ["# Pain hypothesis", ""]
+    for name, why, validate in items:
+        lines.extend([f"## {name}", f"- Hypothesis: {name} is creating avoidable manual work for {record.get('company') or 'the business'}.", f"- Why it may matter: {why}", f"- How to validate in a conversation: {validate}", ""])
+    return "\n".join(lines)
+
+
+def _build_local_ai_pilot_idea(record: dict[str, Any]) -> str:
+    pilots = [
+        ("Inquiry triage and follow-up agent", "manager, sales, or front-office team", "new email/form/DM/call note arrives", "classify request, extract key details, draft response, assign owner, set reminder", "shared inbox, website forms, CRM notes, calendar, existing FAQ/menu/package docs", "prioritized queue plus drafted follow-up and missing-info checklist", "human approves message and owner before sending", "response time, lead capture rate, and fewer missed follow-ups", "starts with one intake channel and draft-only responses"),
+        ("Weekly operations/reporting summary agent", "owner/operator and managers", "weekly reporting cutoff", "pull notes/status from source systems, summarize exceptions, flag stale items, prepare owner update", "spreadsheets, POS/export reports, task tracker, CRM, manager notes", "one-page weekly summary with risks, wins, and follow-up list", "manager reviews numbers and edits narrative before sharing", "hours saved per week and fewer surprise status questions", "can begin with exported CSVs and a manual review step"),
+        ("Vendor/request coordination agent", "operations manager", "new vendor or internal request is logged", "capture request, route to vendor/owner, draft check-ins, track status, escalate stale items", "email, forms, vendor list, task board, service history notes", "status tracker plus reminder drafts and escalation list", "ops manager approves vendor messages and escalations", "fewer stale requests and less time chasing status", "does not require full integration on day one; it can start from a simple request log"),
+    ]
+    if _is_hospitality_local(record):
+        pilots[0] = ("Event/private dining intake agent", "events, sales, or restaurant manager", "private dining, catering, or group inquiry arrives", "capture date, party size, budget, room needs, menu constraints, timing, then draft next reply and internal handoff", "inquiry forms, inbox, event sheets, menus/packages, calendar/availability notes", "qualified inquiry brief, drafted guest reply, and ops handoff checklist", "manager approves guest reply and confirms availability/pricing", "faster first response and more complete qualified event leads", "starts with draft responses and one inquiry type before touching reservations/POS")
+    lines = ["# AI pilot ideas", ""]
+    for name, user, trigger, workflow, inputs, output, review, metric, small in pilots:
+        lines.extend([f"## {name}", f"- Pilot name: {name}", f"- User/team: {user}", f"- Trigger: {trigger}", f"- Workflow: {workflow}", f"- Data/source inputs: {inputs}", f"- Output: {output}", f"- Human review step: {review}", f"- Success metric: {metric}", f"- Why it is small enough to start: {small}", ""])
+    return "\n".join(lines)
+
+def _build_local_diagnostic_offer(record: dict[str, Any]) -> str:
+    return f"""# Diagnostic offer
+
+## Offer name
+30-minute workflow diagnostic for {record.get('company') or 'the business'}
+
+## Who it is for
+Operators, owners, managers, or team leads who handle intake, follow-up, reporting, scheduling, vendor coordination, CRM updates, or internal task routing.
+
+## 30-minute diagnostic promise
+In 30 minutes, Cody will identify one manual workflow that is specific enough to improve, automate, or pilot without disrupting the business.
+
+## What Cody reviews
+- Current request/intake path
+- Follow-up and ownership handoffs
+- Reporting or status-update process
+- Systems involved, including inboxes, spreadsheets, CRM, calendars, POS exports, task tools, or vendor lists
+- Data access and human approval constraints
+
+## What Cody delivers after the call
+- One-page workflow map
+- Top 2-3 friction points
+- One small pilot recommendation
+- Required data/systems list
+- Success metric and next-step estimate
+
+## No-pressure next step
+If the workflow is not urgent or not a fit, Cody can simply leave the business with the workflow notes and a practical next step.
+
+## Example agenda
+1. Confirm the workflow and owner (5 minutes)
+2. Walk through current intake, routing, follow-up, and reporting steps (10 minutes)
+3. Identify bottlenecks, repeat work, and missed handoffs (10 minutes)
+4. Pick one small pilot or decide there is no fit (5 minutes)
+"""
+
+def _build_local_outreach_note(record: dict[str, Any]) -> str:
+    company = _display_value(record.get('company'))
+    angle = "guest/event inquiry follow-up, vendor coordination, and weekly reporting" if _is_hospitality_local(record) else "intake, follow-up, reporting, and internal task routing"
+    return f"""# Outreach note
+
+Hi [Recipient Name],
+
+I’m reaching out because {company} looks like the kind of operation where small workflow fixes can save manager time — especially around {angle}.
+
+I help teams turn repeat admin work into practical, reviewable workflows: cleaner intake, clearer ownership, better follow-up, and simple reporting. Not a big AI transformation project — just finding one process that is worth improving.
+
+Would you be open to a 30-minute diagnostic conversation? I can map one workflow, point out where time or follow-up is getting lost, and suggest a small pilot only if there is a clear fit.
+
+Best,
+Cody
+"""
+
+def _build_local_follow_up_sequence(record: dict[str, Any]) -> str:
+    company = _display_value(record.get('company'))
+    workflow = "private dining/event inquiries" if _is_hospitality_local(record) else "inbound requests"
+    return f"""# Follow-up sequence
+
+## Message 1 — Initial note
+Hi [Recipient Name], I’m reaching out because {company} may have repeat workflow friction around intake, follow-up, reporting, or internal handoffs. Would you be open to a 30-minute diagnostic conversation to map one workflow and see if there is a small improvement worth making?
+
+## Message 2 — Workflow hypothesis
+Hi [Recipient Name], one concrete hypothesis: {workflow} may be arriving through multiple channels, then getting retyped, forwarded, or manually chased before the right person can respond. If that is happening, a simple triage and follow-up workflow could reduce missed handoffs without changing your core systems. Worth a short look?
+
+## Message 3 — Small pilot idea
+Hi [Recipient Name], a small starting pilot could be a draft-only workflow that captures each request, summarizes the key details, assigns an owner, drafts the next response, and flags anything stale for review. A person still approves every message. If useful, I can outline what this would look like in 30 minutes.
+
+## Message 4 — Close-loop / right person
+Hi [Recipient Name], I don’t want to keep pinging the wrong person. Is there someone who owns operations, guest/customer follow-up, reporting, or internal workflow improvement at {company}? If not a priority right now, no worries — happy to close the loop.
+"""
+
+def _build_local_risks(record: dict[str, Any]) -> str:
+    risks = {
+        "Unclear buyer": "Ask who owns the workflow, budget, and final decision before proposing work.",
+        "No relationship": "Use a low-pressure diagnostic and ask for the right person rather than pitching a full project.",
+        "Pain may be unvalidated": "Treat every pain point as a hypothesis and validate volume, cost, and urgency on the call.",
+        "Scope creep": "Limit the first pilot to one workflow, one user/team, one or two data sources, and draft/review mode.",
+        "Data access": "Start from exports, shared inboxes, or sample records; avoid sensitive data until access rules are clear.",
+        "Integration constraints": "Design a no/low-integration first version before committing to APIs or system changes.",
+        "Too broad / not enough urgency": "Anchor outreach on a specific workflow and ask what breaks if nothing changes in 30-60 days.",
+    }
+    lines = ["# Risks", ""]
+    if record.get("risks"):
+        lines.extend(["## Opportunity-record risk notes", str(record.get("risks")), ""])
+    for risk, mitigation in risks.items():
+        lines.extend([f"## {risk}", f"- Risk: {risk} could prevent a useful business-development conversation or small pilot.", f"- Mitigation: {mitigation}", ""])
+    return "\n".join(lines)
+
 def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]:
     """Create markdown prep files for an RFP, 1099, or local outreach opportunity."""
     record = get_work_opportunity(opportunity_id)
@@ -898,14 +1063,16 @@ def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]
         "proposed_solution_outline.md": f"# Proposed solution outline\n\nFrame a {prep_kind} solution around AI agents, workflow automation, AI operations, product systems, technical implementation, analytics, and measurable business-process improvement.\n",
         "scope_hypothesis.md": "# Scope hypothesis\n\nDraft a small, concrete implementation scope: target workflow, users, systems, data inputs, agent/automation behavior, success metric, and out-of-scope items.\n",
         "pricing_hypothesis.md": "# Pricing hypothesis\n\nDefine likely pilot, fixed-scope, or advisory pricing with assumptions about timeline, access, implementation risk, and expected revenue potential.\n",
-        "business_profile.md": f"# Business profile\n\n{common_brief}\n## Local relevance\nSummarize location, decision maker, operations model, current systems, and why this business is likely to have workflow pain.\n",
-        "pain_hypothesis.md": "# Pain hypothesis\n\nList likely manual workflows, reporting gaps, scheduling/intake bottlenecks, customer follow-up misses, or operational handoffs that AI agents could improve.\n",
-        "ai_pilot_idea.md": "# AI pilot idea\n\nPropose one simple pilot with a clear user, trigger, workflow, data source, output, review step, and success metric.\n",
-        "diagnostic_offer.md": "# Diagnostic offer\n\nOffer a short diagnostic conversation and workflow teardown that identifies one automation pilot Cody can scope quickly.\n",
-        "outreach_note.md": f"# Outreach note\n\nDraft a concise note for {context['company']} about {context['title']} and the target workflow or AI operations problem Cody can help diagnose.\n",
-        "follow_up_sequence.md": "# Follow-up sequence\n\n1. Initial diagnostic offer\n2. Value-add follow-up with a concrete workflow hypothesis\n3. Short proof-of-concept suggestion\n4. Close-loop note asking for the right decision maker\n",
+        "business_profile.md": _build_local_business_profile(record),
+        "pain_hypothesis.md": _build_local_pain_hypothesis(record),
+        "ai_pilot_idea.md": _build_local_ai_pilot_idea(record),
+        "diagnostic_offer.md": _build_local_diagnostic_offer(record),
+        "outreach_note.md": _build_local_outreach_note(record),
+        "follow_up_sequence.md": _build_local_follow_up_sequence(record),
     }
-    if prep_kind != "rfp":
+    if prep_kind == "local_outreach":
+        file_bodies["risks.md"] = _build_local_risks(record)
+    elif prep_kind != "rfp":
         file_bodies["risks.md"] = f"# Risks\n\n{record.get('risks') or 'Add delivery, procurement, relationship, deadline, scope, data-access, and buyer-availability risks before submitting or outreaching.'}\n"
         file_bodies["next_steps.md"] = f"# Next steps\n\n{record.get('next_action') or 'Define the next action, owner, and deadline.'}\n"
     filenames = PREP_FILE_SETS.get(prep_kind, PREP_FILE_SETS["1099"])

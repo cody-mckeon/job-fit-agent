@@ -605,3 +605,66 @@ def test_rfp_example_still_scores_positively_without_deadline_urgency(tmp_path, 
     assert record["fit_score"] > 0
     assert record["actionability_score"] > 0
     assert record["urgency_score"] == 0
+
+
+def test_prep_local_outreach_generates_concrete_business_development_material(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    opp = add_work_opportunity(
+        title="Private dining and operations workflow lead",
+        company="Downtown Hospitality Group",
+        opportunity_type="local_business",
+        source="local",
+        source_detail="Las Vegas restaurant and event venue",
+        priority="high",
+        relationship_value="medium",
+        revenue_potential="medium",
+        why_fit="Hospitality operator likely needs AI workflow automation for guest inquiry intake, vendor coordination, and reporting.",
+        notes="Potential local business development target with private dining, events, and manager admin work.",
+        qualification={"likely_workflow_pain": True, "simple_pilot_opportunity": True},
+        next_action="Send diagnostic outreach and validate one workflow pain point.",
+    )
+
+    main(["prep-local-outreach", opp["opportunity_id"]])
+    payload = _record_from_output(capsys.readouterr().out)
+    folder = Path(payload["folder"])
+
+    business_profile = (folder / "business_profile.md").read_text()
+    pain = (folder / "pain_hypothesis.md").read_text()
+    pilots = (folder / "ai_pilot_idea.md").read_text()
+    diagnostic = (folder / "diagnostic_offer.md").read_text()
+    outreach = (folder / "outreach_note.md").read_text()
+    followups = (folder / "follow_up_sequence.md").read_text()
+    risks = (folder / "risks.md").read_text()
+
+    assert "Company / target" in business_profile
+    assert "Current scores" in business_profile
+    assert "What is unknown" in business_profile
+    assert "Recommended next action" in business_profile
+
+    assert "List likely" not in pain
+    assert "Event/group booking handoffs" in pain
+    assert "Restaurant/private dining inquiries" in pain
+    assert "Vendor coordination" in pain
+    assert "How to validate in a conversation" in pain
+
+    assert "Propose one simple" not in pilots
+    assert pilots.count("Pilot name:") >= 2
+    assert "Event/private dining intake agent" in pilots
+    assert "Human review step" in pilots
+    assert "Success metric" in pilots
+
+    assert "30-minute diagnostic" in diagnostic
+    assert "What Cody delivers after the call" in diagnostic
+    assert "Example agenda" in diagnostic
+
+    assert "Draft a concise note" not in outreach
+    assert "Hi [Recipient Name]" in outreach
+    assert "Would you be open to a 30-minute diagnostic conversation?" in outreach
+    assert "Best," in outreach
+
+    assert followups.count("## Message") == 4
+    assert "right person" in followups.lower()
+
+    for expected_risk in ["Unclear buyer", "No relationship", "Pain may be unvalidated", "Scope creep", "Data access", "Integration constraints", "Too broad / not enough urgency"]:
+        assert expected_risk in risks
+    assert "Mitigation:" in risks
