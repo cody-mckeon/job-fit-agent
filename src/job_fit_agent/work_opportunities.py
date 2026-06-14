@@ -701,17 +701,71 @@ def _score_value(value: Any) -> int:
         return mapping.get(str(value).strip().lower(), 0)
 
 
+
+def _rfp_required_documents_known(qualification: dict[str, Any]) -> bool:
+    docs = qualification.get("required_documents") if isinstance(qualification, dict) else None
+    return isinstance(docs, (list, tuple, set)) and any(str(doc).strip() for doc in docs)
+
+
+def _rfp_eligibility_known(qualification: dict[str, Any]) -> bool:
+    eligibility = str(qualification.get("eligibility") or qualification.get("eligible") or "").strip().lower()
+    return bool(eligibility) and eligibility not in {"unknown", "needs_review", "needs review", "review", "none"}
+
+
+def _rfp_submission_requirements_known(record: dict[str, Any], qualification: dict[str, Any]) -> bool:
+    submission = qualification.get("submission_requirements") or qualification.get("submission_requirements_known")
+    if isinstance(submission, bool):
+        return submission
+    if isinstance(submission, (list, tuple, set)):
+        return any(str(item).strip() for item in submission)
+    if isinstance(submission, str) and submission.strip().lower() not in {"", "unknown", "needs_review", "needs review"}:
+        return True
+    return bool(str(record.get("source_detail") or "").strip() and str(record.get("url") or "").strip())
+
+
+def _rfp_deadline_known_and_open(record: dict[str, Any], qualification: dict[str, Any]) -> bool:
+    deadline = str(qualification.get("deadline") or record.get("deadline") or "").strip()
+    parsed_deadline = _parse_date(deadline)
+    if not parsed_deadline:
+        return False
+    return (parsed_deadline - datetime.now(UTC).date()).days >= 0
+
+
+def _rfp_scope_fit_ok(record: dict[str, Any], qualification: dict[str, Any]) -> bool:
+    scope_fit = qualification.get("scope_fit")
+    if isinstance(scope_fit, bool):
+        return scope_fit
+    return bool(str(record.get("why_fit") or "").strip())
+
+
+def _rfp_visible_go_ready(record: dict[str, Any]) -> bool:
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    return (
+        _rfp_scope_fit_ok(record, qualification)
+        and _rfp_deadline_known_and_open(record, qualification)
+        and _rfp_eligibility_known(qualification)
+        and _rfp_required_documents_known(qualification)
+        and _rfp_submission_requirements_known(record, qualification)
+    )
+
+
+def _rfp_initial_posture(record: dict[str, Any]) -> str:
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    risks = str(record.get("risks") or "").lower()
+    if "ineligible" in risks or "not eligible" in risks or qualification.get("eligible") is False:
+        return "Not viable until eligibility blocker is resolved"
+    if _rfp_visible_go_ready(record):
+        return "Go"
+    if _rfp_scope_fit_ok(record, qualification) and _rfp_deadline_known_and_open(record, qualification):
+        return "Viable, needs RFP package review"
+    return "Need More Info"
+
 def _rfp_preliminary_recommendation(record: dict[str, Any]) -> str:
-    fit_score = _score_value(record.get("fit_score"))
-    actionability_score = _score_value(record.get("actionability_score"))
-    deadline = str(record.get("deadline") or "").strip()
     risks = str(record.get("risks") or "").lower()
     qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
     if "ineligible" in risks or "not eligible" in risks or qualification.get("eligible") is False:
         return "No-Go"
-    if not deadline or fit_score == 0 or actionability_score == 0:
-        return "Need More Info"
-    if fit_score >= 65 and actionability_score >= 45:
+    if _rfp_visible_go_ready(record):
         return "Go"
     return "Need More Info"
 
@@ -825,9 +879,12 @@ def prep_work_opportunity(opportunity_id: str, prep_kind: str) -> dict[str, Any]
     record = get_work_opportunity(opportunity_id)
     folder = Path("applications") / "work_opportunities" / f"{_slugify(str(record.get('company') or 'company'))}_{_slugify(str(record.get('title') or 'opportunity'))}_{opportunity_id}"
     folder.mkdir(parents=True, exist_ok=True)
-    context = {key: _display_value(record.get(key)) for key in ("title", "company", "opportunity_type", "source", "source_detail", "url", "deadline", "priority", "fit_score", "actionability_score", "urgency_score", "revenue_potential", "relationship_value", "why_fit", "notes", "risks", "qualification", "next_action", "status")}
+    context = {key: _display_value(record.get(key)) for key in ("title", "company", "opportunity_type", "source", "source_detail", "url", "deadline", "priority", "fit_score", "actionability_score", "urgency_score", "revenue_potential", "relationship_value", "why_fit", "notes", "risks", "next_action", "status")}
+    qualification = record.get("qualification") if isinstance(record.get("qualification"), dict) else {}
+    required_docs = qualification.get("required_documents") or []
+    required_docs_status = _display_value(required_docs) if _rfp_required_documents_known(qualification) else "Unknown"
     common_brief = f"- Type: {context['opportunity_type']}\n- Company/organization: {context['company']}\n- Title: {context['title']}\n- Source: {context['source']}\n- Source detail: {context['source_detail']}\n- URL: {context['url']}\n- Deadline: {context['deadline']}\n\n## Why fit\n{context['why_fit']}\n"
-    rfp_summary = f"# RFP summary\n\n## Opportunity\n{context['title']}\n\n## Buyer / agency\n{context['company']}\n\n## Source\n- Source: {context['source']}\n- Source detail: {context['source_detail']}\n- URL: {context['url']}\n\n## Deadline\n{context['deadline']}\n\n## Why this may fit Cody's AI operations lane\n{context['why_fit']}\n\n## Current scores\n- Priority: {context['priority']}\n- Fit score: {context['fit_score']}\n- Actionability score: {context['actionability_score']}\n- Urgency score: {context['urgency_score']}\n- Revenue potential: {context['revenue_potential']}\n- Relationship value: {context['relationship_value']}\n\n## Current status\n- Status: {context['status']}\n- Notes: {context['notes']}\n- Qualification: {context['qualification']}\n- Risks: {context['risks']}\n\n## Immediate next action\n{context['next_action']}\n"
+    rfp_summary = f"# RFP summary\n\n## Opportunity\n{context['title']}\n\n## Buyer / agency\n{context['company']}\n\n## Source\n- Source: {context['source']}\n- Source detail: {context['source_detail']}\n- URL: {context['url']}\n\n## RFP qualification snapshot\n- Scope fit: {_display_value(qualification.get('scope_fit')) if 'scope_fit' in qualification else ('Likely' if context['why_fit'] != 'Unknown' else 'Unknown')}\n- Deadline: {context['deadline']}\n- Days until deadline: {_display_value(qualification.get('days_until_deadline'))}\n- Eligibility: {_display_value(qualification.get('eligibility') if 'eligibility' in qualification else qualification.get('eligible'))}\n- Proposal complexity: {_display_value(qualification.get('proposal_complexity'))}\n- Required documents known/unknown: {required_docs_status}\n- Initial posture: {_rfp_initial_posture(record)}\n\n## Why this may fit Cody's AI operations lane\n{context['why_fit']}\n\n## Current scores\n- Priority: {context['priority']}\n- Fit score: {context['fit_score']}\n- Actionability score: {context['actionability_score']}\n- Urgency score: {context['urgency_score']}\n- Revenue potential: {context['revenue_potential']}\n- Relationship value: {context['relationship_value']}\n\n## Current status\n- Status: {context['status']}\n- Notes: {context['notes']}\n- Risks: {context['risks']}\n\n## Immediate next action\n{context['next_action']}\n"
     file_bodies = {
         "rfp_summary.md": rfp_summary,
         "go_no_go_checklist.md": _build_rfp_go_no_go(record),
@@ -936,14 +993,20 @@ def _qualification_from_record(lane: str, record: dict[str, Any], query: str = "
         if parsed_deadline:
             days = (parsed_deadline - datetime.now(UTC).date()).days
         complexity = str(record.get("proposal_complexity") or ("high" if _text_has_any(text, ("bond", "insurance", "certification", "security", "multi-year")) else "medium"))
+        eligibility = str(record.get("eligibility") or "needs_review")
+        required_documents = record.get("required_documents") or record.get("documents") or []
+        scope_fit = _text_has_any(text, TARGET_LANE_TERMS)
+        submission_known = bool(str(record.get("source_detail") or "").strip() and str(record.get("url") or "").strip())
+        eligibility_known = eligibility.strip().lower() not in {"", "unknown", "needs_review", "needs review", "review", "none"}
+        documents_known = isinstance(required_documents, (list, tuple, set)) and any(str(doc).strip() for doc in required_documents)
         qualification.update({
             "deadline": deadline,
             "days_until_deadline": days,
-            "eligibility": str(record.get("eligibility") or "needs_review"),
-            "required_documents": record.get("required_documents") or record.get("documents") or [],
-            "scope_fit": _text_has_any(text, TARGET_LANE_TERMS),
+            "eligibility": eligibility,
+            "required_documents": required_documents,
+            "scope_fit": scope_fit,
             "proposal_complexity": complexity,
-            "go_no_go": "go" if parsed_deadline and days is not None and days >= 0 and complexity != "high" else "review",
+            "go_no_go": "go" if parsed_deadline and days is not None and days >= 0 and complexity != "high" and scope_fit and eligibility_known and documents_known and submission_known else "review",
         })
     elif lane == "local_business":
         qualification.update({
