@@ -64,6 +64,37 @@
     "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "withdrawn_at": null
   },
+  "greenhouse:precisionaq:6011803004": {
+    "application_status": "applied",
+    "applied_at": "2026-06-15T20:24:21.159667+00:00",
+    "blocked_at": null,
+    "classification": "high_fit",
+    "company": "precisionaq",
+    "external_job_id": "6011803004",
+    "geographic_eligibility": "eligible",
+    "identifier_used": "greenhouse:precisionaq:6011803004",
+    "interviewing_at": null,
+    "note": "",
+    "offer_at": null,
+    "rejected_at": null,
+    "saved_at": null,
+    "score": 59,
+    "skipped_at": null,
+    "source": "greenhouse",
+    "stable_job_key": "greenhouse:precisionaq:6011803004",
+    "status_history": [
+      {
+        "identifier_used": "greenhouse:precisionaq:6011803004",
+        "note": "",
+        "status": "applied",
+        "timestamp": "2026-06-15T20:24:21.159667+00:00"
+      }
+    ],
+    "title": "AI Enablement Manager",
+    "updated_at": "2026-06-15T20:24:21.159667+00:00",
+    "url": "https://job-boards.greenhouse.io/precisionaq/jobs/6011803004",
+    "withdrawn_at": null
+  },
   "greenhouse:stripe:7812965": {
     "application_status": "applied",
     "applied_at": "2026-06-10T19:14:03.883878+00:00",
