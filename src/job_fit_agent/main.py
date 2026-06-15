@@ -121,6 +121,11 @@ STRONG_FIT_ROLE_TERMS = (
     "ai automation",
     "ai operations",
     "ai transformation",
+    "marketing ops ai",
+    "marketing operations ai",
+    "product operations ai",
+    "ai implementation",
+    "ai enablement manager",
     "ai solutions consultant",
     "agentic ai consultant",
     "workflow automation consultant",
@@ -219,6 +224,11 @@ STRONG_OVERLAP_TERMS = (
     "ai operations",
     "ai enablement",
     "ai transformation",
+    "marketing ops ai",
+    "marketing operations ai",
+    "product operations ai",
+    "ai implementation",
+    "ai enablement manager",
     "ai implementation",
     "ai adoption",
     "generative ai",
@@ -3007,6 +3017,7 @@ PROFILE_DEFAULT_CONTEXT = {
         "cross-functional execution",
     ],
     "current_projects": [
+        "Marketing Intelligence OS",
         "job-fit-agent",
         "OpenClaw workflow automation",
         "Resorts World web analytics/product systems",
@@ -3089,6 +3100,11 @@ SOLUTIONS_TRANSFORMATION_TERMS = (
     "forward-deployed engineer",
     "forward deployed",
     "ai transformation",
+    "marketing ops ai",
+    "marketing operations ai",
+    "product operations ai",
+    "ai implementation",
+    "ai enablement manager",
     "ai operations",
     "workflow automation",
     "internal tools",
@@ -3125,10 +3141,41 @@ def _is_analytics_product_systems_role(job_title: str, role_family: str, descrip
     )
 
 
+def _is_marketing_intelligence_os_priority_role(job_title: str, role_family: str, description: str) -> bool:
+    text = _role_text(job_title, role_family, description)
+    priority_terms = (
+        "ai enablement manager",
+        "ai enablement",
+        "ai transformation",
+        "ai operations",
+        "ai implementation",
+        "ai solutions engineer",
+        "product operations ai",
+        "marketing operations ai",
+        "marketing ops ai",
+        "marketing operations",
+        "marketing ops",
+        "marketing automation",
+        "marketing systems",
+    )
+    return _matches_any(text, priority_terms) and _matches_any(
+        text,
+        ("ai", "automation", "workflow", "operations", "analytics", "reporting", "enablement", "transformation", "implementation"),
+    )
+
+
 def _select_projects_for_role(job_title: str, role_family: str, description: str) -> list[str]:
     text = _role_text(job_title, role_family, description)
     title_family_text = _role_text(job_title, role_family, "")
     hospitality_terms = ("hospitality", "resort", "digital experience", "guest", "api", "integration")
+
+    if _is_marketing_intelligence_os_priority_role(job_title, role_family, description):
+        return [
+            "Marketing Intelligence OS",
+            "AI Product Design Operating System",
+            "Job Fit Agent",
+            "RWLV Priority Governor Agent",
+        ]
 
     if _matches_any(title_family_text, SOLUTIONS_TRANSFORMATION_TERMS):
         return [
@@ -3221,6 +3268,7 @@ def _role_strategy_emphasis(job_title: str, role_family: str, description: str) 
 
 def _project_bullet(project_name: str) -> str:
     bullets = {
+        "Marketing Intelligence OS": "Marketing Intelligence OS: AI enablement system for marketing teams that structures intake, prioritizes use cases, generates reporting briefs, and turns ambiguous stakeholder requests into actionable workflows.",
         "AI Product Design Operating System": "AI Product Design Operating System: modular AI-assisted product design workflow using Current State, Component Inventory, Recommendation, Concept Generation, and Concept Evaluation agents to turn product context into structured recommendations and evaluable concept directions.",
         "Job Fit Agent": "Job Fit Agent: role discovery, scoring, status tracking, GitHub Actions scheduling, and Telegram notifications that support repeatable application operations.",
         "RWLV Priority Governor Agent": "RWLV Priority Governor Agent: internal operational AI enablement for intake triage, prioritization, and execution rhythm management.",
@@ -3251,9 +3299,9 @@ def _build_cover_letter(job: dict[str, Any], description: str) -> str:
             "stakeholder communication, implementation readiness, and keeping solution design grounded in measurable product outcomes."
         )
         project_paragraph = (
-            "Relevant project work includes AI Product Design Operating System as evidence of building agentic product workflows across current-state analysis, "
-            "component inventory, recommendation, concept generation, and concept evaluation; Job Fit Agent as evidence of practical automation with GitHub Actions, "
-            "Telegram, scoring, and status tracking; and RWLV Priority Governor Agent as evidence of internal operational AI enablement and triage."
+            "Relevant project work includes Marketing Intelligence OS as evidence of practical AI enablement for marketing workflows, analytics, reporting, and operational execution; "
+            "AI Product Design Operating System as evidence of building agentic product workflows across current-state analysis, component inventory, recommendation, concept generation, and concept evaluation; "
+            "and Job Fit Agent as evidence of practical automation with GitHub Actions, Telegram, scoring, and status tracking."
         )
     else:
         fit_paragraph = (
@@ -3413,7 +3461,7 @@ Aligned to {job['company']}'s {job['title']} role by emphasizing {top_strengths}
 
     recruiter_note = f"""Hi, I am interested in the {job['title']} role at {job['company']}.
 I focus on AI-enabled workflow systems, internal tools, product systems, and product analytics.
-Relevant projects include AI Product Design Operating System for agentic product workflows, Job Fit Agent for GitHub Actions/Telegram automation with scoring and status tracking, and RWLV Priority Governor Agent for internal operational AI enablement and triage.
+Relevant projects include Marketing Intelligence OS for AI enablement across marketing workflows, analytics, reporting, and operational execution; AI Product Design Operating System for agentic product workflows; and Job Fit Agent for GitHub Actions/Telegram automation with scoring and status tracking.
 In my current work, I translate ambiguous requests into trackable requirements, analytics instrumentation, and implementation-ready digital work with marketing, web, analytics, and vendor partners.
 If helpful, I can share a concise summary of relevant work and why it maps to this role.
 """

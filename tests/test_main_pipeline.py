@@ -889,15 +889,20 @@ def test_role_family_project_ordering_rules():
         "solutions_engineering",
         "customer-facing AI workflow implementation and internal tools",
     )[:3] == ["AI Product Design Operating System", "Job Fit Agent", "RWLV Priority Governor Agent"]
+    assert _select_projects_for_role(
+        "AI Enablement Manager",
+        "ai_operations",
+        "marketing workflow automation, reporting analytics, and implementation",
+    )[:3] == ["Marketing Intelligence OS", "AI Product Design Operating System", "Job Fit Agent"]
     assert _select_projects_for_role("Forward Deployed Engineer", "", "AI implementation")[:3] == [
+        "Marketing Intelligence OS",
         "AI Product Design Operating System",
         "Job Fit Agent",
-        "RWLV Priority Governor Agent",
     ]
     assert _select_projects_for_role("AI Transformation Lead", "", "workflow automation")[:3] == [
+        "Marketing Intelligence OS",
         "AI Product Design Operating System",
         "Job Fit Agent",
-        "RWLV Priority Governor Agent",
     ]
     assert _select_projects_for_role("Product Manager", "", "roadmap and agentic workflows")[:3] == [
         "AI Product Design Operating System",

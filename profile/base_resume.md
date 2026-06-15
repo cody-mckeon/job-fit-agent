@@ -80,6 +80,15 @@ Dec 2018 – Jul 2023
 
 ## Projects
 
+### Marketing Intelligence OS  
+**AI Workflow Design, Marketing Analytics, Reporting Operations, Use-Case Prioritization, Workflow Automation**
+
+- Built an AI-assisted operating system for marketing teams to structure intake, prioritize use cases, generate reporting briefs, and turn ambiguous stakeholder requests into actionable workflows.
+- Developed repeatable AI workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
+- Created a practical use-case pipeline for identifying AI opportunities across marketing operations, analytics, website management, design systems, and vendor coordination.
+- Applied AI tools to standardize reporting plans, clarify metrics, document assumptions, flag data-quality risks, and support cross-functional decision-making.
+- Positioned the system as an internal AI enablement layer that helps teams adopt AI through real workflow improvements rather than one-off prompting.
+
 ### AI Product Design Operating System  
 **Python, Markdown Agents, Figma, Product Analytics, Design Systems, Workflow Automation, Evaluation Frameworks**
 

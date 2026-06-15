@@ -25,6 +25,37 @@ preferred_themes:
   - experimentation and measurement
 
 current_projects:
+
+  marketing_intelligence_os:
+    name: "Marketing Intelligence OS"
+    description: "AI enablement system for marketing workflows, analytics, reporting, and operational execution."
+    technologies:
+      - AI workflow design
+      - Marketing analytics
+      - Reporting operations
+      - Use-case prioritization
+      - Website performance analysis
+      - UTM/source review
+      - Workflow automation
+    themes:
+      - AI enablement
+      - AI transformation
+      - marketing operations
+      - analytics
+      - reporting
+      - workflow automation
+      - cross-functional decision-making
+    bullets:
+      - Built an AI-assisted operating system for marketing teams to structure intake, prioritize use cases, generate reporting briefs, and turn ambiguous stakeholder requests into actionable workflows.
+      - Developed repeatable AI workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
+      - Created a practical use-case pipeline for identifying AI opportunities across marketing operations, analytics, website management, design systems, and vendor coordination.
+      - Applied AI tools to standardize reporting plans, clarify metrics, document assumptions, flag data-quality risks, and support cross-functional decision-making.
+      - Positioned the system as an internal AI enablement layer that helps teams adopt AI through real workflow improvements rather than one-off prompting.
+    limited_space_bullets:
+      - Built an AI-assisted operating system for marketing teams to structure intake, prioritize use cases, generate reporting briefs, and turn ambiguous stakeholder requests into actionable workflows.
+      - Developed repeatable AI workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
+      - Positioned the system as an internal AI enablement layer that helps teams adopt AI through real workflow improvements rather than one-off prompting.
+
   ai_product_design_operating_system:
     name: "AI Product Design Operating System"
     description: "Modular AI-assisted product design workflow that turns product context into structured design recommendations and evaluable concept directions."
