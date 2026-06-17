@@ -20,6 +20,7 @@ preferred_themes:
   - internal tools
   - operational AI
   - developer tools
+  - local LLM workflow evaluation
   - cross-functional execution
   - privacy and consent governance
   - experimentation and measurement
@@ -37,9 +38,12 @@ current_projects:
       - Website performance analysis
       - UTM/source review
       - Workflow automation
+      - local LLMs
+      - Qwen 3
     themes:
       - AI enablement
       - AI transformation
+      - local LLM workflow evaluation
       - marketing operations
       - analytics
       - reporting
@@ -51,6 +55,7 @@ current_projects:
       - Created a practical use-case pipeline for identifying AI opportunities across marketing operations, analytics, website management, design systems, and vendor coordination.
       - Applied AI tools to standardize reporting plans, clarify metrics, document assumptions, flag data-quality risks, and support cross-functional decision-making.
       - Positioned the system as an internal AI enablement layer that helps teams adopt AI through real workflow improvements rather than one-off prompting.
+      - Incorporated local LLM experimentation into the AI workflow stack, using models such as Qwen 3 to evaluate offline/private inference patterns, cost control, and task-specific agent behavior.
     limited_space_bullets:
       - Built an AI-assisted operating system for marketing teams to structure intake, prioritize use cases, generate reporting briefs, and turn ambiguous stakeholder requests into actionable workflows.
       - Developed repeatable AI workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
@@ -103,10 +108,14 @@ current_projects:
 
   rwlv_priority_governor:
     name: "RWLV Priority Governor Agent"
-    description: "OpenClaw-based workflow agent that helps triage active web/product work, prioritize Asana tasks, and send Telegram briefings using GPT-5.5. Built to reduce operational friction across shifting priorities and limited engineering/vendor capacity."
+    description: "OpenClaw- and Hermes Agent-based workflow agent that helps triage active web/product work, prioritize Asana tasks, and send Telegram briefings using GPT-5.5 and OpenAI API workflows while evaluating local LLM patterns such as Qwen 3 where practical. Built to reduce operational friction across shifting priorities and limited engineering/vendor capacity."
     technologies:
       - OpenClaw
+      - Hermes Agent
       - GPT-5.5
+      - OpenAI API
+      - local LLMs
+      - Qwen 3
       - Telegram
       - Asana
       - Python

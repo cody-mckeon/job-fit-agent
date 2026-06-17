@@ -11,7 +11,7 @@ https://github.com/cody-mckeon
 
 Technical product builder focused on AI-enabled workflow systems, internal tools, product analytics, and agentic operations. Blends product strategy with hands-on technical execution to turn ambiguous business needs into usable internal tools, customer-facing solution workflows, and measurable product systems.
 
-Experienced building and orchestrating AI-assisted product systems across Python, OpenClaw, GPT-5.5, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
+Experienced building and orchestrating AI-assisted product systems across Python, OpenClaw, Hermes Agent, GPT-5.5, hosted OpenAI API workflows, local LLMs including Qwen 3, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
 
 ## Core Skills
 
@@ -31,8 +31,11 @@ Experienced building and orchestrating AI-assisted product systems across Python
 ## Tools & Platforms
 
 - OpenClaw
+- Hermes Agent
 - GPT-5.5
 - OpenAI API
+- local LLMs
+- Qwen 3
 - Python
 - GitHub / GitHub Actions
 - SQLite
@@ -88,6 +91,7 @@ Dec 2018 – Jul 2023
 - Created a practical use-case pipeline for identifying AI opportunities across marketing operations, analytics, website management, design systems, and vendor coordination.
 - Applied AI tools to standardize reporting plans, clarify metrics, document assumptions, flag data-quality risks, and support cross-functional decision-making.
 - Positioned the system as an internal AI enablement layer that helps teams adopt AI through real workflow improvements rather than one-off prompting.
+- Incorporated local LLM experimentation into the AI workflow stack, using models such as Qwen 3 to evaluate offline/private inference patterns, cost control, and task-specific agent behavior.
 
 ### AI Product Design Operating System  
 **Python, Markdown Agents, Figma, Product Analytics, Design Systems, Workflow Automation, Evaluation Frameworks**
@@ -107,7 +111,7 @@ Dec 2018 – Jul 2023
 - Developed application preparation support, including resume PDF export for submission readiness.
 
 ### RWLV Priority Governor Agent  
-**OpenClaw, GPT-5.5, Telegram, Asana, Python, Markdown Configuration**
+**OpenClaw, Hermes Agent, GPT-5.5, OpenAI API, local LLMs, Qwen 3, Telegram, Asana, Python, Markdown Configuration**
 
 - Designed a lightweight agentic operations workflow for active web and product work triage.
 - Structured Asana prioritization flows and Telegram briefings to keep stakeholders aligned on shifting priorities.
