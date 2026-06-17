@@ -1,6 +1,7 @@
 ashby:
   - scrunch
   - elevenlabs
+  - openai
 greenhouse:
   - precisionaq
 lever:
