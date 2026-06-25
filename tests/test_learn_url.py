@@ -3,6 +3,7 @@ from pathlib import Path
 from job_fit_agent.config import load_discovery_queue
 from job_fit_agent.main import ParsedJobUrl, learn_url, main, parse_job_url
 from job_fit_agent.models import JobPosting
+from job_fit_agent.repository import get_job_by_url
 
 
 def test_parse_ashby_url_company() -> None:
@@ -177,6 +178,37 @@ def test_learn_url_accepts_workday_and_creates_fallback(monkeypatch, capsys) -> 
     assert '"stable_job_key": "workday:lennar:R26_0000002533"' in output
     assert stored["job"].title == "Product Manager, Digital Buying & Selling"
     assert stored["fit"].classification == "needs_review"
+
+
+def test_learn_url_workday_description_file_stores_description(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    description_file = tmp_path / "workday_description.txt"
+    description_file.write_text(
+        "Lead digital buying and selling product strategy with AI workflow automation, product analytics, experimentation, and cross-functional delivery for homebuying experiences.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main._fetch_direct_job_page", lambda *a, **k: None)
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr(
+        "job_fit_agent.main.score_job",
+        lambda job, profile: __import__("job_fit_agent.models").models.FitScore(
+            total_score=88,
+            classification="high_fit",
+            role_family="product_management",
+            viability_score=80,
+            viability_level="apply_now",
+        ),
+    )
+
+    learn_url(WORKDAY_URL, description_file=str(description_file))
+    output = capsys.readouterr().out
+    row = get_job_by_url("https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533")
+
+    assert row is not None
+    assert len(row["notes"]) > 0
+    assert row["classification"] != "needs_review"
+    assert '"description": true' in output
+    assert "Description supplied manually from description file." in output
 
 
 def test_prep_url_workday_returns_warning_package_when_review(monkeypatch, capsys) -> None:

@@ -111,6 +111,33 @@ def test_prep_url_generates_package(monkeypatch, tmp_path: Path) -> None:
     assert Path(summary["package_zip_path"]).exists()
 
 
+def test_prep_url_workday_description_file_generates_package(monkeypatch, tmp_path: Path) -> None:
+    _setup_package_workspace(tmp_path, monkeypatch)
+    workday_url = "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com"
+    description_file = tmp_path / "workday_description.txt"
+    description_file.write_text(
+        "Own AI workflow automation, product analytics, digital buying experimentation, roadmap strategy, stakeholder discovery, and cross-functional delivery for customer-facing homebuying journeys.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("job_fit_agent.main._fetch_direct_job_page", lambda *args, **kwargs: None)
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.score_job", _fit)
+
+    summary = prep_url(workday_url, description_file=str(description_file), force=True, skip_browser=True, skip_pdf=True)
+
+    canonical_url = "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533"
+    row = get_job_by_url(canonical_url)
+    assert row is not None
+    assert len(row["notes"]) > 0
+    assert row["classification"] != "needs_review"
+    assert summary is not None
+    assert summary["stable_job_key"] == "workday:lennar:R26_0000002533"
+    fit_summary = (Path(summary["application_folder"]) / "fit_summary.md").read_text(encoding="utf-8")
+    resume_draft = (Path(summary["application_folder"]) / "resume_draft.md").read_text(encoding="utf-8")
+    assert "workflow automation" in resume_draft.lower()
+    assert "product analytics" in row["notes"].lower()
+
+
 def test_prep_url_supports_force(monkeypatch, tmp_path: Path) -> None:
     _setup_package_workspace(tmp_path, monkeypatch)
     monkeypatch.setattr("job_fit_agent.main._fetch_direct_job_page", lambda *args, **kwargs: type("Page", (), {"html": _html(), "fetched_with_browser": False})())
@@ -141,4 +168,4 @@ def test_prep_url_rejects_unsupported_url_with_useful_message(capsys) -> None:
 def test_prep_url_appears_in_help(capsys) -> None:
     main(["--help"])
     output = capsys.readouterr().out
-    assert "python -m job_fit_agent.main prep-url <job_url> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]" in output
+    assert "python -m job_fit_agent.main prep-url <job_url> [--description-file <path>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]" in output

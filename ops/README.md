@@ -79,9 +79,10 @@ If a job exists online but is missing from local SQLite, prepare directly from t
 ```bash
 docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa" --notify-telegram
 docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-url "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com" --force
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-url "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com" --description-file pasted_workday_description.txt --force --skip-browser
 ```
 
-`prep-url` inserts or updates the job, scores it, generates the application package, exports the resume PDF unless `--skip-pdf` is passed, and zips the package when the normal package flow succeeds. By default it blocks geography-review, geography-ineligible, and otherwise non-actionable jobs; use `--force` only when Cody intentionally wants the package despite warnings.
+`prep-url` inserts or updates the job, scores it, generates the application package, exports the resume PDF unless `--skip-pdf` is passed, and zips the package when the normal package flow succeeds. For Workday pages, pass `--description-file` with a pasted visible job description when dynamic rendering blocks automatic extraction; the job is rescored and the description is stored before package generation. By default it blocks geography-review, geography-ineligible, and otherwise non-actionable jobs; use `--force` only when Cody intentionally wants the package despite warnings.
 
 After Cody submits an application, mark it immediately so it is not recommended again:
 
