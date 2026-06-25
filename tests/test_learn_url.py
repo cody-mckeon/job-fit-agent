@@ -138,3 +138,61 @@ def test_learn_url_accepts_greenhouse_job_boards_url(monkeypatch, tmp_path: Path
 
     queue = load_discovery_queue(queue_path)
     assert queue.greenhouse == ["robotsandpencils"]
+
+WORKDAY_URL = "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com"
+
+
+def test_parse_workday_url_lennar_fields() -> None:
+    parsed = parse_job_url(WORKDAY_URL)
+    assert parsed.source == "workday"
+    assert parsed.company == "lennar"
+    assert parsed.tenant == "lennar"
+    assert parsed.site == "Lennar_Jobs"
+    assert parsed.location_slug == "Austin-TX---Virtual"
+    assert parsed.job_slug == "Product-Manager--Digital-Buying---Selling"
+    assert parsed.job_id == "R26_0000002533"
+    assert parsed.canonical_url == "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533"
+
+
+def test_workday_fallback_normalizes_title_and_location() -> None:
+    parsed = parse_job_url(WORKDAY_URL)
+    job = __import__("job_fit_agent.main").main.build_workday_fallback_job(parsed)
+    assert job.title == "Product Manager, Digital Buying & Selling"
+    assert job.location == "Austin, TX - Virtual"
+    assert job.source == "workday"
+    assert job.url == parsed.canonical_url
+
+
+def test_learn_url_accepts_workday_and_creates_fallback(monkeypatch, capsys) -> None:
+    stored = {}
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main._fetch_direct_job_page", lambda *a, **k: None)
+    monkeypatch.setattr("job_fit_agent.main.upsert_job", lambda job, fit: stored.update({"job": job, "fit": fit}))
+
+    learn_url(WORKDAY_URL)
+    output = capsys.readouterr().out
+    assert '"success": true' in output
+    assert '"source": "workday"' in output
+    assert '"stable_job_key": "workday:lennar:R26_0000002533"' in output
+    assert stored["job"].title == "Product Manager, Digital Buying & Selling"
+    assert stored["fit"].classification == "needs_review"
+
+
+def test_prep_url_workday_returns_warning_package_when_review(monkeypatch, capsys) -> None:
+    row = None
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main._fetch_direct_job_page", lambda *a, **k: None)
+
+    def _upsert(job, fit):
+        nonlocal row
+        row = {"id": 22, "source": job.source, "company": job.company, "title": job.title, "location": job.location, "url": job.url, "classification": fit.classification, "geographic_eligibility": "review", "viability_level": "review"}
+
+    monkeypatch.setattr("job_fit_agent.main.upsert_job", _upsert)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_url", lambda url: row if row and row["url"] == url else None)
+    result = __import__("job_fit_agent.main").main.prep_url(WORKDAY_URL)
+    assert result["source"] == "workday"
+    assert result["stable_job_key"] == "workday:lennar:R26_0000002533"
+    assert "requires review" in result["warning"]
+    assert "Workday" in capsys.readouterr().out
