@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-STABLE_JOB_KEY_RE = re.compile(r"^(greenhouse|ashby|lever|job):([^:]+):(.+)$")
+STABLE_JOB_KEY_RE = re.compile(r"^(greenhouse|ashby|lever|workday|job):([^:]+):(.+)$")
 
 
 def _value(job: object, key: str, default: Any = "") -> Any:
@@ -70,6 +70,8 @@ def _company_from_url(source: str, url: str) -> str:
         return segments[0]
     if source == "greenhouse" and host in {"boards.greenhouse.io", "job-boards.greenhouse.io"} and segments:
         return segments[0]
+    if source == "workday" and host.endswith(".myworkdayjobs.com"):
+        return host.split(".")[0]
     # Company-hosted Greenhouse pages such as https://stripe.com/jobs/search?gh_jid=...
     if source == "greenhouse" and host:
         parts = host.split(".")
@@ -87,6 +89,8 @@ def infer_source_from_url(url: str) -> str | None:
         return "lever"
     if host in {"boards.greenhouse.io", "job-boards.greenhouse.io"} or "gh_jid" in parse_qs(parsed.query):
         return "greenhouse"
+    if host.endswith(".myworkdayjobs.com"):
+        return "workday"
     return None
 
 
@@ -132,6 +136,17 @@ def extract_external_job_id(source: str, url: str = "", payload: Any = None) -> 
                 return segment
         return next((value.strip() for value in payload_values if value.strip()), "")
 
+    if normalized_source == "workday":
+        payload_values = _payload_values(payload, ("requisition_id", "requisitionId", "jobReqId", "id"))
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        if len(segments) >= 4 and segments[1] == "job":
+            req_match = re.search(r"_([A-Za-z]+\d+_.+)$", segments[3])
+            if req_match:
+                return req_match.group(1)
+            if "_" in segments[3]:
+                return segments[3].rsplit("_", 1)[1]
+        return next((value.strip() for value in payload_values if value.strip()), "")
+
     return ""
 
 
@@ -149,12 +164,12 @@ def build_stable_job_key(job: object) -> str:
     url = str(_value(job, "url", "") or "")
     payload = _value(job, "payload", None)
     source = str(_value(job, "source", "") or infer_source_from_url(url) or "job").strip().lower()
-    if source not in {"greenhouse", "ashby", "lever"}:
+    if source not in {"greenhouse", "ashby", "lever", "workday"}:
         source = infer_source_from_url(url) or "job"
     company = str(_value(job, "company", "") or _company_from_url(source, url) or "company")
     company_slug = normalize_company_slug(company)
     external_id = extract_external_job_id(source, url, payload)
-    if source in {"greenhouse", "ashby", "lever"} and external_id:
+    if source in {"greenhouse", "ashby", "lever", "workday"} and external_id:
         return f"{source}:{company_slug}:{external_id}"
     return f"job:{company_slug}:{deterministic_unknown_job_hash(job)}"
 
@@ -184,6 +199,6 @@ def validate_stable_job_key(job: object, stable_job_key: str | None = None) -> l
     if company != job_company:
         warnings.append(f"Identifier company {company} does not match job company {job_company}.")
     source_external_id = extract_external_job_id(source, str(_value(job, "url", "") or ""), _value(job, "payload", None))
-    if source in {"greenhouse", "ashby", "lever"} and source_external_id and external_id != source_external_id:
+    if source in {"greenhouse", "ashby", "lever", "workday"} and source_external_id and external_id != source_external_id:
         warnings.append(f"Identifier external id {external_id} does not match source external id {source_external_id}.")
     return warnings

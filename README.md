@@ -46,6 +46,7 @@ Learn a company from a manually found job URL:
 python -m job_fit_agent.main learn-url "https://jobs.ashbyhq.com/scrunch/abc123"
 python -m job_fit_agent.main learn-url "https://job-boards.greenhouse.io/robotsandpencils/jobs/5227395008"
 python -m job_fit_agent.main learn-url "https://jobs.lever.co/ramp/abc123"
+python -m job_fit_agent.main learn-url "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com"
 ```
 
 This command parses the source/company from the URL, fetches that company board, scores all jobs, persists them to SQLite, and adds the company to `config/discovery_queue.yaml`.
@@ -58,7 +59,7 @@ python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f4
 python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa" --force --skip-browser --skip-pdf --notify-telegram --debug
 ```
 
-`prep-url` currently supports Ashby direct job URLs (`https://jobs.ashbyhq.com/<company>/<job_id>`). It does not prepare ineligible or review jobs by default; add `--force` only when Cody intentionally wants to prepare anyway after reviewing the warnings.
+`prep-url` currently supports Ashby direct job URLs (`https://jobs.ashbyhq.com/<company>/<job_id>`) and Workday/myworkdayjobs direct job URLs (`https://<tenant>.wd1.myworkdayjobs.com/<site>/job/<location_slug>/<job_slug>_<requisition_id>` or `wd5`). It does not prepare ineligible or review jobs by default; add `--force` only when Cody intentionally wants to prepare anyway after reviewing the warnings.
 
 Promote a discovered company to the daily monitored watchlist:
 
@@ -157,7 +158,7 @@ Workflow:
 3. `approve-company <company>` to promote known-source companies into `config/company_watchlist.yaml`
 4. `python -m job_fit_agent.main run`
 
-Discovery `source_guess` values may be `ashby`, `greenhouse`, `lever`, or `unknown`. Approved companies with a known Lever source are added to the `lever` section of `config/company_watchlist.yaml`.
+Discovery `source_guess` values may be `ashby`, `greenhouse`, `lever`, `workday`, or `unknown`. Approved companies with a known Lever source are added to the `lever` section of `config/company_watchlist.yaml`.
 
 Unknown-source discoveries stay in review (approved status only) until their source is known.
 
@@ -227,7 +228,7 @@ Stable job identity rules:
 
 - Stable job keys are source-native and deterministic; they never use local SQLite row ids.
 - Greenhouse keys use `greenhouse:<company_slug>:<gh_jid>` (for example `greenhouse:stripe:7914005` from `https://stripe.com/jobs/search?gh_jid=7914005`).
-- Ashby keys use `ashby:<company_slug>:<ashby_uuid>` and Lever keys use `lever:<company_slug>:<posting_id_or_slug>`.
+- Ashby keys use `ashby:<company_slug>:<ashby_uuid>`, Lever keys use `lever:<company_slug>:<posting_id_or_slug>`, and Workday keys use `workday:<tenant_slug>:<requisition_id>`.
 - Unknown/custom jobs use `job:<company_slug>:<deterministic_hash>` based on source, URL, title, and company.
 - Telegram status commands resolve canonical stable keys first, then mobile aliases, URLs, source-native external ids, and only then legacy/local row ids. If a Greenhouse key looks like an unstable local row id or mismatches company/source URL identity, the command fails safely without marking a job.
 - Run `python -m job_fit_agent.main migrate-stable-job-keys` to migrate old durable status keys when records include source URLs such as Greenhouse `gh_jid` links. Use `python -m job_fit_agent.main debug-job-identity <identifier_or_url>` to inspect the canonical key and Telegram accept/reject decision.

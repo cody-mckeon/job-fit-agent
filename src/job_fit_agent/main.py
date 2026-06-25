@@ -14,7 +14,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, UTC, date, timedelta
 from typing import Any, Protocol
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlunparse
 
 from pathlib import Path
 
@@ -352,6 +352,12 @@ class ParsedJobUrl:
     company: str
     job_id: str
     original_url: str
+    canonical_url: str = ""
+    tenant: str = ""
+    site: str = ""
+    location_slug: str = ""
+    job_slug: str = ""
+
 
 
 @dataclass
@@ -360,7 +366,48 @@ class DirectJobPage:
     fetched_with_browser: bool = False
 
 
+def _canonical_url_without_tracking(job_url: str) -> str:
+    parsed = urlparse(job_url)
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "", ""))
+
+
+def _parse_workday_url(job_url: str) -> ParsedJobUrl | None:
+    parsed = urlparse(job_url)
+    host = parsed.netloc.lower()
+    if not host.endswith(".myworkdayjobs.com"):
+        return None
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if len(segments) < 4 or segments[1] != "job":
+        return None
+    tenant = host.split(".")[0]
+    site = segments[0]
+    location_slug = segments[2]
+    slug_and_req = segments[3]
+    req_match = re.search(r"_([A-Za-z]+\d+_.+)$", slug_and_req)
+    if req_match:
+        job_slug = slug_and_req[: req_match.start()]
+        requisition_id = req_match.group(1)
+    elif "_" in slug_and_req:
+        job_slug, requisition_id = slug_and_req.rsplit("_", 1)
+    else:
+        return None
+    return ParsedJobUrl(
+        source="workday",
+        company=normalize_company_slug(tenant),
+        job_id=requisition_id,
+        original_url=job_url,
+        canonical_url=_canonical_url_without_tracking(job_url),
+        tenant=tenant,
+        site=site,
+        location_slug=location_slug,
+        job_slug=job_slug,
+    )
+
+
 def parse_job_url(job_url: str) -> ParsedJobUrl:
+    workday = _parse_workday_url(job_url)
+    if workday is not None:
+        return workday
     patterns = [
         ("ashby", r"^https://jobs\.ashbyhq\.com/([^/]+)/([^/?#]+)"),
         ("greenhouse", r"^https://(?:boards|job-boards)\.greenhouse\.io/([^/]+)/jobs/([^/?#]+)"),
@@ -377,14 +424,14 @@ def parse_job_url(job_url: str) -> ParsedJobUrl:
         company = host_parts[-2] if len(host_parts) >= 2 else "company"
         return ParsedJobUrl(source="greenhouse", company=normalize_company_slug(company), job_id=gh_jid, original_url=job_url)
     raise ValueError(
-        "Unsupported job URL. Expected Ashby, Greenhouse, Lever, or Greenhouse gh_jid URL patterns."
+        "Unsupported job URL. Expected Ashby, Greenhouse, Lever, Workday/myworkdayjobs, or Greenhouse gh_jid URL patterns."
     )
 
 
 def parse_prep_url(job_url: str) -> ParsedJobUrl:
     parsed = parse_job_url(job_url)
-    if parsed.source != "ashby":
-        raise ValueError("Unsupported job URL for prep-url. Expected Ashby URL pattern: https://jobs.ashbyhq.com/<company>/<job_id>.")
+    if parsed.source not in {"ashby", "workday"}:
+        raise ValueError("Unsupported job URL for prep-url. Expected Ashby URL pattern: https://jobs.ashbyhq.com/<company>/<job_id> or Workday/myworkdayjobs URL pattern.")
     return parsed
 
 
@@ -582,6 +629,66 @@ def extract_ashby_job_from_direct_page(job_url: str, html: str) -> JobPosting:
         description=description,
         date_found=datetime.now(UTC),
     )
+
+
+def _humanize_workday_title(job_slug: str) -> str:
+    title = re.sub(r"-+", " ", job_slug or "").strip()
+    title = re.sub(r"\bDigital Buying Selling\b", "Digital Buying & Selling", title, flags=re.IGNORECASE)
+    title = title.title().replace(" And ", " and ").replace(" & ", " & ")
+    title = title.replace("Product Manager Digital", "Product Manager, Digital")
+    return title
+
+
+def _humanize_workday_location(location_slug: str) -> str:
+    location = (location_slug or "").replace("---", " __DASH__ ").replace("--", " __DASH__ ").replace("-", " ")
+    location = location.replace("__DASH__", "-")
+    location = re.sub(r"\s+", " ", location).strip()
+    location = re.sub(r"\bTX\b", "TX", location, flags=re.IGNORECASE)
+    location = location.replace("Austin TX", "Austin, TX")
+    return location
+
+
+def extract_workday_job_from_direct_page(job_url: str, html: str) -> JobPosting:
+    parsed = parse_job_url(job_url)
+    if parsed.source != "workday":
+        raise ValueError("Expected Workday job URL.")
+    soup = BeautifulSoup(html, "html.parser")
+    json_ld_fields = _extract_json_ld_job_fields(html)
+    title = json_ld_fields.get("title") or _extract_direct_job_title(soup) or _humanize_workday_title(parsed.job_slug)
+    description = _extract_direct_job_description(soup, html)
+    location = _humanize_workday_location(parsed.location_slug)
+    if not description or len(description) < 80:
+        raise ValueError("Could not extract Workday description from dynamic page.")
+    return JobPosting(
+        source="workday",
+        company=parsed.company,
+        title=title,
+        location=location,
+        location_raw=location,
+        url=parsed.canonical_url or job_url,
+        description=description,
+        date_found=datetime.now(UTC),
+    )
+
+
+def build_workday_fallback_job(parsed: ParsedJobUrl) -> JobPosting:
+    location = _humanize_workday_location(parsed.location_slug)
+    return JobPosting(
+        source="workday",
+        company=parsed.company,
+        title=_humanize_workday_title(parsed.job_slug),
+        location=location,
+        location_raw=location,
+        url=parsed.canonical_url or parsed.original_url,
+        description="",
+        geographic_eligibility="review",
+        geographic_reason="Workday page could not be fully parsed; manually review description.",
+        date_found=datetime.now(UTC),
+    )
+
+
+def _workday_warning() -> str:
+    return "Workday page could not be fully parsed; manually review description."
 
 
 def group_jobs_by_classification(
@@ -2491,6 +2598,50 @@ def learn_url(job_url: str) -> None:
     parsed = parse_job_url(job_url)
     target_profile = load_target_profile()
     initialize()
+    if parsed.source == "workday":
+        page = _fetch_direct_job_page(parsed.original_url, skip_browser=False, debug=False)
+        warnings: list[str] = []
+        try:
+            if page is None:
+                raise ValueError(_workday_warning())
+            job = extract_workday_job_from_direct_page(parsed.original_url, page.html)
+        except ValueError:
+            job = build_workday_fallback_job(parsed)
+            warnings.append(_workday_warning())
+        fit = score_job(job, target_profile) if job.description.strip() else FitScore(
+            total_score=0,
+            classification="needs_review",
+            role_family="unknown",
+            viability_score=0,
+            viability_level="review",
+            viability_reasons=[_workday_warning()],
+            reasons=[],
+            red_flags=[],
+        )
+        upsert_job(job, fit)
+        print(json.dumps({
+            "success": True,
+            "source": "workday",
+            "company": parsed.company,
+            "tenant": parsed.tenant,
+            "site": parsed.site,
+            "location_slug": parsed.location_slug,
+            "job_slug": parsed.job_slug,
+            "title": job.title,
+            "location": job.location,
+            "requisition_id": parsed.job_id,
+            "stable_job_key": f"workday:{parsed.company}:{parsed.job_id}",
+            "url": job.url,
+            "canonical_url": parsed.canonical_url,
+            "original_url": parsed.original_url,
+            "parsed_fields": {
+                "description": bool(job.description.strip()),
+                "geographic_eligibility": job.geographic_eligibility,
+                "classification": fit.classification,
+            },
+            "warnings": warnings,
+        }, indent=2))
+        return
     collectors = _build_enabled_collectors(AppConfig())
     collector = collectors.get(parsed.source)
     if collector is None:
@@ -2570,6 +2721,64 @@ def prep_url(
 ) -> dict[str, Any] | None:
     parsed = parse_prep_url(job_url)
     initialize()
+    if parsed.source == "workday":
+        row = get_job_by_url(parsed.canonical_url or parsed.original_url) or get_job_by_url(parsed.original_url)
+        warning = ""
+        if row is None:
+            page = _fetch_direct_job_page(parsed.original_url, skip_browser=skip_browser, debug=debug)
+            try:
+                if page is None:
+                    raise ValueError(_workday_warning())
+                job = extract_workday_job_from_direct_page(parsed.original_url, page.html)
+            except ValueError:
+                job = build_workday_fallback_job(parsed)
+                warning = _workday_warning()
+            target_profile = load_target_profile()
+            fit = score_job(job, target_profile) if job.description.strip() else FitScore(
+                total_score=0,
+                classification="needs_review",
+                role_family="unknown",
+                viability_score=0,
+                viability_level="review",
+                viability_reasons=[_workday_warning()],
+            )
+            upsert_job(job, fit)
+            row = get_job_by_url(job.url)
+            if row is not None and job.description.strip():
+                update_notes(int(row["id"]), job.description.strip())
+                row = get_job_by_url(job.url)
+        if row is None:
+            print(json.dumps({"error": "Workday job was learned but could not be loaded from SQLite.", "warning": warning}))
+            return None
+        row_dict = dict(row)
+        if not _is_actionable_selected_job(row_dict) and not force:
+            summary = {
+                "success": False,
+                "source": "workday",
+                "company": parsed.company,
+                "title": row_dict.get("title", ""),
+                "requisition_id": parsed.job_id,
+                "stable_job_key": f"workday:{parsed.company}:{parsed.job_id}",
+                "url": row_dict.get("url", ""),
+                "warning": (warning + " Job requires review before package generation. Use --force to prepare anyway.").strip() if warning else "Workday job requires review before package generation. Use --force to prepare anyway.",
+            }
+            print(json.dumps(summary, indent=2))
+            return summary
+        prep_output = io.StringIO()
+        with contextlib.redirect_stdout(prep_output):
+            summary = prep_next_application(job_id=int(row["id"]), skip_browser=skip_browser, force=force, skip_pdf=skip_pdf)
+        if summary is None:
+            captured = prep_output.getvalue().strip()
+            if captured:
+                print(captured)
+            return None
+        summary["source"] = "workday"
+        summary["external_job_id"] = parsed.job_id
+        summary["stable_job_key"] = f"workday:{parsed.company}:{parsed.job_id}"
+        if warning:
+            summary["warning"] = warning
+        print(json.dumps(summary, indent=2))
+        return summary
     page = _fetch_direct_job_page(job_url, skip_browser=skip_browser, debug=debug)
     if page is None:
         print(json.dumps({"error": "Could not fetch direct job page. Try --debug or run from GitHub Actions."}))
