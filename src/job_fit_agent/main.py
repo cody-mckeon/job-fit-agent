@@ -588,6 +588,73 @@ def _extract_direct_job_description(soup: BeautifulSoup, html: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _flatten_json_strings(value: Any, *, key_hint: str = "") -> list[tuple[str, str]]:
+    strings: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            strings.extend(_flatten_json_strings(nested, key_hint=str(key)))
+    elif isinstance(value, list):
+        for nested in value:
+            strings.extend(_flatten_json_strings(nested, key_hint=key_hint))
+    elif isinstance(value, str):
+        text = BeautifulSoup(value, "html.parser").get_text("\n", strip=True)
+        if text.strip():
+            strings.append((key_hint, text.strip()))
+    return strings
+
+
+def _extract_workday_embedded_job_fields(html: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    soup = BeautifulSoup(html or "", "html.parser")
+    candidate_texts: list[str] = []
+    for script in soup.find_all("script"):
+        raw = script.string or script.get_text()
+        if raw and any(token in raw for token in ("jobPostingInfo", "JobPosting", "requisition", "qualifications", "responsibilities")):
+            candidate_texts.append(raw)
+    for raw in candidate_texts:
+        for pattern in (
+            r'"title"\s*:\s*"([^"]+)"',
+            r'"jobTitle"\s*:\s*"([^"]+)"',
+        ):
+            match = re.search(pattern, raw)
+            if match and not fields.get("title"):
+                fields["title"] = bytes(match.group(1), "utf-8").decode("unicode_escape").strip()
+        for pattern in (
+            r'"location"\s*:\s*"([^"]+)"',
+            r'"primaryLocation"\s*:\s*"([^"]+)"',
+        ):
+            match = re.search(pattern, raw)
+            if match and not fields.get("location"):
+                fields["location"] = bytes(match.group(1), "utf-8").decode("unicode_escape").strip()
+
+        decoder = json.JSONDecoder()
+        for marker in ("jobPostingInfo", "jobPosting", "posting"):
+            marker_index = raw.find(marker)
+            if marker_index < 0:
+                continue
+            brace_index = raw.find("{", marker_index)
+            if brace_index < 0:
+                continue
+            try:
+                payload, _ = decoder.raw_decode(raw[brace_index:])
+            except json.JSONDecodeError:
+                continue
+            strings = _flatten_json_strings(payload)
+            description_parts: list[str] = []
+            for key, text in strings:
+                key_lower = key.lower()
+                if key_lower in {"title", "jobtitle"} and not fields.get("title"):
+                    fields["title"] = text
+                if "location" in key_lower and not fields.get("location"):
+                    fields["location"] = text
+                if any(token in key_lower for token in ("description", "responsibilities", "qualification", "requirement", "compensation", "question")) and len(text) > 20:
+                    description_parts.append(text)
+            if description_parts:
+                fields["description"] = "\n\n".join(dict.fromkeys(description_parts))
+                return fields
+    return fields
+
+
 def extract_ashby_job_from_direct_page(job_url: str, html: str) -> JobPosting:
     parsed = parse_prep_url(job_url)
     soup = BeautifulSoup(html, "html.parser")
@@ -654,9 +721,10 @@ def extract_workday_job_from_direct_page(job_url: str, html: str) -> JobPosting:
         raise ValueError("Expected Workday job URL.")
     soup = BeautifulSoup(html, "html.parser")
     json_ld_fields = _extract_json_ld_job_fields(html)
-    title = json_ld_fields.get("title") or _extract_direct_job_title(soup) or _humanize_workday_title(parsed.job_slug)
-    description = _extract_direct_job_description(soup, html)
-    location = _humanize_workday_location(parsed.location_slug)
+    embedded_fields = _extract_workday_embedded_job_fields(html)
+    title = json_ld_fields.get("title") or embedded_fields.get("title") or _extract_direct_job_title(soup) or _humanize_workday_title(parsed.job_slug)
+    description = json_ld_fields.get("description") or embedded_fields.get("description") or _extract_direct_job_description(soup, html)
+    location = embedded_fields.get("location") or _humanize_workday_location(parsed.location_slug)
     if not description or len(description) < 80:
         raise ValueError("Could not extract Workday description from dynamic page.")
     return JobPosting(
@@ -689,6 +757,49 @@ def build_workday_fallback_job(parsed: ParsedJobUrl) -> JobPosting:
 
 def _workday_warning() -> str:
     return "Workday page could not be fully parsed; manually review description."
+
+
+def _manual_description_warning() -> str:
+    return "Description supplied manually from description file."
+
+
+def _read_description_file(description_file: str | None) -> str:
+    if not description_file:
+        return ""
+    description = Path(description_file).read_text(encoding="utf-8").strip()
+    if not description:
+        raise ValueError("Description file is empty.")
+    return description
+
+
+def _attach_manual_description(job: JobPosting, description: str) -> JobPosting:
+    job.description = description.strip()
+    if job.geographic_eligibility == "review" and job.geographic_reason == _workday_warning():
+        job.geographic_reason = ""
+    return job
+
+
+def _job_from_row_with_description(row: dict[str, Any], description: str) -> JobPosting:
+    return JobPosting(
+        source=str(row.get("source") or ""),
+        company=str(row.get("company") or ""),
+        title=str(row.get("title") or ""),
+        location=str(row.get("location") or ""),
+        location_raw=str(row.get("location_raw") or row.get("location") or ""),
+        normalized_country=str(row.get("normalized_country") or ""),
+        normalized_state=str(row.get("normalized_state") or ""),
+        normalized_city=str(row.get("normalized_city") or ""),
+        normalized_location_type=str(row.get("normalized_location_type") or ""),
+        geographic_eligibility=str(row.get("geographic_eligibility") or "review"),
+        geographic_reason=str(row.get("geographic_reason") or ""),
+        workplace_type=str(row.get("workplace_type") or ""),
+        department=str(row.get("department") or ""),
+        employment_type=str(row.get("employment_type") or ""),
+        team=str(row.get("team") or ""),
+        url=str(row.get("url") or ""),
+        description=description.strip(),
+        date_found=datetime.now(UTC),
+    )
 
 
 def group_jobs_by_classification(
@@ -2270,12 +2381,21 @@ def debug_job_identity(identifier_or_url: str) -> dict[str, Any]:
     payload = {
         "input": token,
         "resolved": resolved,
+        "id": safe_row_value(job, "id", None) if job else None,
         "local_job_id": safe_row_value(job, "id", None) if job else None,
         "source": safe_row_value(job, "source", "") if job else "",
         "company": safe_row_value(job, "company", "") if job else "",
         "title": safe_row_value(job, "title", "") if job else "",
+        "location": safe_row_value(job, "location", "") if job else "",
         "url": safe_row_value(job, "url", "") if job else "",
+        "has_description": bool(str(safe_row_value(job, "notes", "") or "").strip()) if job else False,
+        "description_length": len(str(safe_row_value(job, "notes", "") or "").strip()) if job else 0,
+        "classification": safe_row_value(job, "classification", "") if job else "",
+        "score": safe_row_value(job, "score", None) if job else None,
+        "viability_level": safe_row_value(job, "viability_level", "") if job else "",
+        "geographic_eligibility": safe_row_value(job, "geographic_eligibility", "") if job else "",
         "source_external_id": source_external_id,
+        "stable_job_key": canonical,
         "canonical_stable_job_key": canonical,
         "mobile_command_alias": mobile_command_alias_for_job(job) if job and resolved else "",
         "warnings": warnings,
@@ -2594,11 +2714,12 @@ def print_digest(group_by_status: bool = False, include_skipped: bool = False) -
         print()
 
 
-def learn_url(job_url: str) -> None:
+def learn_url(job_url: str, *, description_file: str | None = None) -> None:
     parsed = parse_job_url(job_url)
     target_profile = load_target_profile()
     initialize()
     if parsed.source == "workday":
+        manual_description = _read_description_file(description_file)
         page = _fetch_direct_job_page(parsed.original_url, skip_browser=False, debug=False)
         warnings: list[str] = []
         try:
@@ -2607,7 +2728,11 @@ def learn_url(job_url: str) -> None:
             job = extract_workday_job_from_direct_page(parsed.original_url, page.html)
         except ValueError:
             job = build_workday_fallback_job(parsed)
-            warnings.append(_workday_warning())
+            if not manual_description:
+                warnings.append(_workday_warning())
+        if manual_description:
+            _attach_manual_description(job, manual_description)
+            warnings.append(_manual_description_warning())
         fit = score_job(job, target_profile) if job.description.strip() else FitScore(
             total_score=0,
             classification="needs_review",
@@ -2619,6 +2744,12 @@ def learn_url(job_url: str) -> None:
             red_flags=[],
         )
         upsert_job(job, fit)
+        try:
+            row = get_job_by_url(job.url)
+        except sqlite3.Error:
+            row = None
+        if row is not None and job.description.strip():
+            update_notes(int(row["id"]), job.description.strip())
         print(json.dumps({
             "success": True,
             "source": "workday",
@@ -2718,10 +2849,12 @@ def prep_url(
     skip_pdf: bool = False,
     notify_telegram: bool = False,
     debug: bool = False,
+    description_file: str | None = None,
 ) -> dict[str, Any] | None:
     parsed = parse_prep_url(job_url)
     initialize()
     if parsed.source == "workday":
+        manual_description = _read_description_file(description_file)
         row = get_job_by_url(parsed.canonical_url or parsed.original_url) or get_job_by_url(parsed.original_url)
         warning = ""
         if row is None:
@@ -2733,6 +2866,9 @@ def prep_url(
             except ValueError:
                 job = build_workday_fallback_job(parsed)
                 warning = _workday_warning()
+            if manual_description:
+                _attach_manual_description(job, manual_description)
+                warning = _manual_description_warning()
             target_profile = load_target_profile()
             fit = score_job(job, target_profile) if job.description.strip() else FitScore(
                 total_score=0,
@@ -2747,6 +2883,15 @@ def prep_url(
             if row is not None and job.description.strip():
                 update_notes(int(row["id"]), job.description.strip())
                 row = get_job_by_url(job.url)
+        elif manual_description:
+            row_dict_for_update = dict(row)
+            job = _job_from_row_with_description(row_dict_for_update, manual_description)
+            target_profile = load_target_profile()
+            fit = score_job(job, target_profile)
+            upsert_job(job, fit)
+            update_notes(int(row_dict_for_update["id"]), manual_description)
+            row = get_job_by_url(job.url) or row
+            warning = _manual_description_warning()
         if row is None:
             print(json.dumps({"error": "Workday job was learned but could not be loaded from SQLite.", "warning": warning}))
             return None
@@ -4989,9 +5134,9 @@ def main(argv: list[str] | None = None) -> None:
             print(json.dumps({"success": False, "message": str(exc)}))
         return
 
-    if command == "debug-job-identity":
+    if command in {"debug-job-identity", "show-job"}:
         if len(args) != 2:
-            print('Usage: python -m job_fit_agent.main debug-job-identity <identifier_or_url>')
+            print(f'Usage: python -m job_fit_agent.main {command} <identifier_or_url>')
             return
         debug_job_identity(args[1])
         return
@@ -5324,20 +5469,22 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if command == "learn-url":
-        if len(args) != 2:
-            print("Usage: python -m job_fit_agent.main learn-url <job_url>")
+        if len(args) < 2 or args[1].startswith("--"):
+            print("Usage: python -m job_fit_agent.main learn-url <job_url> [--description-file <path>]")
             return
         try:
-            learn_url(args[1])
-        except ValueError as exc:
+            description_file = args[args.index("--description-file") + 1] if "--description-file" in args[2:] else None
+            learn_url(args[1], description_file=description_file)
+        except (ValueError, IndexError) as exc:
             print(str(exc))
         return
 
     if command == "prep-url":
         if len(args) < 2 or args[1].startswith("--"):
-            print("Usage: python -m job_fit_agent.main prep-url <job_url> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
+            print("Usage: python -m job_fit_agent.main prep-url <job_url> [--description-file <path>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
             return
         try:
+            description_file = args[args.index("--description-file") + 1] if "--description-file" in args[2:] else None
             prep_url(
                 args[1],
                 force="--force" in args[2:],
@@ -5345,8 +5492,9 @@ def main(argv: list[str] | None = None) -> None:
                 skip_pdf="--skip-pdf" in args[2:],
                 notify_telegram="--notify-telegram" in args[2:],
                 debug="--debug" in args[2:],
+                description_file=description_file,
             )
-        except ValueError as exc:
+        except (ValueError, IndexError) as exc:
             print(str(exc))
         return
 
@@ -5548,8 +5696,8 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main set-status <job_id> <status>")
     print("python -m job_fit_agent.main list-status <status>")
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
-    print("python -m job_fit_agent.main learn-url <job_url>")
-    print("python -m job_fit_agent.main prep-url <job_url> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
+    print("python -m job_fit_agent.main learn-url <job_url> [--description-file <path>]")
+    print("python -m job_fit_agent.main prep-url <job_url> [--description-file <path>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
     print("python -m job_fit_agent.main discover-companies")
     print("python -m job_fit_agent.main add-discovered-company <company> --source <source> --url <careers_url> --reason <reason>")

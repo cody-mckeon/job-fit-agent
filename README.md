@@ -47,6 +47,7 @@ python -m job_fit_agent.main learn-url "https://jobs.ashbyhq.com/scrunch/abc123"
 python -m job_fit_agent.main learn-url "https://job-boards.greenhouse.io/robotsandpencils/jobs/5227395008"
 python -m job_fit_agent.main learn-url "https://jobs.lever.co/ramp/abc123"
 python -m job_fit_agent.main learn-url "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com"
+python -m job_fit_agent.main learn-url "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com" --description-file pasted_workday_description.txt
 ```
 
 This command parses the source/company from the URL, fetches that company board, scores all jobs, persists them to SQLite, and adds the company to `config/discovery_queue.yaml`.
@@ -57,9 +58,10 @@ When a specific job exists online but is missing locally, use `prep-url` to fetc
 ```bash
 python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa"
 python -m job_fit_agent.main prep-url "https://jobs.ashbyhq.com/elevenlabs/275f43d0-b62d-401d-830c-7c1ac0e688aa" --force --skip-browser --skip-pdf --notify-telegram --debug
+python -m job_fit_agent.main prep-url "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Austin-TX---Virtual/Product-Manager--Digital-Buying---Selling_R26_0000002533?source=Monster.com" --description-file pasted_workday_description.txt --force --skip-browser
 ```
 
-`prep-url` currently supports Ashby direct job URLs (`https://jobs.ashbyhq.com/<company>/<job_id>`) and Workday/myworkdayjobs direct job URLs (`https://<tenant>.wd1.myworkdayjobs.com/<site>/job/<location_slug>/<job_slug>_<requisition_id>` or `wd5`). It does not prepare ineligible or review jobs by default; add `--force` only when Cody intentionally wants to prepare anyway after reviewing the warnings.
+`prep-url` currently supports Ashby direct job URLs (`https://jobs.ashbyhq.com/<company>/<job_id>`) and Workday/myworkdayjobs direct job URLs (`https://<tenant>.wd1.myworkdayjobs.com/<site>/job/<location_slug>/<job_slug>_<requisition_id>` or `wd5`). Workday ingestion tries static HTML, embedded JSON/script data, JSON-LD, page metadata, and browser-rendered HTML when available. If Workday dynamic rendering blocks description extraction, paste the visible job description into a text file and pass `--description-file`; the job is rescored with that description, `parsed_fields.description` is true, and the CLI warns that the description was supplied manually. It does not prepare ineligible or review jobs by default; add `--force` only when Cody intentionally wants to prepare anyway after reviewing the warnings.
 
 Promote a discovered company to the daily monitored watchlist:
 
