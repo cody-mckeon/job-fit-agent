@@ -3604,7 +3604,7 @@ def _headline_for_role(job_title: str, role_family: str, description: str, compa
         return "Technical Product Builder | AI Workflow Systems | Product Analytics | Solutions Engineering"
     if _is_analytics_product_systems_role(job_title, role_family, description):
         return "Product Systems Builder | Product Analytics | AI Workflow Systems | Internal Tools"
-    return "Technical Product Manager | AI Workflows | Product Systems | Agentic Operations"
+    return "Technical Product Manager | AI-Powered Digital Products | Product Analytics"
 
 
 def _summary_positioning_for_role(job_title: str, role_family: str, description: str, company: str = "") -> str:
@@ -4401,7 +4401,7 @@ def _build_application_answer(question: str, company: str) -> tuple[str, str]:
 
 
 
-DEFAULT_RESUME_HEADLINE = "Technical Product Manager | AI Workflows | Product Systems | Agentic Operations"
+DEFAULT_RESUME_HEADLINE = "Technical Product Manager | AI-Powered Digital Products | Product Analytics"
 
 
 def _resume_submit_header(headline: str = DEFAULT_RESUME_HEADLINE) -> str:
