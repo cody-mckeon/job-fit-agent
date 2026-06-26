@@ -331,6 +331,24 @@ Generated filename format:
 - `Cody_McKeon_<Company>_<Role>_Resume.pdf`
 - Example: `Cody_McKeon_Linear_Product_Manager_Resume.pdf`
 
+Manual resume edit workflow:
+
+1. Generate the application package normally with `prep-next-application` or `prep-url`.
+2. Edit `applications/<package>/submit_resume.md` directly; this markdown file is the editable source of truth for final submission.
+3. Regenerate only the PDF from that exact markdown, without rerunning tailoring or rewriting `submit_resume.md`:
+
+```bash
+python -m job_fit_agent.main regenerate-application-pdf applications/<package> --force
+```
+
+For an explicit input/output render, use:
+
+```bash
+python -m job_fit_agent.main render-resume-pdf --input applications/<package>/submit_resume.md --output applications/<package>/resume.pdf --force
+```
+
+Both commands use the same pandoc PDF styling as `prep-next-application`, print the generated PDF path, fail clearly when `submit_resume.md` is missing, and support `--open` to launch the rendered PDF. `regenerate-application-pdf` reuses an existing `*Resume.pdf` name when present, otherwise writes `resume.pdf`. Existing zip packages are not refreshed automatically; recreate the zip or rerun packaging before submitting a zip.
+
 Compatibility note: if `resume_draft.md` is missing but `tailored_resume_draft.md` exists, the exporter uses the legacy file and prints a regeneration reminder.
 
 

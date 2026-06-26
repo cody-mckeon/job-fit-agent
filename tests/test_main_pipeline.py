@@ -2288,3 +2288,85 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
         assert tool in submit_text
     assert "model training" not in resume_text.lower()
     assert "ml infrastructure" not in resume_text.lower()
+
+
+def test_render_resume_pdf_creates_pdf_from_markdown_resume(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    resume = tmp_path / "submit_resume.md"
+    pdf = tmp_path / "resume.pdf"
+    resume.write_text("# Cody McKeon\n\nManual resume", encoding="utf-8")
+
+    def fake_run(cmd, check):
+        assert cmd[0] == "pandoc"
+        assert cmd[1] == str(resume)
+        Path(cmd[-1]).write_text("%PDF-1.7\nCody McKeon\nManual resume", encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["render-resume-pdf", "--input", str(resume), "--output", str(pdf)])
+    assert pdf.exists()
+    assert "Manual resume" in pdf.read_text(encoding="utf-8")
+
+
+def test_regenerate_application_pdf_uses_existing_submit_resume(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "acme_product_manager_1"
+    app_dir.mkdir(parents=True)
+    submit_resume = app_dir / "submit_resume.md"
+    submit_resume.write_text("# Cody McKeon\n\nManual edit source", encoding="utf-8")
+    existing_pdf = app_dir / "Cody_McKeon_Acme_Product_Manager_Resume.pdf"
+    existing_pdf.write_bytes(b"%PDF-1.7 old")
+
+    def fake_run(cmd, check):
+        assert cmd[1] == str(submit_resume)
+        assert cmd[-1] == str(existing_pdf)
+        Path(cmd[-1]).write_text("%PDF-1.7\nManual edit source", encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["regenerate-application-pdf", str(app_dir), "--force"])
+    assert existing_pdf.exists()
+    assert "Manual edit source" in existing_pdf.read_text(encoding="utf-8")
+
+
+def test_manual_edits_appear_in_regenerated_pdf_text(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "beta_product_manager_2"
+    app_dir.mkdir(parents=True)
+    manual_marker = "MANUAL EDIT: customer journey analytics"
+    (app_dir / "submit_resume.md").write_text(f"# Cody McKeon\n\n{manual_marker}", encoding="utf-8")
+
+    def fake_run(cmd, check):
+        markdown_text = Path(cmd[1]).read_text(encoding="utf-8")
+        Path(cmd[-1]).write_text("%PDF-1.7\n" + markdown_text, encoding="utf-8")
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["regenerate-application-pdf", str(app_dir)])
+    assert manual_marker in (app_dir / "resume.pdf").read_text(encoding="utf-8")
+
+
+def test_regenerate_application_pdf_does_not_rewrite_submit_resume(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "gamma_product_manager_3"
+    app_dir.mkdir(parents=True)
+    submit_resume = app_dir / "submit_resume.md"
+    original = "# Cody McKeon\n\nExact manual edit\n"
+    submit_resume.write_text(original, encoding="utf-8")
+
+    def fake_run(cmd, check):
+        Path(cmd[-1]).write_bytes(b"%PDF-1.7\nmock")
+
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", fake_run)
+    main(["regenerate-application-pdf", str(app_dir)])
+    assert submit_resume.read_text(encoding="utf-8") == original
+
+
+def test_regenerate_application_pdf_missing_submit_resume_returns_clear_error(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    app_dir = tmp_path / "applications" / "missing_resume_4"
+    app_dir.mkdir(parents=True)
+    called = {"ran": False}
+    monkeypatch.setattr("job_fit_agent.main.subprocess.run", lambda *args, **kwargs: called.__setitem__("ran", True))
+    main(["regenerate-application-pdf", str(app_dir)])
+    output = capsys.readouterr().out
+    assert "Error: Missing submit_resume.md" in output
+    assert str(app_dir / "submit_resume.md") in output
+    assert called["ran"] is False

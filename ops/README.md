@@ -258,6 +258,8 @@ The separate **Job Status Command** workflow persists one explicit Telegram stat
 
 Scheduled GitHub Actions now installs `pandoc` plus LaTeX dependencies (`texlive-latex-base`, `texlive-latex-recommended`, `texlive-fonts-recommended`, `lmodern`) and attempts resume PDF export before packaging. `setspace.sty` is provided by `texlive-latex-recommended`. When export succeeds, the PDF is included in both the Telegram zip and the GitHub artifact; when export fails, the workflow continues and `submit_resume.md` remains the manual fallback.
 
+Manual final-edit workflow: after downloading or generating an application package, edit `applications/<package>/submit_resume.md` as the source of truth, then run `python -m job_fit_agent.main regenerate-application-pdf applications/<package> --force` to regenerate the PDF from those exact edits without rerunning tailoring. For a custom path, run `python -m job_fit_agent.main render-resume-pdf --input applications/<package>/submit_resume.md --output applications/<package>/resume.pdf --force`. Add `--open` to launch the PDF locally. If a package zip already exists, the command warns that the zip was not refreshed; recreate the zip before submitting it.
+
 Download package artifacts from: **GitHub → Actions → Job Fit Agent → latest run → Artifacts**.
 Telegram package summaries include a direct **GitHub Actions run URL** (when executed in Actions), so you can open the run from Telegram, go to **Artifacts**, and download the application package.
 Telegram now also sends the application package `.zip` directly in the chat for mobile download.
