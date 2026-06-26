@@ -4539,6 +4539,68 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
     return _ensure_submit_resume_header(normalized_text, headline=headline)
 
 
+RESUME_PDF_PANDOC_OPTIONS = [
+    "-V",
+    "geometry:margin=0.5in",
+    "-V",
+    "fontsize=10pt",
+    "-V",
+    "pagestyle=empty",
+    "-V",
+    "linestretch=1.15",
+]
+
+
+def _render_resume_pdf_from_markdown(input_path: Path, output_pdf: Path, *, force: bool = False, open_pdf: bool = False) -> Path:
+    if not input_path.exists():
+        raise FileNotFoundError(f"Missing submit_resume.md: {input_path}")
+    if output_pdf.exists() and not force:
+        raise FileExistsError(f"Output PDF already exists: {output_pdf}. Pass --force to overwrite it.")
+    output_pdf.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "pandoc",
+            str(input_path),
+            *RESUME_PDF_PANDOC_OPTIONS,
+            "-o",
+            str(output_pdf),
+        ],
+        check=True,
+    )
+    print(f"Resume PDF exported: {output_pdf}")
+    if open_pdf:
+        if sys.platform == "darwin":
+            opener = ["open", str(output_pdf)]
+        elif os.name == "nt":
+            opener = ["cmd", "/c", "start", "", str(output_pdf)]
+        else:
+            opener = ["xdg-open", str(output_pdf)]
+        subprocess.run(opener, check=False)
+    return output_pdf
+
+
+def _application_resume_pdf_path(application_folder: Path) -> Path:
+    existing = sorted(application_folder.glob("*Resume.pdf"))
+    if existing:
+        return existing[0]
+    return application_folder / "resume.pdf"
+
+
+def render_resume_pdf(input_path: str | Path, output_path: str | Path, *, force: bool = False, open_pdf: bool = False) -> Path:
+    return _render_resume_pdf_from_markdown(Path(input_path), Path(output_path), force=force, open_pdf=open_pdf)
+
+
+def regenerate_application_pdf(application_folder: str | Path, *, force: bool = False, open_pdf: bool = False) -> Path:
+    app_dir = Path(application_folder)
+    resume_path = app_dir / "submit_resume.md"
+    output_pdf = _application_resume_pdf_path(app_dir)
+    rendered = _render_resume_pdf_from_markdown(resume_path, output_pdf, force=force, open_pdf=open_pdf)
+    zip_paths = sorted(app_dir.parent.glob(f"{app_dir.name}*.zip"))
+    if zip_paths:
+        print("Existing zip package was not refreshed. Rerun packaging or recreate the zip before submitting it.")
+    return rendered
+
+
 def export_resume_pdf(job_id: int) -> None:
     initialize()
     job = get_job_by_id(job_id)
@@ -4567,24 +4629,7 @@ def export_resume_pdf(job_id: int) -> None:
     company = _sanitize_resume_name_component(str(job["company"]))
     role = _sanitize_resume_name_component(str(job["title"]))
     output_pdf = app_dir / f"Cody_McKeon_{company}_{role}_Resume.pdf"
-    subprocess.run(
-        [
-            "pandoc",
-            str(resume_path),
-            "-V",
-            "geometry:margin=0.5in",
-            "-V",
-            "fontsize=10pt",
-            "-V",
-            "pagestyle=empty",
-            "-V",
-            "linestretch=1.15",
-            "-o",
-            str(output_pdf),
-        ],
-        check=True,
-    )
-    print(f"Resume PDF exported: {output_pdf}")
+    _render_resume_pdf_from_markdown(resume_path, output_pdf, force=True)
 
 
 def _is_prep_next_application_eligible(job: dict[str, Any]) -> bool:
@@ -5707,6 +5752,54 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Failed to export PDF: {exc}")
         return
 
+    if command == "render-resume-pdf":
+        force = "--force" in args[1:]
+        open_pdf = "--open" in args[1:]
+        input_path = None
+        output_path = None
+        unknown: list[str] = []
+        idx = 1
+        while idx < len(args):
+            token = args[idx]
+            if token == "--input" and idx + 1 < len(args):
+                input_path = args[idx + 1]
+                idx += 2
+                continue
+            if token == "--output" and idx + 1 < len(args):
+                output_path = args[idx + 1]
+                idx += 2
+                continue
+            if token in {"--force", "--open"}:
+                idx += 1
+                continue
+            unknown.append(token)
+            idx += 1
+        if not input_path or not output_path or unknown:
+            print("Usage: python -m job_fit_agent.main render-resume-pdf --input <path/to/submit_resume.md> --output <path/to/resume.pdf> [--force] [--open]")
+            return
+        try:
+            render_resume_pdf(input_path, output_path, force=force, open_pdf=open_pdf)
+        except (FileNotFoundError, FileExistsError) as exc:
+            print(f"Error: {exc}")
+        except subprocess.CalledProcessError as exc:
+            print(f"Failed to export PDF: {exc}")
+        return
+
+    if command == "regenerate-application-pdf":
+        force = "--force" in args[1:]
+        open_pdf = "--open" in args[1:]
+        positional = [arg for arg in args[1:] if arg not in {"--force", "--open"}]
+        if len(positional) != 1:
+            print("Usage: python -m job_fit_agent.main regenerate-application-pdf <application_folder> [--force] [--open]")
+            return
+        try:
+            regenerate_application_pdf(positional[0], force=force, open_pdf=open_pdf)
+        except (FileNotFoundError, FileExistsError) as exc:
+            print(f"Error: {exc}")
+        except subprocess.CalledProcessError as exc:
+            print(f"Failed to export PDF: {exc}")
+        return
+
     if command == "extract-application-questions":
         if len(args) != 2:
             print("Usage: python -m job_fit_agent.main extract-application-questions <job_id>")
@@ -5818,6 +5911,8 @@ def main(argv: list[str] | None = None) -> None:
     print("python -m job_fit_agent.main debug-geography [<job_id>]")
     print("python -m job_fit_agent.main prep-application <job_id>")
     print("python -m job_fit_agent.main export-resume-pdf <job_id>")
+    print("python -m job_fit_agent.main render-resume-pdf --input <path/to/submit_resume.md> --output <path/to/resume.pdf> [--force] [--open]")
+    print("python -m job_fit_agent.main regenerate-application-pdf <application_folder> [--force] [--open]")
     print("python -m job_fit_agent.main extract-application-questions <job_id>")
     print("python -m job_fit_agent.main extract-application-questions-browser <job_id> [--debug]")
     print('python -m job_fit_agent.main add-application-question <job_id> "<question>"')
