@@ -2236,12 +2236,34 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
     )
     assert resume_text.find("## Core Skills") < resume_text.find("## Product Methodologies") < resume_text.find("## Tools & Platforms")
     submit_text = (app_dir / "submit_resume.md").read_text(encoding="utf-8")
+    assert submit_text.startswith("# Cody McKeon")
+    for forbidden in [
+        "Tailored Resume Draft",
+        "Positioning",
+        "Tailored Summary",
+        "Experience Highlights",
+        "Selected Projects",
+        "Targeted Value",
+        "Notes",
+        "Resume Rules Applied",
+    ]:
+        assert forbidden not in submit_text
     assert "**Technical Product Manager | AI-Powered Digital Products | Product Analytics**" in submit_text
     assert "Project Manager, Marketing | Digital Experience & AI Enablement" in submit_text
     assert "Technical Product Manager, Digital Experience & AI Enablement" not in submit_text
     assert "## Product Methodologies" in submit_text
     assert _section_body(submit_text, "Product Methodologies") == product_methodologies
     assert submit_text.find("## Core Skills") < submit_text.find("## Product Methodologies") < submit_text.find("## Tools & Platforms")
+    tools_platforms = _section_body(submit_text, "Tools & Platforms")
+    assert tools_platforms == (
+        "OpenClaw, Hermes Agent, GPT-5.5, OpenAI API, local LLMs, Qwen 3, Python, "
+        "GitHub / GitHub Actions, SQLite, Telegram Bot API, Asana, Pendo, GA4, "
+        "Google Tag Manager, OneTrust, Figma, pytest"
+    )
+    assert all(tool in tools_platforms for tool in ["Hermes Agent", "local LLMs", "Qwen 3"])
+    assert tools_platforms.count("\n") == 0
+    assert submit_text.count("## Projects") == 1
+    assert submit_text.find("## Professional Experience") < submit_text.find("## Projects") < submit_text.find("## Education")
     assert "Built AI-assisted workflows to accelerate product discovery" in resume_text
     assert "implementation-ready product requirements" in resume_text
     assert "AI Marketing Intelligence Platform" in resume_text
