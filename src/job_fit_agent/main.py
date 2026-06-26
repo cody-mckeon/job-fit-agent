@@ -3662,6 +3662,72 @@ def _role_strategy_emphasis(job_title: str, role_family: str, description: str, 
     ]
 
 
+
+PRODUCT_METHODOLOGIES = [
+    "Product Roadmap",
+    "Product Discovery",
+    "Feature Prioritization",
+    "User Behavior Analysis",
+    "Conversion Optimization",
+    "Customer Journey Mapping",
+    "Experimentation",
+    "A/B Testing",
+    "Product Requirements",
+    "User Stories",
+    "Backlog Prioritization",
+    "Product Lifecycle",
+    "Stakeholder Alignment",
+    "AI-assisted Product Development",
+]
+
+
+def _should_include_product_methodologies(job_title: str, role_family: str, description: str, company: str = "") -> bool:
+    text = _role_text(job_title, role_family, description)
+    if _is_lennar_product_manager_role(job_title, role_family, description, company):
+        return True
+    return _is_product_management_role(job_title, role_family, description) and _matches_any(
+        text,
+        (
+            "digital product",
+            "digital buying",
+            "digital selling",
+            "buying & selling",
+            "customer journey",
+            "conversion optimization",
+            "user behavior",
+        ),
+    )
+
+
+def _strip_product_methodologies_section(markdown_text: str) -> str:
+    return re.sub(
+        r"\n## Product Methodologies(?: / Product Skills)?\n\n.*?(?=\n## )",
+        "\n",
+        markdown_text,
+        flags=re.DOTALL,
+    )
+
+
+def _product_methodologies_block() -> str:
+    return section("Product Methodologies", format_inline_list(PRODUCT_METHODOLOGIES))
+
+
+def _add_product_methodologies_section(markdown_text: str) -> str:
+    cleaned = _strip_product_methodologies_section(markdown_text)
+    tools_heading = "\n## Tools & Platforms"
+    block = _product_methodologies_block()
+    if tools_heading in cleaned:
+        return cleaned.replace(tools_heading, f"{block}\n## Tools & Platforms", 1)
+    return f"{cleaned.rstrip()}\n{block}"
+
+
+def _prepare_resume_for_role(markdown_text: str, job_title: str, role_family: str, description: str, company: str = "") -> str:
+    cleaned = _strip_product_methodologies_section(markdown_text)
+    if _should_include_product_methodologies(job_title, role_family, description, company):
+        return _add_product_methodologies_section(cleaned)
+    return cleaned
+
+
 def _project_bullet(project_name: str) -> str:
     bullets = {
         "Marketing Intelligence OS": "Marketing Intelligence OS: AI enablement system for marketing teams that structures intake, prioritizes use cases, generates reporting briefs, and turns ambiguous stakeholder requests into actionable workflows.",
@@ -3755,6 +3821,7 @@ def prep_application(job_id: int) -> None:
     viability_reasons = json.loads(job["viability_reasons"] or "[]")
     description = (job["notes"] or "").strip()
     role_family = (safe_row_value(job, "role_family", "") or "").strip()
+    base_resume = _prepare_resume_for_role(base_resume, job["title"], role_family, description, job["company"])
 
     decision = "review first"
     if job["classification"] == "high_fit" and job["viability_level"] == "apply_now":
@@ -4379,6 +4446,7 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
     section_order = [
         "Professional Summary",
         "Core Skills",
+        "Product Methodologies",
         "Tools & Platforms",
         "Professional Experience",
         "Projects",
@@ -4416,6 +4484,7 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
             return
 
     _convert_section("Core Skills")
+    _convert_section("Product Methodologies")
     _convert_section("Tools & Platforms")
 
     summary_heading = "## Professional Summary"
