@@ -2188,3 +2188,47 @@ def test_digest_separates_eligible_ineligible_and_review_jobs(monkeypatch, capsy
     assert "DACH Forward Deployed Engineer" in output.split("Needs geography review")[0]
     assert "Needs geography review" in output
     assert "North America Forward Deployed Engineer" in output.split("Needs geography review", 1)[1]
+
+
+def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    base_resume = Path(__file__).resolve().parents[1] / "profile" / "base_resume.md"
+    (profile_dir / "base_resume.md").write_text(base_resume.read_text(encoding="utf-8"), encoding="utf-8")
+    (profile_dir / "profile_context.yaml").write_text("strengths:\n  - digital product ownership\n  - product analytics\n  - customer journey\n", encoding="utf-8")
+    (profile_dir / "resume_rules.yaml").write_text("rules:\n  - Avoid unsupported metrics\n", encoding="utf-8")
+    job = _prep_job(
+        "Product Manager, Digital Buying & Selling",
+        company="Lennar",
+        role_family="product_manager",
+        notes="digital buying and selling product manager responsible for product discovery, requirements, experimentation, conversion optimization, customer journey, internal sales tools, analytics, and stakeholder alignment",
+    )
+    monkeypatch.setattr("job_fit_agent.main.initialize", lambda: None)
+    monkeypatch.setattr("job_fit_agent.main.get_job_by_id", lambda job_id: job)
+    monkeypatch.setattr("job_fit_agent.main.update_status", lambda job_id, status: None)
+
+    main(["prep-application", "88"])
+
+    app_dir = tmp_path / "applications" / "lennar_product_manager_digital_buying_selling_88"
+    resume_text = (app_dir / "resume_draft.md").read_text(encoding="utf-8")
+    strategy_text = (app_dir / "resume_strategy.md").read_text(encoding="utf-8")
+    assert "Technical Product Manager building AI-powered digital products" in resume_text
+    assert "customer-facing experiences" in resume_text
+    for term in [
+        "Product Discovery",
+        "Product Requirements",
+        "User Behavior",
+        "Conversion Optimization",
+        "AI-assisted Product Development",
+    ]:
+        assert term in resume_text or term in strategy_text
+    assert "Built AI-assisted workflows to accelerate product discovery" in resume_text
+    assert "implementation-ready product requirements" in resume_text
+    assert "AI Marketing Intelligence Platform" in resume_text
+    assert "Marketing Intelligence OS:" not in resume_text
+    assert resume_text.find("AI Marketing Intelligence Platform") < resume_text.find("Job Fit Agent")
+    for tool in ["Hermes Agent", "local LLMs", "Qwen 3"]:
+        assert tool in resume_text
+    assert "model training" not in resume_text.lower()
+    assert "ml infrastructure" not in resume_text.lower()
