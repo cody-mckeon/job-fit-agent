@@ -5,7 +5,7 @@ Las Vegas / Henderson Metro
 mckeonc0827@gmail.com  
 https://github.com/cody-mckeon  
 
-## Technical Product Builder | AI Workflow Systems | Product Analytics | Internal Tools
+## Technical Product Manager | AI-Powered Digital Products | Product Analytics
 
 ## Professional Summary
 

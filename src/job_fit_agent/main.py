@@ -4554,6 +4554,7 @@ def export_resume_pdf(job_id: int) -> None:
         "Tailored Resume Draft",
         "Resume Rules Applied",
         "Targeted Value",
+        "Selected Projects",
         "Notes",
         "[insert metric if available]",
     ]
