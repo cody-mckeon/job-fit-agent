@@ -2213,6 +2213,8 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
     app_dir = tmp_path / "applications" / "lennar_product_manager_digital_buying_selling_88"
     resume_text = (app_dir / "resume_draft.md").read_text(encoding="utf-8")
     strategy_text = (app_dir / "resume_strategy.md").read_text(encoding="utf-8")
+    assert "Technical Product Manager | AI-Powered Digital Products | Product Analytics" in strategy_text
+    assert "Technical Product Manager | AI-Powered Digital Products | Product Analytics | Customer Journey" not in strategy_text
     assert "Technical Product Manager building AI-powered digital products" in resume_text
     assert "customer-facing experiences" in resume_text
     for term in [
@@ -2234,6 +2236,9 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
     )
     assert resume_text.find("## Core Skills") < resume_text.find("## Product Methodologies") < resume_text.find("## Tools & Platforms")
     submit_text = (app_dir / "submit_resume.md").read_text(encoding="utf-8")
+    assert "**Technical Product Manager | AI-Powered Digital Products | Product Analytics**" in submit_text
+    assert "Project Manager, Marketing | Digital Experience & AI Enablement" in submit_text
+    assert "Technical Product Manager, Digital Experience & AI Enablement" not in submit_text
     assert "## Product Methodologies" in submit_text
     assert _section_body(submit_text, "Product Methodologies") == product_methodologies
     assert submit_text.find("## Core Skills") < submit_text.find("## Product Methodologies") < submit_text.find("## Tools & Platforms")
@@ -2242,7 +2247,22 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
     assert "AI Marketing Intelligence Platform" in resume_text
     assert "Marketing Intelligence OS:" not in resume_text
     assert resume_text.find("AI Marketing Intelligence Platform") < resume_text.find("Job Fit Agent")
+    for subtitle in [
+        "AI-assisted analytics, reporting operations, behavioral insights, product decision support",
+        "AI-assisted product discovery, UX decision support, concept validation, requirements generation",
+        "AI product scoring, workflow automation, decision systems, application operations",
+        "AI-assisted prioritization, stakeholder alignment, operational decision support",
+    ]:
+        assert subtitle in submit_text
+    for tool_heavy_subtitle in [
+        "AI Workflow Design, Marketing Analytics, Reporting Operations, Use-Case Prioritization, Workflow Automation",
+        "Python, Markdown Agents, Figma, Product Analytics, Design Systems, Workflow Automation, Evaluation Frameworks",
+        "Python, SQLite, GitHub Actions, Telegram Bot API, Ashby, Greenhouse, pytest",
+        "OpenClaw, Hermes Agent, GPT-5.5, OpenAI API, local LLMs, Qwen 3, Telegram, Asana, Python, Markdown Configuration",
+    ]:
+        assert tool_heavy_subtitle not in submit_text
     for tool in ["Hermes Agent", "local LLMs", "Qwen 3"]:
         assert tool in resume_text
+        assert tool in submit_text
     assert "model training" not in resume_text.lower()
     assert "ml infrastructure" not in resume_text.lower()
