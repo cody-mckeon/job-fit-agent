@@ -51,7 +51,7 @@ Experienced building and orchestrating AI-assisted product systems across Python
 
 ## Professional Experience
 
-### Technical Product Manager, Digital Experience & AI Enablement  
+### Project Manager, Marketing | Digital Experience & AI Enablement  
 **Resorts World Las Vegas**  
 Feb 2026 – Present
 
@@ -85,7 +85,7 @@ Dec 2018 – Jul 2023
 ## Projects
 
 ### AI Marketing Intelligence Platform  
-**AI Workflow Design, Marketing Analytics, Reporting Operations, Use-Case Prioritization, Workflow Automation**
+**AI-assisted analytics, reporting operations, behavioral insights, product decision support**
 
 - Built an AI-assisted marketing intelligence product to structure intake, prioritize analytics use cases, and convert ambiguous stakeholder requests into reporting briefs, decision documents, and product recommendations.
 - Developed repeatable workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
@@ -94,7 +94,7 @@ Dec 2018 – Jul 2023
 - Positioned the system as an internal AI enablement layer that improves adoption through real workflow improvements, not one-off prompting.
 
 ### AI Product Design Operating System  
-**Python, Markdown Agents, Figma, Product Analytics, Design Systems, Workflow Automation, Evaluation Frameworks**
+**AI-assisted product discovery, UX decision support, concept validation, requirements generation**
 
 - Designed an AI-assisted product operating system that supports product discovery, concept validation, requirements generation, and UX decision-making.
 - Built agent workflows for current-state analysis, component inventory, recommendation generation, concept exploration, and evaluation of multiple solution paths.
@@ -103,7 +103,7 @@ Dec 2018 – Jul 2023
 - Incorporated local LLM experimentation into the AI workflow stack, using models such as Qwen 3 to evaluate offline/private inference patterns, cost control, and task-specific agent behavior.
 
 ### Job Fit Agent  
-**Python, SQLite, GitHub Actions, Telegram Bot API, Ashby, Greenhouse, pytest**
+**AI product scoring, workflow automation, decision systems, application operations**
 
 - Designed and iteratively improved an AI product that evaluates job opportunities using configurable scoring models, workflow automation, and user-defined decision criteria.
 - Implemented geographic and seniority viability checks to filter roles against practical candidacy constraints.
@@ -112,7 +112,7 @@ Dec 2018 – Jul 2023
 - Developed application preparation support, including resume PDF export for submission readiness.
 
 ### RWLV Priority Governor Agent  
-**OpenClaw, Hermes Agent, GPT-5.5, OpenAI API, local LLMs, Qwen 3, Telegram, Asana, Python, Markdown Configuration**
+**AI-assisted prioritization, stakeholder alignment, operational decision support**
 
 - Designed a lightweight agentic operations workflow for active web and product work triage.
 - Structured Asana prioritization flows and Telegram briefings to keep stakeholders aligned on shifting priorities.

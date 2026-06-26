@@ -3599,7 +3599,7 @@ def _select_projects_for_role(job_title: str, role_family: str, description: str
 
 def _headline_for_role(job_title: str, role_family: str, description: str, company: str = "") -> str:
     if _is_lennar_product_manager_role(job_title, role_family, description, company):
-        return "Technical Product Manager | AI-Powered Digital Products | Product Analytics | Customer Journey"
+        return "Technical Product Manager | AI-Powered Digital Products | Product Analytics"
     if _is_solutions_or_transformation_role(job_title, role_family, description):
         return "Technical Product Builder | AI Workflow Systems | Product Analytics | Solutions Engineering"
     if _is_analytics_product_systems_role(job_title, role_family, description):
@@ -4535,7 +4535,7 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
             normalized_sections.append(section(section_name, body))
 
     if normalized_sections:
-        return _ensure_submit_resume_header("".join(normalized_sections).lstrip("\n"))
+        return _ensure_submit_resume_header("".join(normalized_sections).lstrip("\n"), headline=headline)
     return _ensure_submit_resume_header(normalized_text, headline=headline)
 
 
