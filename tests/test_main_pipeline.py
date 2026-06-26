@@ -1152,7 +1152,7 @@ def test_submit_resume_does_not_include_internal_sections(monkeypatch, tmp_path)
     assert "Builder summary." in submit_text
     assert submit_text.startswith("# Cody McKeon\n")
     assert "760-669-9343 | mckeonc0827@gmail.com | https://github.com/cody-mckeon" in submit_text
-    assert "**Technical Product Manager | AI Workflows | Product Systems | Agentic Operations**" in submit_text
+    assert "**Technical Product Manager | AI-Powered Digital Products | Product Analytics**" in submit_text
     assert "Second paragraph." not in submit_text
     assert "## Core Skills" in submit_text
     assert "\n\n## Core Skills\n\n" in submit_text
