@@ -3481,6 +3481,12 @@ def _is_product_management_role(job_title: str, role_family: str, description: s
     return _matches_any(text, ("technical product manager", "product manager", "ai product manager", "product management", "product lead"))
 
 
+def _is_lennar_product_manager_role(job_title: str, role_family: str, description: str, company: str = "") -> bool:
+    text = _role_text(job_title, role_family, description)
+    company_text = company.lower()
+    return "lennar" in company_text and _matches_any(text, ("product manager", "digital buying", "digital selling", "buying & selling"))
+
+
 def _is_analytics_product_systems_role(job_title: str, role_family: str, description: str) -> bool:
     text = _role_text(job_title, role_family, description)
     return _matches_any(
@@ -3521,10 +3527,18 @@ def _is_marketing_intelligence_os_priority_role(job_title: str, role_family: str
     )
 
 
-def _select_projects_for_role(job_title: str, role_family: str, description: str) -> list[str]:
+def _select_projects_for_role(job_title: str, role_family: str, description: str, company: str = "") -> list[str]:
     text = _role_text(job_title, role_family, description)
     title_family_text = _role_text(job_title, role_family, "")
     hospitality_terms = ("hospitality", "resort", "digital experience", "guest", "api", "integration")
+
+    if _is_lennar_product_manager_role(job_title, role_family, description, company):
+        return [
+            "AI Marketing Intelligence Platform",
+            "AI Product Design Operating System",
+            "RWLV Priority Governor Agent",
+            "Job Fit Agent",
+        ]
 
     if _is_marketing_intelligence_os_priority_role(job_title, role_family, description):
         return [
@@ -3583,7 +3597,9 @@ def _select_projects_for_role(job_title: str, role_family: str, description: str
     ]
 
 
-def _headline_for_role(job_title: str, role_family: str, description: str) -> str:
+def _headline_for_role(job_title: str, role_family: str, description: str, company: str = "") -> str:
+    if _is_lennar_product_manager_role(job_title, role_family, description, company):
+        return "Technical Product Manager | AI-Powered Digital Products | Product Analytics | Customer Journey"
     if _is_solutions_or_transformation_role(job_title, role_family, description):
         return "Technical Product Builder | AI Workflow Systems | Product Analytics | Solutions Engineering"
     if _is_analytics_product_systems_role(job_title, role_family, description):
@@ -3591,7 +3607,14 @@ def _headline_for_role(job_title: str, role_family: str, description: str) -> st
     return "Technical Product Manager | AI Workflows | Product Systems | Agentic Operations"
 
 
-def _summary_positioning_for_role(job_title: str, role_family: str, description: str) -> str:
+def _summary_positioning_for_role(job_title: str, role_family: str, description: str, company: str = "") -> str:
+    if _is_lennar_product_manager_role(job_title, role_family, description, company):
+        return (
+            "Technical Product Manager building AI-powered digital products, analytics systems, and workflow automation. "
+            "Experienced translating ambiguous business needs into customer-facing experiences, internal tools, "
+            "measurable product improvements, and cross-functional execution. Uses AI throughout product discovery, "
+            "planning, prototyping, and delivery to accelerate decision making, stakeholder alignment, and product outcomes."
+        )
     if _is_solutions_or_transformation_role(job_title, role_family, description):
         return (
             "Technical product and AI workflow builder focused on translating ambiguous business needs "
@@ -3603,7 +3626,23 @@ def _summary_positioning_for_role(job_title: str, role_family: str, description:
     )
 
 
-def _role_strategy_emphasis(job_title: str, role_family: str, description: str) -> list[str]:
+def _role_strategy_emphasis(job_title: str, role_family: str, description: str, company: str = "") -> list[str]:
+    if _is_lennar_product_manager_role(job_title, role_family, description, company):
+        return [
+            "Product Roadmap",
+            "Product Discovery",
+            "Feature Prioritization",
+            "User Behavior Analysis",
+            "Conversion Optimization",
+            "Customer Journey Mapping",
+            "Experimentation and A/B Testing",
+            "Product Requirements and User Stories",
+            "Backlog Prioritization",
+            "Product Lifecycle",
+            "Stakeholder Alignment",
+            "AI-assisted Product Development",
+            "Analytics Instrumentation",
+        ]
     if _is_solutions_or_transformation_role(job_title, role_family, description):
         return [
             "customer-facing technical problem solving",
@@ -3626,9 +3665,10 @@ def _role_strategy_emphasis(job_title: str, role_family: str, description: str) 
 def _project_bullet(project_name: str) -> str:
     bullets = {
         "Marketing Intelligence OS": "Marketing Intelligence OS: AI enablement system for marketing teams that structures intake, prioritizes use cases, generates reporting briefs, and turns ambiguous stakeholder requests into actionable workflows.",
-        "AI Product Design Operating System": "AI Product Design Operating System: modular AI-assisted product design workflow using Current State, Component Inventory, Recommendation, Concept Generation, and Concept Evaluation agents to turn product context into structured recommendations and evaluable concept directions.",
-        "Job Fit Agent": "Job Fit Agent: role discovery, scoring, status tracking, GitHub Actions scheduling, and Telegram notifications that support repeatable application operations.",
-        "RWLV Priority Governor Agent": "RWLV Priority Governor Agent: internal operational AI enablement for intake triage, prioritization, and execution rhythm management.",
+        "AI Marketing Intelligence Platform": "AI Marketing Intelligence Platform: AI-powered analytics and reporting product for marketing operations, behavioral insights, prioritization, conversion signals, experimentation support, and stakeholder decision-making.",
+        "AI Product Design Operating System": "AI Product Design Operating System: AI-assisted product operating system supporting product discovery, concept validation, requirements generation, UX decision-making, and Current State, Component Inventory, Recommendation, Concept Generation, and Concept Evaluation workflows, with local LLM experimentation using Qwen 3.",
+        "Job Fit Agent": "Job Fit Agent: AI product that evaluates job opportunities using configurable scoring models, workflow automation, and user-defined decision criteria, with GitHub Actions scheduling and Telegram notifications.",
+        "RWLV Priority Governor Agent": "RWLV Priority Governor Agent / Resorts World digital product and analytics work: AI-assisted discovery, implementation-ready product requirements, stakeholder alignment, GA4/GTM/Pendo analytics instrumentation, customer journey optimization, and internal sales/digital tool execution.",
         "Web Product Measurement Framework": "Web Product Measurement Framework: event taxonomy, instrumentation standards, and analytics QA for decision-ready reporting.",
         "Hospitality API Integration Exploration": "Hospitality API Integration Exploration: scoped integration discovery for digital experience improvements across hospitality touchpoints.",
         "Resorts World analytics/instrumentation work": "Resorts World analytics/instrumentation work: analytics implementation and instrumentation quality improvements for product measurement.",
@@ -3752,11 +3792,11 @@ def prep_application(job_id: int) -> None:
 - {decision}
 """
 
-    prioritized_projects = _select_projects_for_role(job["title"], role_family, description)
+    prioritized_projects = _select_projects_for_role(job["title"], role_family, description, job["company"])
     top_projects = prioritized_projects[:3]
-    recommended_headline = _headline_for_role(job["title"], role_family, description)
-    summary_positioning = _summary_positioning_for_role(job["title"], role_family, description)
-    strategy_emphasis = _role_strategy_emphasis(job["title"], role_family, description)
+    recommended_headline = _headline_for_role(job["title"], role_family, description, job["company"])
+    summary_positioning = _summary_positioning_for_role(job["title"], role_family, description, job["company"])
+    strategy_emphasis = _role_strategy_emphasis(job["title"], role_family, description, job["company"])
 
     resume_strategy = f"""# Resume Strategy
 
@@ -3766,7 +3806,7 @@ def prep_application(job_id: int) -> None:
 ## Recommended summary angle
 - {summary_positioning}
 
-## Top skills to emphasize
+## Product Methodologies / Product Skills
 {chr(10).join(f'- {skill}' for skill in strategy_emphasis)}
 
 ## Top projects to include

@@ -9,9 +9,26 @@ https://github.com/cody-mckeon
 
 ## Professional Summary
 
-Technical product builder focused on AI-enabled workflow systems, internal tools, product analytics, and agentic operations. Blends product strategy with hands-on technical execution to turn ambiguous business needs into usable internal tools, customer-facing solution workflows, and measurable product systems.
+Technical Product Manager building AI-powered digital products, analytics systems, and workflow automation. Experienced translating ambiguous business needs into customer-facing experiences, internal tools, measurable product improvements, and cross-functional execution. Uses AI throughout product discovery, planning, prototyping, and delivery to accelerate decision making, stakeholder alignment, and product outcomes.
 
 Experienced building and orchestrating AI-assisted product systems across Python, OpenClaw, Hermes Agent, GPT-5.5, hosted OpenAI API workflows, local LLMs including Qwen 3, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
+
+## Product Methodologies / Product Skills
+
+- Product Roadmap
+- Product Discovery
+- Feature Prioritization
+- User Behavior Analysis
+- Conversion Optimization
+- Customer Journey Mapping
+- Experimentation / A/B Testing
+- Product Requirements
+- User Stories
+- Backlog Prioritization
+- Product Lifecycle
+- Stakeholder Alignment
+- AI-assisted Product Development
+- Analytics Instrumentation
 
 ## Core Skills
 
@@ -54,11 +71,11 @@ Experienced building and orchestrating AI-assisted product systems across Python
 **Resorts World Las Vegas**  
 Feb 2026 – Present
 
-- Built and tested AI-assisted product/design workflow concepts to improve digital experience planning, component reuse, and recommendation quality.
-- Created structured workflows for current-state analysis, component inventory, recommendation generation, concept exploration, and concept evaluation.
-- Partnered across marketing, web, analytics, and vendor teams to translate ambiguous business requests into trackable requirements and implementation-ready digital work.
-- Defined analytics instrumentation and event tracking frameworks using Pendo, GA4, and GTM to connect product decisions to user behavior.
-- Managed privacy and consent platform configuration using OneTrust, Google Consent Mode, and GTM as part of digital product governance without letting governance work overpower product workflow outcomes.
+- Built AI-assisted workflows to accelerate product discovery, solution evaluation, and digital experience planning across marketing, analytics, design, engineering, and vendor teams.
+- Owned analytics instrumentation strategy using GA4, GTM, and Pendo to measure customer behavior, validate product decisions, and improve digital experiences.
+- Partnered with designers, marketers, engineers, and third-party vendors to translate ambiguous business requests into implementation-ready product requirements.
+- Led website optimization initiatives spanning customer journeys, analytics, consent management, booking flows, and digital governance.
+- Applied AI throughout product planning, documentation, analysis, and prototyping to improve delivery speed and stakeholder alignment.
 
 ### Technical Business Analyst / Project Manager  
 **Lake Havasu City**  
@@ -83,28 +100,28 @@ Dec 2018 – Jul 2023
 
 ## Projects
 
-### Marketing Intelligence OS  
+### AI Marketing Intelligence Platform  
 **AI Workflow Design, Marketing Analytics, Reporting Operations, Use-Case Prioritization, Workflow Automation**
 
-- Built an AI-assisted operating system for marketing teams to structure intake, prioritize use cases, generate reporting briefs, and turn ambiguous stakeholder requests into actionable workflows.
-- Developed repeatable AI workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
-- Created a practical use-case pipeline for identifying AI opportunities across marketing operations, analytics, website management, design systems, and vendor coordination.
-- Applied AI tools to standardize reporting plans, clarify metrics, document assumptions, flag data-quality risks, and support cross-functional decision-making.
-- Positioned the system as an internal AI enablement layer that helps teams adopt AI through real workflow improvements rather than one-off prompting.
-- Incorporated local LLM experimentation into the AI workflow stack, using models such as Qwen 3 to evaluate offline/private inference patterns, cost control, and task-specific agent behavior.
+- Built an AI-assisted marketing intelligence product to structure intake, prioritize analytics use cases, and convert ambiguous stakeholder requests into reporting briefs, decision documents, and product recommendations.
+- Developed repeatable workflows for campaign analysis, website performance reporting, UTM/source review, CTA behavior, booking-intent analysis, and leadership-ready insight generation.
+- Created a use-case pipeline to identify AI opportunities across marketing operations, analytics, website management, design systems, and vendor coordination.
+- Applied AI to standardize reporting plans, clarify metrics, document assumptions, flag data-quality risks, and support cross-functional product decisions.
+- Positioned the system as an internal AI enablement layer that improves adoption through real workflow improvements, not one-off prompting.
 
 ### AI Product Design Operating System  
 **Python, Markdown Agents, Figma, Product Analytics, Design Systems, Workflow Automation, Evaluation Frameworks**
 
-- Built a modular AI workflow system that decomposes ambiguous product and design problems into current-state analysis, component inventory, recommendations, concept generation, and concept evaluation.
-- Designed specialized agents — Current State Agent, Component Inventory Agent, Recommendation Agent, Concept Generation Agent, and Concept Evaluation Agent — to translate business goals, product constraints, reusable components, and analytics context into actionable product recommendations.
-- Created a repeatable operating model for evaluating multiple solution paths before implementation, improving stakeholder clarity and reducing design/product rework.
-- Structured the system to support better handoff between strategy, UX, analytics, and implementation.
+- Designed an AI-assisted product operating system that supports product discovery, concept validation, requirements generation, and UX decision-making.
+- Built agent workflows for current-state analysis, component inventory, recommendation generation, concept exploration, and evaluation of multiple solution paths.
+- Used AI to translate business goals, product constraints, reusable components, and analytics context into actionable product recommendations.
+- Created a repeatable model for evaluating digital experience concepts before implementation, improving stakeholder clarity and reducing product/design rework.
+- Incorporated local LLM experimentation into the AI workflow stack, using models such as Qwen 3 to evaluate offline/private inference patterns, cost control, and task-specific agent behavior.
 
 ### Job Fit Agent  
 **Python, SQLite, GitHub Actions, Telegram Bot API, Ashby, Greenhouse, pytest**
 
-- Built an AI-assisted job discovery and scoring workflow to evaluate role fit and prioritize opportunities.
+- Designed and iteratively improved an AI product that evaluates job opportunities using configurable scoring models, workflow automation, and user-defined decision criteria.
 - Implemented geographic and seniority viability checks to filter roles against practical candidacy constraints.
 - Added persistence and status tracking across opportunities to support repeatable application operations.
 - Integrated Telegram notifications for workflow updates and application milestones.
