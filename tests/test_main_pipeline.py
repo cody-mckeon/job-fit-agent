@@ -2223,6 +2223,20 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
         "AI-assisted Product Development",
     ]:
         assert term in resume_text or term in strategy_text
+    assert "## Product Methodologies" in resume_text
+    assert "## Product Methodologies / Product Skills" not in resume_text
+    product_methodologies = _section_body(resume_text, "Product Methodologies")
+    assert product_methodologies == (
+        "Product Roadmap, Product Discovery, Feature Prioritization, User Behavior Analysis, "
+        "Conversion Optimization, Customer Journey Mapping, Experimentation, A/B Testing, "
+        "Product Requirements, User Stories, Backlog Prioritization, Product Lifecycle, "
+        "Stakeholder Alignment, AI-assisted Product Development"
+    )
+    assert resume_text.find("## Core Skills") < resume_text.find("## Product Methodologies") < resume_text.find("## Tools & Platforms")
+    submit_text = (app_dir / "submit_resume.md").read_text(encoding="utf-8")
+    assert "## Product Methodologies" in submit_text
+    assert _section_body(submit_text, "Product Methodologies") == product_methodologies
+    assert submit_text.find("## Core Skills") < submit_text.find("## Product Methodologies") < submit_text.find("## Tools & Platforms")
     assert "Built AI-assisted workflows to accelerate product discovery" in resume_text
     assert "implementation-ready product requirements" in resume_text
     assert "AI Marketing Intelligence Platform" in resume_text

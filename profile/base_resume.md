@@ -13,22 +13,6 @@ Technical Product Manager building AI-powered digital products, analytics system
 
 Experienced building and orchestrating AI-assisted product systems across Python, OpenClaw, Hermes Agent, GPT-5.5, hosted OpenAI API workflows, local LLMs including Qwen 3, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
 
-## Product Methodologies / Product Skills
-
-- Product Roadmap
-- Product Discovery
-- Feature Prioritization
-- User Behavior Analysis
-- Conversion Optimization
-- Customer Journey Mapping
-- Experimentation / A/B Testing
-- Product Requirements
-- User Stories
-- Backlog Prioritization
-- Product Lifecycle
-- Stakeholder Alignment
-- AI-assisted Product Development
-- Analytics Instrumentation
 
 ## Core Skills
 
