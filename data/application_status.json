@@ -64,6 +64,34 @@
     "url": "https://jobs.ashbyhq.com/elevenlabs/a3097257-a07a-4a7e-b9fe-b8555c1a0fa7",
     "withdrawn_at": null
   },
+  "ashby:linear:c0abc97e-b4d7-4ad7-bd13-bc40f4023227": {
+    "application_status": "applied",
+    "applied_at": "2026-07-14T17:23:54.359838+00:00",
+    "blocked_at": null,
+    "company": "linear",
+    "external_job_id": "c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
+    "identifier_used": "ashby:linear:c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
+    "interviewing_at": null,
+    "note": "",
+    "offer_at": null,
+    "rejected_at": null,
+    "saved_at": null,
+    "skipped_at": null,
+    "source": "ashby",
+    "stable_job_key": "ashby:linear:c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
+    "status_history": [
+      {
+        "identifier_used": "ashby:linear:c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
+        "note": "",
+        "status": "applied",
+        "timestamp": "2026-07-14T17:23:54.359838+00:00"
+      }
+    ],
+    "title": null,
+    "updated_at": "2026-07-14T17:23:54.359838+00:00",
+    "url": "https://jobs.ashbyhq.com/linear/c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
+    "withdrawn_at": null
+  },
   "greenhouse:precisionaq:6011803004": {
     "application_status": "applied",
     "applied_at": "2026-06-15T20:24:21.159667+00:00",
