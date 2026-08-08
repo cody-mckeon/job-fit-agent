@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-STABLE_JOB_KEY_RE = re.compile(r"^(greenhouse|ashby|lever|workday|job):([^:]+):(.+)$")
+STABLE_JOB_KEY_RE = re.compile(r"^(greenhouse|ashby|lever|workday|manual|job):([^:]+):(.+)$")
 
 
 def _value(job: object, key: str, default: Any = "") -> Any:
@@ -147,6 +147,17 @@ def extract_external_job_id(source: str, url: str = "", payload: Any = None) -> 
                 return segments[3].rsplit("_", 1)[1]
         return next((value.strip() for value in payload_values if value.strip()), "")
 
+    if normalized_source == "manual":
+        # Custom career sites commonly expose a durable requisition/posting id
+        # as a path segment.  Prefer a clearly id-shaped segment while keeping
+        # its spelling intact for copy/paste lifecycle commands.
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        for segment in reversed(segments):
+            if re.fullmatch(r"[A-Za-z]+\d*-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+", segment):
+                return segment
+        payload_values = _payload_values(payload, ("posting_id", "requisition_id", "job_id", "id"))
+        return next((value.strip() for value in payload_values if value.strip()), "")
+
     return ""
 
 
@@ -164,13 +175,15 @@ def build_stable_job_key(job: object) -> str:
     url = str(_value(job, "url", "") or "")
     payload = _value(job, "payload", None)
     source = str(_value(job, "source", "") or infer_source_from_url(url) or "job").strip().lower()
-    if source not in {"greenhouse", "ashby", "lever", "workday"}:
+    if source not in {"greenhouse", "ashby", "lever", "workday", "manual"}:
         source = infer_source_from_url(url) or "job"
     company = str(_value(job, "company", "") or _company_from_url(source, url) or "company")
     company_slug = normalize_company_slug(company)
     external_id = extract_external_job_id(source, url, payload)
-    if source in {"greenhouse", "ashby", "lever", "workday"} and external_id:
+    if source in {"greenhouse", "ashby", "lever", "workday", "manual"} and external_id:
         return f"{source}:{company_slug}:{external_id}"
+    if source == "manual":
+        return f"manual:{company_slug}:{deterministic_unknown_job_hash(job)}"
     return f"job:{company_slug}:{deterministic_unknown_job_hash(job)}"
 
 
@@ -199,6 +212,6 @@ def validate_stable_job_key(job: object, stable_job_key: str | None = None) -> l
     if company != job_company:
         warnings.append(f"Identifier company {company} does not match job company {job_company}.")
     source_external_id = extract_external_job_id(source, str(_value(job, "url", "") or ""), _value(job, "payload", None))
-    if source in {"greenhouse", "ashby", "lever", "workday"} and source_external_id and external_id != source_external_id:
+    if source in {"greenhouse", "ashby", "lever", "workday", "manual"} and source_external_id and external_id != source_external_id:
         warnings.append(f"Identifier external id {external_id} does not match source external id {source_external_id}.")
     return warnings
