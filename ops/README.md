@@ -84,6 +84,14 @@ docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-url "htt
 
 `prep-url` inserts or updates the job, scores it, generates the application package, exports the resume PDF unless `--skip-pdf` is passed, and zips the package when the normal package flow succeeds. For Workday pages, pass `--description-file` with a pasted visible job description when dynamic rendering blocks automatic extraction; the job is rescored and the description is stored before package generation. By default it blocks geography-review, geography-ineligible, and otherwise non-actionable jobs; use `--force` only when Cody intentionally wants the package despite warnings.
 
+For unsupported company-hosted career URLs, save the visible description locally and use the browser-free manual W2 workflow:
+
+```bash
+docker compose run --rm job-fit-agent python -m job_fit_agent.main prep-manual-job --company "Fontainebleau Las Vegas" --title "Digital Tech Product Management Director" --url "https://careers.fontainebleaulasvegas.com/posting/digital-tech-product-management-director/P1-6172162-2/?keyword=product" --location "Las Vegas, NV" --description-file manual_job_descriptions/fontainebleau_digital_tech_product_management_director.txt --force --skip-browser
+```
+
+This creates the normal scored W2 package and a durable key such as `manual:fontainebleau-las-vegas:P1-6172162-2`; use that key with Telegram `applied`, `rejected`, `interviewing`, `save`, and `skip` commands. Continue using `prep-url` only for supported ATS URLs—custom URLs deliberately remain unsupported there.
+
 After Cody submits an application, mark it immediately so it is not recommended again:
 
 ```bash

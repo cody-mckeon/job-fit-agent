@@ -63,6 +63,20 @@ python -m job_fit_agent.main prep-url "https://lennar.wd1.myworkdayjobs.com/Lenn
 
 `prep-url` currently supports Ashby direct job URLs (`https://jobs.ashbyhq.com/<company>/<job_id>`) and Workday/myworkdayjobs direct job URLs (`https://<tenant>.wd1.myworkdayjobs.com/<site>/job/<location_slug>/<job_slug>_<requisition_id>` or `wd5`). Workday ingestion tries static HTML, embedded JSON/script data, JSON-LD, page metadata, and browser-rendered HTML when available. If Workday dynamic rendering blocks description extraction, paste the visible job description into a text file and pass `--description-file`; the job is rescored with that description, `parsed_fields.description` is true, and the CLI warns that the description was supplied manually. It does not prepare ineligible or review jobs by default; add `--force` only when Cody intentionally wants to prepare anyway after reviewing the warnings.
 
+For an unsupported custom career site, copy the full visible description into a text file and use the manual W2 path. This path does not fetch the URL or require a supported ATS; it upserts and scores a `manual` job, then runs the same resume, cover-letter, PDF, and zip package pipeline:
+
+```bash
+python -m job_fit_agent.main prep-manual-job \
+  --company "Fontainebleau Las Vegas" \
+  --title "Digital Tech Product Management Director" \
+  --url "https://careers.fontainebleaulasvegas.com/posting/digital-tech-product-management-director/P1-6172162-2/?keyword=product" \
+  --location "Las Vegas, NV" \
+  --description-file manual_job_descriptions/fontainebleau_digital_tech_product_management_director.txt \
+  --force --skip-browser
+```
+
+The resulting stable key is `manual:fontainebleau-las-vegas:P1-6172162-2`. Use it in Telegram lifecycle commands such as `applied manual:fontainebleau-las-vegas:P1-6172162-2`, `rejected ...`, `interviewing ...`, `save ...`, or `skip ... <reason>`. Unsupported URLs remain rejected by `prep-url`; only `prep-manual-job` bypasses ATS URL validation.
+
 Promote a discovered company to the daily monitored watchlist:
 
 ```bash

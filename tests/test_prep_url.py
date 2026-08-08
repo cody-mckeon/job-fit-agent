@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from job_fit_agent.main import main, parse_prep_url, prep_url
+from job_fit_agent.main import execute_telegram_status_command, main, parse_prep_url, prep_manual_job, prep_url
 from job_fit_agent.models import FitScore
 from job_fit_agent.repository import get_job_by_url, initialize, update_notes
 
@@ -169,3 +169,83 @@ def test_prep_url_appears_in_help(capsys) -> None:
     main(["--help"])
     output = capsys.readouterr().out
     assert "python -m job_fit_agent.main prep-url <job_url> [--description-file <path>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]" in output
+
+
+CUSTOM_URL = "https://careers.fontainebleaulasvegas.com/posting/digital-tech-product-management-director/P1-6172162-2/?keyword=product"
+MANUAL_KEY = "manual:fontainebleau-las-vegas:P1-6172162-2"
+
+
+def test_prep_manual_job_creates_normal_package_and_stable_key(monkeypatch, tmp_path: Path) -> None:
+    _setup_package_workspace(tmp_path, monkeypatch)
+    description_file = tmp_path / "fontainebleau.txt"
+    description_file.write_text("Lead digital product management, AI workflow automation, product analytics, and cross-functional delivery.", encoding="utf-8")
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.score_job", _fit)
+
+    summary = prep_manual_job(company="Fontainebleau Las Vegas", title="Digital Tech Product Management Director",
+        job_url=CUSTOM_URL, location="Las Vegas, NV", description_file=str(description_file),
+        force=True, skip_browser=True, skip_pdf=True)
+
+    assert summary is not None
+    assert summary["stable_job_key"] == MANUAL_KEY
+    assert summary["message"] == "Application Package Ready"
+    assert summary["status_commands"]["applied"] == f"applied {MANUAL_KEY}"
+    app_dir = Path(summary["application_folder"])
+    assert (app_dir / "submit_resume.md").exists()
+    assert Path(summary["package_zip_path"]).exists()
+    row = get_job_by_url(CUSTOM_URL)
+    assert row is not None
+    assert row["source"] == "manual"
+    assert "workflow automation" in row["notes"]
+
+
+def test_prep_manual_job_includes_pdf_when_export_pipeline_is_available(monkeypatch, tmp_path: Path) -> None:
+    _setup_package_workspace(tmp_path, monkeypatch)
+    description_file = tmp_path / "job.txt"
+    description_file.write_text("AI workflow automation product leadership", encoding="utf-8")
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.score_job", _fit)
+
+    def available_pdf_export(job_id: int) -> None:
+        app_dir = next((tmp_path / "applications").iterdir())
+        (app_dir / "Cody_McKeon_Fontainebleau_Las_Vegas_Director_Resume.pdf").write_bytes(b"%PDF-1.4\n")
+
+    monkeypatch.setattr("job_fit_agent.main.export_resume_pdf", available_pdf_export)
+    summary = prep_manual_job(company="Fontainebleau Las Vegas", title="Director", job_url=CUSTOM_URL,
+        location="Las Vegas, NV", description_file=str(description_file), force=True, skip_browser=True)
+
+    assert summary is not None
+    assert summary["pdf_export"] == "generated"
+    assert Path(summary["resume_pdf_path"]).exists()
+
+
+def test_manual_stable_key_supports_application_status_commands(monkeypatch, tmp_path: Path) -> None:
+    _setup_package_workspace(tmp_path, monkeypatch)
+    description_file = tmp_path / "job.txt"
+    description_file.write_text("AI workflow automation product leadership", encoding="utf-8")
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.score_job", _fit)
+    prep_manual_job(company="Fontainebleau Las Vegas", title="Director", job_url=CUSTOM_URL,
+        location="Las Vegas, NV", description_file=str(description_file), force=True, skip_browser=True, skip_pdf=True)
+
+    for command, expected in (("applied", "applied"), ("rejected", "rejected"), ("interviewing", "interviewing"), ("save", "saved")):
+        result = execute_telegram_status_command(f"{command} {MANUAL_KEY}")
+        assert result["success"] is True
+        assert result["new_status"] == expected
+    skipped = execute_telegram_status_command(f"skip {MANUAL_KEY} Role closed")
+    assert skipped["success"] is True
+    assert skipped["new_status"] == "skipped"
+
+
+def test_custom_url_fails_prep_url_but_cli_accepts_manual_job(monkeypatch, tmp_path: Path, capsys) -> None:
+    _setup_package_workspace(tmp_path, monkeypatch)
+    description_file = tmp_path / "job.txt"
+    description_file.write_text("AI workflow automation product leadership", encoding="utf-8")
+    monkeypatch.setattr("job_fit_agent.main.load_target_profile", lambda: object())
+    monkeypatch.setattr("job_fit_agent.main.score_job", _fit)
+
+    main(["prep-url", CUSTOM_URL])
+    assert "Unsupported job URL" in capsys.readouterr().out
+    main(["prep-manual-job", "--company", "Fontainebleau Las Vegas", "--title", "Director", "--url", CUSTOM_URL,
+        "--location", "Las Vegas, NV", "--description-file", str(description_file), "--force", "--skip-browser", "--skip-pdf"])
+    assert "Application Package Ready" in capsys.readouterr().out

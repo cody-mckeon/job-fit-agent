@@ -3006,6 +3006,88 @@ def prep_url(
     return summary
 
 
+def prep_manual_job(
+    *,
+    company: str,
+    title: str,
+    job_url: str,
+    location: str,
+    description_file: str,
+    force: bool = False,
+    skip_browser: bool = False,
+    skip_pdf: bool = False,
+    notify_telegram: bool = False,
+) -> dict[str, Any] | None:
+    """Prepare a normal W2 package from user-supplied custom-site metadata."""
+    for option, value in (("--company", company), ("--title", title), ("--url", job_url), ("--location", location)):
+        if not str(value or "").strip():
+            raise ValueError(f"{option} is required.")
+    parsed_url = urlparse(job_url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise ValueError("--url must be an absolute HTTP(S) job URL.")
+    description = _read_description_file(description_file)
+    if not description:
+        raise ValueError("--description-file must contain a non-empty job description.")
+
+    initialize()
+    job = JobPosting(
+        source="manual",
+        company=company.strip(),
+        title=title.strip(),
+        location=location.strip(),
+        location_raw=location.strip(),
+        url=job_url.strip(),
+        description=description,
+    )
+    fit = score_job(job, load_target_profile())
+    upsert_job(job, fit)
+    row = get_job_by_url(job.url)
+    if row is None:
+        raise RuntimeError("Manual job was saved but could not be loaded from SQLite.")
+    job_id = int(row["id"])
+    update_notes(job_id, description)
+    row = get_job_by_url(job.url) or row
+    if not _is_actionable_selected_job(dict(row)) and not force:
+        print("Job is not actionable. Use --force to prepare anyway.")
+        return None
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        summary = prep_next_application(
+            job_id=job_id,
+            skip_browser=True,  # manual jobs never need browser extraction
+            force=force,
+            skip_pdf=skip_pdf,
+        )
+    if summary is None:
+        return None
+    stable_job_key = build_stable_job_key(job)
+    summary.update(
+        {
+            "source": "manual",
+            "external_job_id": extract_external_job_id("manual", job.url),
+            "stable_job_key": stable_job_key,
+            "skip_browser": True,
+            "status_commands": {
+                status: f"{status} {stable_job_key}"
+                for status in ("applied", "rejected", "interviewing")
+            },
+            "message": "Application Package Ready",
+        }
+    )
+    if notify_telegram:
+        config = load_notification_config().telegram
+        if config.bot_token and config.chat_id:
+            send_message_with_credentials(
+                text=_format_prep_next_application_telegram_message(summary),
+                bot_token=config.bot_token,
+                chat_id=config.chat_id,
+            )
+        else:
+            print("Telegram notification skipped: missing credentials")
+    print(json.dumps(summary, indent=2))
+    return summary
+
+
 def promote_discovery(source: str, company: str) -> None:
     valid_sources = {"ashby", "greenhouse", "lever"}
     if source not in valid_sources:
@@ -5653,6 +5735,25 @@ def main(argv: list[str] | None = None) -> None:
             print(str(exc))
         return
 
+    if command == "prep-manual-job":
+        usage = "Usage: python -m job_fit_agent.main prep-manual-job --company <company> --title <title> --url <job_url> --location <location> --description-file <path> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]"
+        try:
+            required = {
+                name: args[args.index(name) + 1]
+                for name in ("--company", "--title", "--url", "--location", "--description-file")
+            }
+            prep_manual_job(
+                company=required["--company"], title=required["--title"],
+                job_url=required["--url"], location=required["--location"],
+                description_file=required["--description-file"],
+                force="--force" in args[1:], skip_browser="--skip-browser" in args[1:],
+                skip_pdf="--skip-pdf" in args[1:], notify_telegram="--notify-telegram" in args[1:],
+            )
+        except (ValueError, IndexError, OSError) as exc:
+            print(str(exc))
+            print(usage)
+        return
+
     if command == "debug-ashby-url":
         if len(args) != 2:
             print("Usage: python -m job_fit_agent.main debug-ashby-url <job_url>")
@@ -5901,6 +6002,7 @@ def main(argv: list[str] | None = None) -> None:
     print('python -m job_fit_agent.main notes <job_id> "<note text>"')
     print("python -m job_fit_agent.main learn-url <job_url> [--description-file <path>]")
     print("python -m job_fit_agent.main prep-url <job_url> [--description-file <path>] [--force] [--skip-browser] [--skip-pdf] [--notify-telegram] [--debug]")
+    print("python -m job_fit_agent.main prep-manual-job --company <company> --title <title> --url <job_url> --location <location> --description-file <path> [--force] [--skip-browser] [--skip-pdf] [--notify-telegram]")
     print("python -m job_fit_agent.main promote-discovery <source> <company>")
     print("python -m job_fit_agent.main discover-companies")
     print("python -m job_fit_agent.main add-discovered-company <company> --source <source> --url <careers_url> --reason <reason>")
