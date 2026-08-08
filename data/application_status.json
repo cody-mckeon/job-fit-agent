@@ -66,16 +66,6 @@
   },
   "ashby:linear:c0abc97e-b4d7-4ad7-bd13-bc40f4023227": {
     "application_status": "applied",
-    "applied_at": "2026-07-14T17:23:54.359838+00:00",
-    "blocked_at": null,
-    "company": "linear",
-    "external_job_id": "c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
-    "identifier_used": "ashby:linear:c0abc97e-b4d7-4ad7-bd13-bc40f4023227",
-    "interviewing_at": null,
-    "note": "",
-    "offer_at": null,
-    "rejected_at": null,
-    "saved_at": null,
     "applied_at": "2026-07-14T18:02:10.638759+00:00",
     "blocked_at": null,
     "classification": "near_fit",
@@ -175,5 +165,36 @@
     "status": "applied",
     "title": "Product Marketing Manager, Growth",
     "url": "https://stripe.com/jobs/search?gh_jid=7914005"
+  },
+  "manual:fontainebleau-las-vegas:P1-6172162-2": {
+    "application_status": "applied",
+    "applied_at": "2026-08-08T19:53:49.175517+00:00",
+    "blocked_at": null,
+    "classification": "near_fit",
+    "company": "Fontainebleau Las Vegas",
+    "external_job_id": "P1-6172162-2",
+    "geographic_eligibility": "eligible",
+    "identifier_used": "manual:fontainebleau-las-vegas:P1-6172162-2",
+    "interviewing_at": null,
+    "note": "",
+    "offer_at": null,
+    "rejected_at": null,
+    "saved_at": null,
+    "score": 54,
+    "skipped_at": null,
+    "source": "manual",
+    "stable_job_key": "manual:fontainebleau-las-vegas:P1-6172162-2",
+    "status_history": [
+      {
+        "identifier_used": "manual:fontainebleau-las-vegas:P1-6172162-2",
+        "note": "",
+        "status": "applied",
+        "timestamp": "2026-08-08T19:53:49.175517+00:00"
+      }
+    ],
+    "title": "Digital Tech Product Management Director",
+    "updated_at": "2026-08-08T19:53:49.175517+00:00",
+    "url": "https://careers.fontainebleaulasvegas.com/posting/digital-tech-product-management-director/P1-6172162-2/?keyword=product",
+    "withdrawn_at": null
   }
 }
