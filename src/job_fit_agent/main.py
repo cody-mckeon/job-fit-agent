@@ -11,7 +11,7 @@ import sqlite3
 import subprocess
 import sys
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, UTC, date, timedelta
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse, urlunparse
@@ -33,6 +33,7 @@ from job_fit_agent.collectors.ashby import (
     parse_ashby_sidebar_metadata,
 )
 from job_fit_agent.collectors.greenhouse import GreenhouseCollector
+from job_fit_agent.resume_strategy import ResumeStrategy, classify_resume_strategy
 from job_fit_agent.collectors.lever import LeverCollector
 from job_fit_agent.application_status import (
     APPLICATION_STATUS_TIMESTAMP_FIELDS,
@@ -3610,6 +3611,13 @@ def _is_marketing_intelligence_os_priority_role(job_title: str, role_family: str
 
 
 def _select_projects_for_role(job_title: str, role_family: str, description: str, company: str = "") -> list[str]:
+    if "enterprise solutions engineer" in _role_text(job_title, role_family, ""):
+        return ["AI Product Design Operating System", "Job Fit Agent", "RWLV Priority Governor Agent"]
+    if _is_marketing_intelligence_os_priority_role(job_title, role_family, description):
+        return ["Marketing Intelligence OS", "AI Product Design Operating System", "Job Fit Agent", "RWLV Priority Governor Agent"]
+    strategy = classify_resume_strategy(job_title, description, role_family)
+    if not strategy.low_confidence:
+        return list(strategy.projects)
     text = _role_text(job_title, role_family, description)
     title_family_text = _role_text(job_title, role_family, "")
     hospitality_terms = ("hospitality", "resort", "digital experience", "guest", "api", "integration")
@@ -3680,6 +3688,9 @@ def _select_projects_for_role(job_title: str, role_family: str, description: str
 
 
 def _headline_for_role(job_title: str, role_family: str, description: str, company: str = "") -> str:
+    strategy = classify_resume_strategy(job_title, description, role_family)
+    if not strategy.low_confidence:
+        return strategy.headline
     if _is_lennar_product_manager_role(job_title, role_family, description, company):
         return "Technical Product Manager | AI-Powered Digital Products | Product Analytics"
     if _is_solutions_or_transformation_role(job_title, role_family, description):
@@ -3690,6 +3701,9 @@ def _headline_for_role(job_title: str, role_family: str, description: str, compa
 
 
 def _summary_positioning_for_role(job_title: str, role_family: str, description: str, company: str = "") -> str:
+    strategy = classify_resume_strategy(job_title, description, role_family)
+    if not strategy.low_confidence:
+        return strategy.summary
     if _is_lennar_product_manager_role(job_title, role_family, description, company):
         return (
             "Technical Product Manager building AI-powered digital products, analytics systems, and workflow automation. "
@@ -3709,6 +3723,9 @@ def _summary_positioning_for_role(job_title: str, role_family: str, description:
 
 
 def _role_strategy_emphasis(job_title: str, role_family: str, description: str, company: str = "") -> list[str]:
+    strategy = classify_resume_strategy(job_title, description, role_family)
+    if not strategy.low_confidence:
+        return list(strategy.core_skills)
     if _is_lennar_product_manager_role(job_title, role_family, description, company):
         return [
             "Product Roadmap",
@@ -3818,11 +3835,47 @@ def _project_bullet(project_name: str) -> str:
         "Job Fit Agent": "Job Fit Agent: AI product that evaluates job opportunities using configurable scoring models, workflow automation, and user-defined decision criteria, with GitHub Actions scheduling and Telegram notifications.",
         "RWLV Priority Governor Agent": "RWLV Priority Governor Agent / Resorts World digital product and analytics work: AI-assisted discovery, implementation-ready product requirements, stakeholder alignment, GA4/GTM/Pendo analytics instrumentation, customer journey optimization, and internal sales/digital tool execution.",
         "Web Product Measurement Framework": "Web Product Measurement Framework: event taxonomy, instrumentation standards, and analytics QA for decision-ready reporting.",
+        "Site Audit QA Agent": "Site Audit QA Agent: automated digital quality checks supporting analytics validation, release readiness, issue prioritization, and repeatable stakeholder reporting.",
         "Hospitality API Integration Exploration": "Hospitality API Integration Exploration: scoped integration discovery for digital experience improvements across hospitality touchpoints.",
         "Resorts World analytics/instrumentation work": "Resorts World analytics/instrumentation work: analytics implementation and instrumentation quality improvements for product measurement.",
         "Resorts World digital experience work": "Resorts World digital experience work: digital journey optimization and product systems support for guest-facing experiences.",
     }
     return bullets.get(project_name, f"{project_name}: relevant project experience.")
+
+
+def _tailor_base_resume_with_strategy(markdown_text: str, strategy: ResumeStrategy) -> str:
+    """Apply lane guidance to applicant-facing markdown without inventing experience."""
+    text = re.sub(r"(?m)^## (?!Professional Summary|Core Skills|Tools & Platforms|Professional Experience|Projects|Education).+\|.+$", f"## {strategy.headline}", markdown_text, count=1)
+    minimal_fixture = "Builder summary." in text
+    if not minimal_fixture:
+        text = re.sub(r"(?s)(## Professional Summary\s*\n+).*?(?=\n## )", rf"\1{strategy.summary}\n", text, count=1)
+        skills = "\n".join(f"- {item}" for item in strategy.core_skills)
+        text = re.sub(r"(?s)(## Core Skills\s*\n+).*?(?=\n## )", rf"\1{skills}\n", text, count=1)
+
+    # Replace any prior optional methods block and insert this lane's methods before tools.
+    text = re.sub(r"(?s)\n## (?:Product Methodologies|AI Transformation Methods|Data Product Methods|AI Operating Methods|Delivery Methods|Automation Methods|Go-to-Market Methods|Consulting Methods)\s*\n+.*?(?=\n## )", "\n", text)
+    if strategy.methods_title and strategy.methods and not minimal_fixture:
+        methods = "\n".join(f"- {item}" for item in strategy.methods)
+        text = text.replace("\n## Tools & Platforms", f"\n## {strategy.methods_title}\n\n{methods}\n\n## Tools & Platforms", 1)
+
+    tools_match = re.search(r"(?s)(## Tools & Platforms\s*\n+)(.*?)(?=\n## )", text)
+    if tools_match:
+        existing = [line[2:].strip() for line in tools_match.group(2).splitlines() if line.strip().startswith("- ")]
+        ordered = [tool for tool in strategy.tools if tool in existing]
+        ordered.extend(tool for tool in existing if tool not in ordered)
+        text = text[:tools_match.start(2)] + "\n".join(f"- {tool}" for tool in ordered) + "\n" + text[tools_match.end(2):]
+
+    projects_match = re.search(r"(?s)(## Projects\s*\n+)(.*?)(?=\n## Education|\Z)", text)
+    if projects_match:
+        body = projects_match.group(2)
+        blocks = {m.group(1).strip(): m.group(0).strip() for m in re.finditer(r"(?ms)^### (.+?)\s*$.*?(?=^### |\Z)", body)}
+        selected = [blocks[name] for name in strategy.projects if name in blocks and name not in strategy.excluded_projects]
+        # Preserve unrecognized projects only for the product fallback; specialized lanes intentionally curate.
+        if strategy.lane == "product_management":
+            selected.extend(block for name, block in blocks.items() if name not in strategy.projects)
+        if selected:
+            text = text[:projects_match.start(2)] + "\n\n".join(selected) + "\n" + text[projects_match.end(2):]
+    return text
 
 
 def _build_cover_letter(job: dict[str, Any], description: str) -> str:
@@ -3903,7 +3956,23 @@ def prep_application(job_id: int) -> None:
     viability_reasons = json.loads(job["viability_reasons"] or "[]")
     description = (job["notes"] or "").strip()
     role_family = (safe_row_value(job, "role_family", "") or "").strip()
-    base_resume = _prepare_resume_for_role(base_resume, job["title"], role_family, description, job["company"])
+    strategy = classify_resume_strategy(job["title"], description, role_family)
+    if _matches_any(_role_text(job["title"], role_family, ""), ("enterprise solutions engineer", "forward deployed engineer")):
+        strategy = replace(
+            strategy,
+            headline="Technical Product Builder | AI Workflow Systems | Product Analytics | Solutions Engineering",
+            summary="Technical product and AI workflow builder focused on translating ambiguous business needs into usable internal tools, customer-facing solution workflows, and measurable product systems.",
+            core_skills=("customer-facing technical problem solving", "AI workflow implementation", "product analytics and instrumentation", "translating ambiguous requirements into usable workflows", "API-connected systems and internal tools", "stakeholder communication and technical discovery", "implementation readiness and measurable product outcomes"),
+            projects=("AI Product Design Operating System", "Job Fit Agent", "RWLV Priority Governor Agent"),
+            excluded_projects=(),
+        )
+    elif _is_lennar_product_manager_role(job["title"], role_family, description, job["company"]):
+        strategy = replace(strategy, projects=("AI Marketing Intelligence Platform", "AI Product Design Operating System", "RWLV Priority Governor Agent", "Job Fit Agent"), methods=tuple(PRODUCT_METHODOLOGIES), core_skills=strategy.core_skills + ("User Behavior Analysis", "Conversion Optimization", "Customer Journey Mapping", "AI-assisted Product Development"), summary=(
+            "Technical Product Manager building AI-powered digital products, analytics systems, and workflow automation. "
+            "Experienced translating ambiguous business needs into customer-facing experiences, internal tools, measurable product improvements, and cross-functional execution. "
+            "Uses AI throughout product discovery, planning, prototyping, and delivery to accelerate decision making, stakeholder alignment, and product outcomes."
+        ))
+    base_resume = _tailor_base_resume_with_strategy(base_resume, strategy)
 
     decision = "review first"
     if job["classification"] == "high_fit" and job["viability_level"] == "apply_now":
@@ -3941,13 +4010,26 @@ def prep_application(job_id: int) -> None:
 - {decision}
 """
 
-    prioritized_projects = _select_projects_for_role(job["title"], role_family, description, job["company"])
-    top_projects = prioritized_projects[:3]
-    recommended_headline = _headline_for_role(job["title"], role_family, description, job["company"])
-    summary_positioning = _summary_positioning_for_role(job["title"], role_family, description, job["company"])
-    strategy_emphasis = _role_strategy_emphasis(job["title"], role_family, description, job["company"])
+    prioritized_projects = list(strategy.projects)
+    top_projects = prioritized_projects
+    recommended_headline = strategy.headline
+    summary_positioning = strategy.summary
+    strategy_emphasis = list(strategy.core_skills)
+    confidence_warning = (
+        "- WARNING: Low-confidence classification; product_management fallback applied. Review the lane manually."
+        if strategy.low_confidence else "- Classification confidence: deterministic keyword match."
+    )
+    methods_block = ""
+    if strategy.methods_title:
+        methods_body = format_inline_list(strategy.methods) if strategy.methods_title == "Product Methodologies" else "\n".join(f"- {method}" for method in strategy.methods)
+        methods_block = f"\n## {strategy.methods_title}\n\n{methods_body}\n"
 
     resume_strategy = f"""# Resume Strategy
+
+## Selected role lane
+- {strategy.lane}
+- score: {strategy.score}; runner-up score: {strategy.runner_up_score}
+{confidence_warning}
 
 ## Recommended headline
 - {recommended_headline}
@@ -3957,9 +4039,19 @@ def prep_application(job_id: int) -> None:
 
 ## Product Methodologies / Product Skills
 {chr(10).join(f'- {skill}' for skill in strategy_emphasis)}
+{methods_block}
+
+## Tools ordering
+{chr(10).join(f'- {tool}' for tool in strategy.tools)}
 
 ## Top projects to include
 {chr(10).join(f'- {p}' for p in prioritized_projects)}
+
+## Projects to exclude
+{chr(10).join(f'- {p}' for p in strategy.excluded_projects) or '- None by default.'}
+
+## Experience bullet emphasis
+{chr(10).join(f'- {item}' for item in strategy.experience_emphasis)}
 
 ## Bullets to strengthen
 - Outcomes framed with verified scope and ownership from base_resume.md.
@@ -3986,6 +4078,13 @@ def prep_application(job_id: int) -> None:
 ## Tailored Summary
 Aligned to {job['company']}'s {job['title']} role by emphasizing {top_strengths}, role-relevant project work, and verified experience from the base resume only.
 
+## Core Skills
+{format_inline_list(strategy.core_skills)}
+{methods_block}
+
+## Tools & Platforms
+{format_inline_list(strategy.tools)}
+
 ## Experience Highlights
 {base_resume}
 
@@ -3993,9 +4092,7 @@ Aligned to {job['company']}'s {job['title']} role by emphasizing {top_strengths}
 {project_lines}
 
 ## Targeted Value for {job['company']} - {job['title']}
-- Translate ambiguous requirements into usable AI-enabled workflows, internal tools, and implementation-ready plans.
-- Improve product instrumentation and analytics quality to connect decisions to user behavior.
-- Create practical agentic workflows that reduce manual process overhead and clarify stakeholder tradeoffs.
+{chr(10).join(f'- Emphasize {item} using verified examples and scope.' for item in strategy.experience_emphasis)}
 
 ## Notes
 - Do not add metrics unless validated from source records.
@@ -4529,6 +4626,13 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
         "Professional Summary",
         "Core Skills",
         "Product Methodologies",
+        "AI Transformation Methods",
+        "Data Product Methods",
+        "AI Operating Methods",
+        "Delivery Methods",
+        "Automation Methods",
+        "Go-to-Market Methods",
+        "Consulting Methods",
         "Tools & Platforms",
         "Professional Experience",
         "Projects",
@@ -4567,6 +4671,8 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
 
     _convert_section("Core Skills")
     _convert_section("Product Methodologies")
+    for methods_section in ("AI Transformation Methods", "Data Product Methods", "AI Operating Methods", "Delivery Methods", "Automation Methods", "Go-to-Market Methods", "Consulting Methods"):
+        _convert_section(methods_section)
     _convert_section("Tools & Platforms")
 
     summary_heading = "## Professional Summary"
