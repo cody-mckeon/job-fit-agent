@@ -1,0 +1,38 @@
+Director of AI Systems & Integration 
+
+The Role:
+
+Reporting to the SVP, AI & Enterprise Performance, and under the guidance of the AI Steering Committee, this role will help guide the strategy and roadmap for how the LVCVA’s AI systems are built, run, and connected across the organization. The role will set the technical direction for the stack, turn the department’s priorities into working systems, and serve as the conduit to departments, partnering with their teams to map how work gets done and roll out solutions that improve performance and efficiency. This role will serve as an authority on our AI systems, directing how the work is built, integrated, deployed, and maintained.
+
+What You’ll Do:
+Keep in mind that this list is not all-inclusive.
+
+Technology Leadership
+
+Support the design and execution of the roadmap for the AI stack, evolving it as tools and organizational needs change.
+Define the technical standards and architecture for AI systems and integrations.
+Track the AI landscape and translate it into clear direction for where LVCVA’s AI systems go next.
+Integrate AI tools and platforms into a cohesive stack rather than isolated point solutions
+Manage AI vendor and partner relationships, including scoped project work and flexible engineering and data science capacity.
+Oversee AI contracts, budgets, and token usage across tools, coordinating with Finance and IT as needed. 
+Cross-Functional Partnership
+Serve as the primary liaison between the AI function and other departments, moving initiatives from idea to deployment.
+Lead a team of people to drive consistent excellence in the development of AI systems and the delivery of AI integration into departments.
+Map how work moves through each department to identify where tools, automation, or process changes improve performance and efficiency.
+Partner with the AI Steering Committee, IT, Legal, and People & Culture to review, secure, and roll out AI tools, connectors, and governance guardrails across the organization. 
+Data Intelligence
+Lead development of the systems that power LVCVA’s data intelligence capabilities.
+Partner with and train research and data teams on AI systems, building and maintaining tools that support their work.
+Monitor deployed agents, automations, and dashboards, maintaining feedback loops with users and refining solutions as systems and needs change.
+What We’re Looking For:
+
+Bachelor’s degree in computer science, engineering, information systems, or a related field; advanced degree is a plus.
+7+ years of progressively responsible experience in technology, digital, or operations roles, including leadership of complex cross-functional initiatives.
+Hands-on fluency with the current AI landscape and a track record of designing, building, and deploying AI solutions in production, not just evaluating vendors or pilots.
+A track record of setting technical direction for AI and integration initiatives, owning a roadmap from concept through delivery and continuous improvement.
+Strong technical fluency to evaluate tools, scope integrations, and translate business needs into practical system requirements with IT and vendor partners.
+Experience mapping business processes and turning them into clear workflows and automation that improve performance and customer experience.
+Proven ability to manage multiple complex, cross-functional programs at once and to identify practical solutions when the path forward is not obvious.
+Clear, confident communicator with a track record of working across business units and external partners to deliver integrated solutions and influence decisions at all levels.
+Comfortable in a fast-changing environment, able to adapt quickly as tools, priorities, and requirements evolve, while providing steady leadership in ambiguity. Ability to travel as needed; familiarity with tourism, convention, or public-sector governance preferred.
+All LVCVA Ambassadors are expected to demonstrate “Do the Right Thing”, “Vegas for All”, and “Be Extraordinary” by acting with integrity, fostering an inclusive and welcoming environment, and delivering exceptional service in everything they do.

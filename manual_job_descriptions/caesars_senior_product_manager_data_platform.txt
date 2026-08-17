@@ -1,0 +1,65 @@
+Senior Product Manager - Data Platform
+Jersey City, NJ, United States and 1 more (Hybrid)
+WE ARE CAESARS
+
+At Caesars Entertainment, our Mission, Vision & Values reflect our unique purpose, providing people with possibilities and places to have fun. Our Mission, Vision & Values represent a unifying and inspiring way forward, and all Team Members are expected to uphold them.
+
+Our Mission:  “Create the Extraordinary"
+Our Vision: “We create spectacular worlds that immerse, inspire and connect you. We don’t perform magic; we create it with excellence.”
+Our Values: “Blaze the Trail, Together We Win, All-In on Service”
+
+Our corporate social responsibility framework, People Planet Play, represents our continuous dedication to enhancing economic development, uplifting the wellbeing of our Team Members and their families, and making positive contributions to the communities we operate in. 
+
+Job Summary
+We are seeking a Sr. Product Manager, Data Platform to own the strategy, roadmap, and delivery of data capabilities across the Caesars Digital. This role partners closely with Data Architecture, Engineering, Product, Analytics, and Business Stakeholders to ensure data is well-governed, discoverable, high-quality, and actionable.
+
+You will play a central role in building our Customer Data Platform (CDP) and Single Customer View (SCV) while driving improvements in data taxonomy, governance, and AI-powered accessibility.
+
+How You Will Create the Extraordinary
+Define and own the roadmap for internal data products, including data governance frameworks, data categorization and taxonomy, and CDP and Single Customer View capabilities
+Translate business needs into scalable data solutions across Product, Marketing, Fraud, Finance, and Operations while partnering with Data Architecture to align product priorities with long-term platform strategy
+Ability to embed data governance requirements into the product development lifecycle: Standardized event tracking and instrumentation, schema design, versioning, and documentation, and PII classification and consent alignment
+Establish and communicate clear data ownership and accountability across teams
+Partner with engineering teams to ensure all new features meet data quality, compliance, and observability standards while driving consistency in event tracking across mobile, web, and backend systems
+Standardize and improve data categorization across Kafka, Snowflake, BigQuery, and downstream systems
+Collaborate with Data Engineering to ensure datasets are clearly defined and documented, easily discoverable via catalogs, and mapped to business use cases
+Reduce duplication and fragmentation across data sources
+Own product requirements for Customer Data Platform and Single Customer View development, including: Identity resolution and profile stitching, behavioral, transactional, and profile unification, segmentation and activation capabilities
+Enable real-time and batch use cases such as: Personalization and recommendations, player lifecycle management, alerts and triggers across product and marketing systems
+Lead and inspire the adoption of CDP capabilities across the organization
+Lead the development of AI-powered data tools that simplify access to insights: Natural language querying, automated insights and reporting, and intelligent alerting and anomaly detection
+Partner with BI, Data Science, and Engineering to prioritize high-impact AI use cases
+Be a conduit between technical data teams and business stakeholders
+Ensure data products are intuitive, accessible, and widely adopted
+Develop training, documentation, and change management programs to support team members across Caesars Digital
+Continuously prioritize based on measurable business outcomes
+What You Will Need
+7+ years of Product Management experience in data platforms, analytics, or infrastructure
+Strong understanding of event tracking and telemetry systems, data pipelines and architectures (streaming + batch), and data warehousing/lakehouse environments
+Experience with data taxonomy and classification frameworks, schema design, versioning, and governance processes, and data quality and observability concepts
+Experience with Customer Data & Personalization or customer data ecosystems with an understanding of identity resolution and segmentation, as well as personalization and lifecycle marketing.  Bonus if you have familiarity with privacy and regulatory requirements 
+Discovering and using best in class AI/ML-driven data tools is a personal interest of yours
+Passion for improving how organizations consume and activate data at scale
+Strong cross-functional leadership across Engineering, Data, and Business teams
+Ability to translate complex technical concepts into clear product requirements
+Data-driven decision-making with a focus on measurable impact
+Agile mindset with a bias toward rapid iteration and continuous improvement
+ 
+
+What makes you stand out: 
+
+Find complex problems with numerous restraints exciting; and not daunting
+
+Enjoy learning new skills and are passionate about new developments in technology  
+
+You are highly motivated individual, who wants to work with the best and be the best  
+
+Ability to build trusting relationships with peers, teams, and leaders 
+
+Ability to lead through influence, inspiration, experience, and collaboration
+
+You inspire teams to come together and build best in class B2C products  
+
+ 
+
+The salary range for this position is $140,000 - $165,000 USD, which is dependent on a several factors including relevant experience, geography, business needs and market demand. This role may offer the following benefits: medical, vision, and dental insurance; life insurance; disability insurance; a 401(k)-matching program; among other employee benefits. This role may also be eligible for short-term or long-term incentive compensation, including, but not limited to, cash bonuses. This role includes paid Flexible Time Off and paid company holidays.

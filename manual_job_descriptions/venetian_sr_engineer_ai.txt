@@ -1,0 +1,42 @@
+Position Overview
+The primary responsibility of the Sr Engineer – AI is to play a pivotal role in identifying, developing, and deploying cutting-edge AI solutions across our organization. This position offers the unique opportunity to work on a variety of projects, integrating cutting-edge technologies into our business. Our AI Strategy and Digital Automation Team is at the forefront of exploring emerging technologies and developing groundbreaking solutions that enhance our services, improve customer experience, and drive our business forward.
+
+The successful candidate for this role will be a fast, clear, and independent thinker who is naturally curious about how things work, is metrics and number savvy, has an analytical mindset, and has demonstrated leadership ability. This person will need an ability to see the big picture/whole system and execute on grass root level to rapidly demonstrate impact and value to the organization. Additionally, they are never satisfied with the status quo, can show success in results, and can thrive in a fast-paced, customer-centric, and ever-changing environment. This position is classified as exempt under the Fair Labor Standards Act and Nevada state law.  It is paid on a salary basis and is not eligible for overtime.
+
+All duties are to be performed in accordance with departmental and The Venetian Resort’s policies, practices, and procedures. 
+
+ 
+
+Essential Duties & Responsibilities
+Architect and develop autonomous agentic AI solutions using frameworks like Google Agent Development Kit (ADK), Vertex AI Agent Engine, LangChain, or OpenAI Agents SDK.
+Develop scalable, asynchronous APIs using FastAPI and integrate Model Context Protocol (MCP) to standardize secure connections between agents and external enterprise data and tools.
+Implement hybrid retrieval pipelines using Vertex AI Vector Search for semantic lookup and Knowledge/Context Graphs (e.g., Neo4j) to manage long-term user memory and complex relationship mapping.
+Build ingestion pipelines for internal enterprise data (BigQuery, Enterprise Knowledge Base, Unstructured Docs) to ground agents in internal organizational knowledge.
+Deploy and manage scalable agent architectures on Google Cloud (using Vertex AI Agent Engine or Cloud Run), ensuring secure integrations and reliable recovery workflows.
+Additional Duties & Responsibilities
+Implement full-stack observability (tracing, logging, dashboards) to visualize agent reasoning, debug state issues, and monitor production health.
+Build robust evaluation frameworks (Evals) and benchmark orchestration tools to track accuracy, minimize hallucinations, and ensure systematic quality improvement (hill climbing).
+Design and optimize advanced system prompts (Chain-of-Thought, ReAct) for Gemini models, utilizing Vertex AI Prompt Management for versioning and regression testing.
+Conduct research and analysis on emerging AI technology trends, providing insights and recommendations to senior management.
+Design and maintain high-quality prompt strategies for robustness and reliability.
+Safety is an essential function of this job.
+Consistent and regular attendance is an essential function of this job.
+Performs other related duties as assigned.
+ 
+
+Company Standards of Conduct
+
+All The Venetian Resort Team Members are expected to conduct and carry themselves in a professional manner at all times. Team Members are required to observe the Company’s standards, work requirements and rules of conduct.
+
+ 
+
+Minimum Qualifications
+Physical Requirements
+Must be able to
+
+Physically access all areas of the property and drive areas with or without a reasonable accommodation.
+Maintain composure under pressure and consistently meet deadlines with internal and external customers and contacts.
+Ability to interact appropriately and effectively with guests, management, other team members, and outside contacts.
+Ability for prolonged periods of time to walk, stand, stretch, bend and kneel
+Work in a fast-paced and busy environment.
+Work indoors and be exposed to various environmental factors such as, but not limited to, CRT, noise, dust, and cigarette smoke.
