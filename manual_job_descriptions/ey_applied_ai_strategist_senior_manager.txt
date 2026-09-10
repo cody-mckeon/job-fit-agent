@@ -1,0 +1,55 @@
+EY Applied AI Strategist Senior Manager
+
+Location: Anywhere in Country
+
+The opportunity:
+This role builds and leads delivery of applied AI solutions for private equity clients and portfolio companies, aligning AI investment with client value creation strategy to achieve measurable business outcomes. The role serves as a hands-on architect and trusted advisor to senior client stakeholders, leading small embedded teams of engineer-consultant practitioners who design, build, and operationalize production-grade AI agents while carrying the process and organizational change around them.
+
+Specializing in agentic and generative AI delivery, this role coaches others on relevant frameworks, tools, techniques, and enabling technologies, proposing solutions to technical constraints and anticipating bottlenecks across the full solution lifecycle.
+
+Key responsibilities:
+- Manage and deliver complex applied AI solutions from opportunity identification through production deployment and adoption.
+- Maintain focus on quality, risk management, and measurable value while navigating operational and organizational dynamics.
+- Own solution architecture and technical direction for AI deployments across multiple concurrent client environments.
+- Exercise judgment in selecting models, frameworks, and evaluation criteria for reliable, compliant results.
+- Develop solutions to complex problems spanning data, process, and organizational change.
+- Recommend changes to client operating models and establish delivery practices that affect workstreams and broader business functions.
+- Work embedded at client sites and travel regularly as required.
+- Manage client relationships with daily interactions.
+
+Skills and attributes:
+- Lead end-to-end delivery of production AI solutions while managing program/project economics.
+- Strong client relationship management and ability to identify sales and new opportunities within accounts.
+- Build, coach, and develop cross-functional engineering teams.
+- Develop resource plans and budgets for engagements.
+
+Required qualifications:
+- Bachelor's degree required, master's degree preferred.
+- 5-7+ years relevant experience.
+- Agentic AI solution architecture.
+- Generative AI application development, including RAG, multi-agent systems, and orchestration frameworks such as LangChain and LangGraph.
+- AI platform design and operations, including LLMOps and MLOps.
+- Multi-model and multi-cloud architecture across Azure, AWS, and GCP.
+- Data platform and pipeline engineering, including Snowflake, Databricks, and lakehouse patterns.
+- AI governance, security, and responsible AI, including RBAC/ABAC authorization design.
+- AI use-case discovery and value qualification.
+- Business case development.
+- Process re-engineering and workflow automation.
+- AI operating model and organization design.
+- Building and managing relationships.
+- Client trust and value.
+- Commercial astuteness.
+- Communicating with impact.
+- Complex problem-solving.
+- Critical thinking.
+- Driving outcomes.
+- Leading teams.
+- Learning agility.
+- Managing change.
+- Negotiation and influencing.
+
+Preferred:
+- Consulting environment experience focused on AI, data, or digital transformation.
+- Experience serving private equity firms or portfolio companies, or similar fast-paced outcome-driven environments.
+- Ability to articulate AI solutions to technical and non-technical audiences.
+- Passion for staying at the frontier of AI, adopting the latest models, agents, and tools in daily work.

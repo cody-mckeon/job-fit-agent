@@ -1,0 +1,34 @@
+Freeman Sr Digital Product Manager
+
+The Freeman Company is a global leader in events. The Senior Digital Product Manager will lead prioritization and execution of ecommerce capabilities across the exhibitor shopping journey, translating customer insights, business priorities, analytics, and technology constraints into a focused product roadmap that drives measurable outcomes.
+
+This position supports the Commerce group under Technology Services and may be based in Dallas, Chicago, or Las Vegas.
+
+Responsibilities:
+- Lead the end-to-end ecommerce shopping experience for event exhibitors across product discovery, selection, configuration, checkout, account management, and post-order support.
+- Own and manage the product roadmap, prioritizing initiatives based on analytics, customer feedback, moderated and unmoderated studies, competitive analysis, and stakeholder input.
+- Translate strategic priorities into clear product requirements, user stories, acceptance criteria, success metrics, and release plans.
+- Use analytics, customer feedback, customer research, competitive analysis, and stakeholder input to identify opportunities and prioritize work.
+- Partner with engineering, QA, UX design, analytics, digital merchandising, marketing, customer experience, operations, and data science to deliver cohesive end-to-end solutions.
+- Develop KPIs and measurement plans for new features and enhancements.
+- Manage trade-offs and make clear prioritization recommendations across timeline, scope, resources, and business needs.
+- Mentor business analysts and product contributors by establishing strong discovery, documentation, prioritization, and measurement practices.
+- Serve as subject matter expert for the digital exhibitor experience and advocate for simple, intuitive, scalable solutions.
+- Support agile delivery through discovery, backlog refinement, sprint planning, demos, release readiness, QA/UAT, and post-launch measurement.
+- Present roadmap priorities, progress, results, risks, and recommendations to executives, stakeholders, and cross-functional partners.
+- Leverage web analytics, financial data, customer insights, competitive analysis, and industry trends to evaluate opportunities and inform product decisions.
+- Partner with analytics and data science teams to support AI, personalization, recommendations, guided ordering, cross-sell, upsell, and related commerce capabilities.
+- Support Freeman's broader digital commerce goals, including improved customer experience, higher conversion, revenue growth, operational efficiency, and scalable platform capabilities.
+
+Qualifications:
+- 7-10 years of product management experience.
+- Demonstrated ownership of enterprise-scale digital commerce or ecommerce programs with measurable business impact.
+- Experience in B2C ecommerce and driving digital growth, conversion, and revenue outcomes.
+- Experience with tools such as Salesforce Commerce Cloud, Salesforce Service Cloud, Adobe Analytics, GA4, Jira, Azure DevOps, Confluence, or similar platforms.
+- Experience managing vendor relationships, contracts, or technology budgets in support of a digital product roadmap.
+- Strong customer-first product mindset with the ability to simplify complex workflows into intuitive digital experiences.
+- Ability to own and prioritize a product roadmap in a complex cross-functional enterprise environment.
+- Strong analytical skills using product usage data, funnel metrics, financial data, customer feedback, and research findings.
+- Excellent written and verbal communication for executives, technical teams, business stakeholders, and frontline users.
+- Ability to define success metrics, build measurement plans, interpret results, and translate learnings into product recommendations.
+- Experience with ecommerce platforms, digital shopping journeys, personalization, product discovery, search, navigation, checkout, and customer self-service.

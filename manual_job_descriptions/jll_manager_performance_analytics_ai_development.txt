@@ -1,0 +1,50 @@
+JLL Manager, Performance Analytics & AI Development
+
+Location: Remote, Vacaville, CA
+
+JLL seeks a Manager, Performance Analytics & AI Development to drive performance excellence through data-driven insights and innovative technology solutions. This role combines strategic KPI management, business intelligence expertise, and artificial intelligence tool development to enhance operational efficiency and decision-making across the organization, while focusing on general reliability of the overall organization.
+
+Responsibilities:
+- Design and implement comprehensive KPI frameworks aligned with business objectives and strategic priorities.
+- Establish performance measurement standards across departments and service lines to ensure consistency and accountability.
+- Monitor and analyze key performance indicators, identifying trends, anomalies, and opportunities for improvement.
+- Partner with business leaders to set performance targets, track progress, and develop action plans to address underperformance.
+- Create executive-level performance dashboards and reports that provide clear, actionable insights.
+- Conduct regular performance review sessions with stakeholders, translating data findings into strategic recommendations.
+- Develop methodologies for benchmarking performance against industry standards and competitors.
+- Build and maintain BI infrastructure, including data warehouses, ETL processes, and reporting platforms.
+- Facilitate the design and development of interactive dashboards, visualizations, and self-service analytics tools.
+- Perform complex data analysis to uncover patterns, correlations, and insights that drive business strategy.
+- Collaborate with cross-functional teams to understand reporting requirements and translate them into scalable BI solutions.
+- Ensure data quality, governance, and security across BI platforms and reporting processes.
+- Optimize existing BI tools and workflows to improve efficiency, usability, and adoption rates.
+- Train and support business users in leveraging BI tools effectively.
+- Identify opportunities to leverage artificial intelligence and machine learning to solve business challenges and automate processes.
+- Design, prototype, and implement AI-powered solutions that enhance operational efficiency and customer experience.
+- Collaborate with IT, data science teams, and external vendors to develop and deploy AI applications tailored to JLL needs.
+- Evaluate emerging AI technologies and tools, recommending strategic investments aligned with business priorities.
+- Build predictive models and intelligent automation workflows that improve forecasting accuracy and decision speed.
+- Establish best practices for responsible AI development, including ethics, bias mitigation, and transparency.
+- Monitor AI solution performance, iterating and refining models based on feedback and changing business requirements.
+
+Required Qualifications:
+- 5+ years of progressive experience in reliability or operations management, performance management, business intelligence, data analytics, or related roles.
+- 2+ years of hands-on experience with AI/ML tools, techniques, or development projects.
+- Strong analytical and problem-solving skills with ability to translate complex data into clear business insights.
+- Excellent communication and presentation abilities with technical and non-technical audiences.
+
+Preferred Qualifications:
+- Bachelor's degree in Data Science, Computer Science, Business Analytics, Statistics, Engineering, or related field.
+- Advanced proficiency in BI platforms such as Power BI, Tableau, Qlik, or similar tools.
+- Experience in commercial real estate, property management, or professional services.
+- Strong SQL skills and experience with relational databases.
+- Familiarity with Python, R, or similar for data analysis and AI development.
+- Experience with machine learning frameworks and AI platforms.
+- Knowledge of data warehousing, ETL processes, and data modeling.
+- Understanding of cloud platforms and AI/ML services.
+- Experience with API integration, automation tools, and workflow orchestration.
+- Project management skills with ability to manage multiple priorities.
+- Strategic thinking, attention to detail, and commitment to data accuracy.
+- Ability to work across departments and influence without direct authority.
+- Curiosity and passion for emerging AI and automation technologies.
+- Change management experience and ability to drive adoption of new tools and processes.

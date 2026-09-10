@@ -1,0 +1,35 @@
+Humana Senior AI Implementation Lead
+
+The Senior Technology Implementation Professional delivers new AI technological solutions to meet business needs within a specified scope while aligned to enterprise objectives. The role specializes in AI applications architecture, where analysis of situations or data requires in-depth evaluation of variable factors.
+
+The Senior Technology Implementation Professional gathers and documents business system and functional requirements, influences system design to optimize support, and ensures solutions meet business objectives and requirements for AI solutions. The primary focus is to build scalable, secure, user-facing software applications powered by AI models.
+
+Responsibilities:
+- Complete and coordinate implementation of design and requirements.
+- Coordinate testing, operational readiness, and transition to the appropriate production support team.
+- Influence department strategy.
+- Make decisions on moderately complex to complex issues regarding technical approach for project components.
+- Work independently and exercise latitude in determining objectives and approaches.
+- Design workflows, interfaces, and LLM orchestrations.
+- Design resilient microservices, API layers, and backend pipelines to handle non-deterministic AI outputs and dynamic token streaming.
+- Ensure data privacy and AI frameworks.
+- Influence business partners on solutions.
+- Work with offshore teams and vendors to implement the best solution for business needs.
+
+Required Qualifications:
+- Bachelor's Degree in Computer Science, Engineering, or a related technical field.
+- 3-5+ years leading enterprise AI/GenAI initiatives, including design, implementation, and production support of AI-powered applications.
+- Experience designing and deploying Generative AI solutions using LLMs, RAG architectures, vector databases, prompt engineering, and agent orchestration frameworks.
+- Responsible AI.
+- Healthcare compliance.
+- Business value realization.
+- AI product delivery leadership.
+- Azure OpenAI and Microsoft AI ecosystem experience.
+- Experience implementing AI solutions on Azure or Google Cloud Platform.
+- Experience with Responsible AI practices including model governance, fairness, explainability, privacy controls, human-in-the-loop review processes, and regulatory compliance.
+- Lead cross-functional teams consisting of business partners, architects, engineers, product owners, security teams, and vendors to deliver enterprise AI capabilities.
+
+Additional Information:
+- Remote work.
+- Dedicated workspace required to protect member PHI and HIPAA information.
+- Occasional travel to Humana offices for training or meetings may be required.

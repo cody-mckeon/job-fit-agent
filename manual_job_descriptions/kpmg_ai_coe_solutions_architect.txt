@@ -1,0 +1,26 @@
+KPMG Manager, AI Center of Excellence Solutions Architect
+
+KPMG is seeking a Manager, AI Center of Excellence Solutions Architect to join the AI & Digital organization.
+
+Responsibilities:
+- Help establish AI architecture and technology components aligned with current marketplace developments.
+- Regularly review and update architecture and components based on firm standards and alliance ecosystem changes.
+- Collaborate with stakeholders, developers, and data scientists to plan, design, and implement AI experiments and solutions.
+- Conduct hands-on experimentation with ecosystem vendors and platforms.
+- Document technical specifications and experiment results.
+- Define strategy and detailed architecture for Knowledge Assistants and AI Agents.
+- Identify strategy, approach, and architecture to evaluate AI systems and models, including automated tests, evals, and benchmarks.
+- Work closely with KPMG functions to implement evaluation strategy.
+- Liaise with functional stakeholders across Audit, Tax, and Advisory to align AI technical guidance, components, and solutions with priorities.
+
+Qualifications:
+- Minimum five years recent experience in AI solutions development.
+- Bachelor's degree.
+- Strong experience preferably in financial services and efforts related to model training, tuning, and performance evaluations.
+- Published work preferred.
+- Knowledge of AI technologies and methodologies.
+- Experience designing and implementing AI experiments and solutions.
+- Strong collaboration and communication skills with stakeholders, developers, and data scientists.
+- Ability to foster hyper-collaboration, continuous learning, and skilling.
+- Familiarity with latest developments in AI marketplace.
+- Ability to adapt architecture and components based on marketplace changes.

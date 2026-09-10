@@ -1,0 +1,34 @@
+Department: WDTech - R&D
+
+Walker & Dunlop is one of the largest providers of capital to the commercial real estate industry. WDTech is Walker & Dunlop's in-house technology team focused on real estate data, data science, and technology.
+
+The AVP, Senior Product Manager - Agentic Workflows is a senior individual contributor responsible for identifying, developing, and delivering AI-powered workflow solutions that improve business processes across Walker & Dunlop. Reporting to the Chief Product Officer, this role partners closely with business leaders and cross-functional teams to identify operational challenges, rapidly prototype solutions, and guide them through production deployment. Success requires combining product management expertise with hands-on experience using modern AI technologies to deliver measurable business outcomes.
+
+Primary Responsibilities:
+- Partner with business teams to identify workflow challenges and opportunities for AI-enabled automation through direct user engagement and observation.
+- Travel regularly to Walker & Dunlop offices and field locations to understand business processes and gather insights that inform product development.
+- Translate business needs into product requirements and maintain a prioritized backlog of AI workflow initiatives.
+- Design, build, test, and iterate AI workflow prototypes using modern AI tools and development platforms.
+- Present solutions to stakeholders, gather feedback, and refine workflows based on user input.
+- Partner with Engineering, Site Reliability Engineering, Information Security, Legal, Procurement, and other cross-functional teams to transition solutions from prototype to production.
+- Define, measure, and report on key performance metrics, including adoption, operational efficiency, quality improvements, and business impact.
+- Maintain workflow documentation, evaluation records, and audit artifacts to support governance and scalable AI development practices.
+- Communicate project priorities, progress, and outcomes to business stakeholders and executive leadership.
+- Contribute to the evolution of Walker & Dunlop's AI product capabilities by identifying reusable solutions, improving development practices, and sharing knowledge across teams.
+
+Education and Experience:
+- Bachelor's degree in Business, Computer Science, Information Systems, Engineering, or related field, or equivalent experience.
+- 8+ years of product management experience with demonstrated track record delivering AI, machine learning, or intelligent automation solutions into production.
+- Experience managing products throughout the full lifecycle from discovery and solution design through implementation and adoption.
+- Experience collaborating with software engineering teams and translating business needs into technical requirements.
+- Experience within commercial real estate, mortgage finance, financial services, or another regulated industry preferred.
+- Familiarity with developer tools such as Git, GitHub/GitLab, Python, JSON, YAML, and Markdown preferred.
+
+Knowledge, Skills and Abilities:
+- Strong knowledge of AI technologies, including large language models, prompt engineering, retrieval-augmented generation, and agentic workflows.
+- Ability to independently prototype AI-enabled solutions using modern AI development tools and platforms.
+- Strong product management, analytical, and problem-solving skills with the ability to translate complex business challenges into scalable technology solutions.
+- Excellent written and verbal communication skills with technical and non-technical stakeholders.
+- Strong collaboration and influencing skills across business and technology teams.
+- Ability to manage multiple priorities while maintaining high-quality execution and documentation.
+- Willingness and ability to travel regularly to Walker & Dunlop offices and field locations.

@@ -1,0 +1,39 @@
+Gusto Agentic Operations Architect
+
+Location: Denver, CO - Hybrid; Las Vegas, NV - Remote; New York, NY; Phoenix, AZ - Remote; San Francisco, CA - Hybrid
+
+Gusto is seeking an Agentic Operations Architect for the Service Transformation (CXT) team. The role owns reusable capabilities that make agentic service workflows possible, including patterns, primitives, standards, and tooling that builders across the organization use to automate discrete customer problems.
+
+The role prototypes workflows selectively to validate patterns, expose gaps, unblock hard problems, and extract reusable components. The role influences Product on what to build next, ranks automation opportunities by volume, risk, and customer impact, works with Data to define workflow performance measurement, and carries quality stakes into Legal, Security, Compliance, and platform reviews.
+
+Responsibilities:
+- Design reusable patterns for agentic service workflows.
+- Define orchestration, human-in-the-loop protocols, override logic, escalation logic, and quality safeguards.
+- Set concrete standards builders can apply without the architect in the room.
+- Prototype workflows to validate patterns and expose platform gaps.
+- Pull learnings from each build back into shared patterns.
+- Influence Product roadmap by turning builder friction into prioritized product asks.
+- Rank automation opportunities by volume, risk, and customer impact.
+- Mine SOPs, operational metrics, and interaction data.
+- Define workflow performance metrics with Data.
+- Identify processes that should not be automated.
+- Bring customer stakes into Legal, Security, Compliance, and platform reviews.
+- Represent portfolio performance to senior stakeholders in a concise, action-oriented way.
+
+Requirements:
+- 8+ years in operations, product, or AI roles.
+- At least 2 years designing and deploying AI-assisted or agentic workflows in production.
+- Hands-on experience with agentic tooling, orchestration frameworks, or MCP-style integrations, including multi-agent coordination.
+- Strong LLM fluency including prompt design, evaluation, and model behavior at scale.
+- Experience designing human-in-the-loop systems with escalation logic, override controls, and compliance-aware checkpoints.
+- Ability to define and diagnose workflow metrics including solve rate, assist rate, containment, and escalation quality.
+- Ability to tell a real regression from noise.
+- Experience influencing Product, Engineering, Legal, Security, and Compliance in writing, design reviews, and high-stakes forums.
+- Familiarity with Responsible AI, governance, and risk management in production.
+- Experience building the plane while flying it.
+
+Strongly preferred:
+- RAG architectures and retrieval quality optimization.
+- Ability to assess data structures, data quality, and governance for reliable agentic performance.
+- SaaS, fintech, or regulated environment experience.
+- AI governance or safety-oriented review processes.

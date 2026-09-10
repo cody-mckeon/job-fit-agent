@@ -1,0 +1,33 @@
+FullStack Junior Ecommerce Product Manager
+
+FullStack is an AI-native engineering partner built to turn AI capability into production-ready outcomes. The company works with clients through team augmentation and design-and-build product teams.
+
+The role is Junior Ecommerce Product Manager. The product manager will work directly with client teams or FullStack product teams to build and deliver products.
+
+Requirements:
+- 2+ years of professional experience in Product Management, Product Ownership, or Digital Product Strategy.
+- Proven track record managing backlogs, defining scope, and writing clear user stories.
+- Advanced English required.
+- Four-year college degree required.
+- Experience in e-commerce or digital transaction environments.
+- Experience optimizing user journeys, checkout and booking flows, and conversion rates.
+- Familiarity with platforms such as Shopify, Magento, or Salesforce Commerce Cloud is a plus.
+- Solid understanding of web technologies including HTML/CSS, React, RESTful APIs, performance metrics, and backend integrations.
+- Ability to collaborate effectively with engineering teams.
+- Willingness to work hybrid onsite 2 days per week in Las Vegas after an initial fully remote period.
+- Ability to work through new and difficult issues and contribute to libraries as needed.
+- Ability to create and maintain continuous integration and delivery of applications.
+- Forensic attention to detail.
+- Positive mindset and can-do attitude.
+- Experience working on Agile/Scrum teams.
+- Meaningful experience working on large, complex systems.
+- Extreme ownership over work.
+- Ability to identify with client goals and deliver on commitments.
+
+Nice to have:
+- AI-enthusiastic workflow.
+- Professional experience or personal project work with Cursor, Windsurf, Google Antigravity, Claude Code, Gemini CLI, Codex, or Copilot CLI.
+
+Compensation:
+- Base salary range: $80,000 - $90,000.
+- Initially remote within the United States, transitioning to hybrid 2 days per week in Las Vegas.
