@@ -81,14 +81,14 @@ def test_blocked_company_appears_in_cooldown_section(tmp_path, monkeypatch, caps
     monkeypatch.chdir(tmp_path)
     initialize()
     _insert_job("elevenlabs", "AI Implementation Lead", score=92)
-    block_company("elevenlabs", "90-day Ashby cooldown", expires_at="2026-09-02", quiet=True)
+    block_company("elevenlabs", "90-day Ashby cooldown", expires_at="2099-09-02", quiet=True)
 
     main(["opportunity-pipeline"])
 
     output = capsys.readouterr().out
     assert "Blocked / cooldown" in output
     assert "company: elevenlabs" in output
-    assert "blocked_until: 2026-09-02" in output
+    assert "blocked_until: 2099-09-02" in output
 
 
 def test_weak_stripe_near_fit_does_not_become_best_next_action(tmp_path, monkeypatch, capsys):
@@ -129,7 +129,7 @@ def test_elevenlabs_blocked_role_recommends_recruiter_manual_review(tmp_path, mo
     monkeypatch.chdir(tmp_path)
     initialize()
     _insert_job("elevenlabs", "AI Agents Product Lead", score=94)
-    block_company("elevenlabs", "90-day application cooldown", expires_at="2026-09-02", quiet=True)
+    block_company("elevenlabs", "90-day application cooldown", expires_at="2099-09-02", quiet=True)
 
     payload = pipeline_review()
 

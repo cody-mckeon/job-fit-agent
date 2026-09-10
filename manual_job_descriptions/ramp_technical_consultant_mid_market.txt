@@ -1,0 +1,33 @@
+Ramp Technical Consultant, Mid-Market
+
+Ramp is building smart infrastructure for finance teams. Technical Consultants work with customers and internal technical teams to support implementations, customer activation, integrations, configuration, and scalable financial workflows.
+
+The role partners with Customer Activation and Account Management teams to identify, prioritize, and build financial solutions for new and existing customers. Technical Consultants act as technical and financial subject matter experts, design solutions through Ramp and partner integrations, and partner with Product, Design, and Engineering teams to evolve Ramp based on customer needs.
+
+This role is focused on Commercial and Mid-Market customers, supporting high-growth companies with standardized financial workflows, core ERP integrations, and repeatable implementation patterns that drive fast time-to-value.
+
+Responsibilities:
+- Act as a technical advisor to customers and internal teams while supporting high-value implementations and expansion opportunities.
+- Guide integration, configuration, and system design.
+- Partner with Customer Activation and Account Management teams to assess customer requirements and propose scalable solutions involving ERP, HRIS, and API integrations.
+- Collaborate with onboarding specialists and implementation leads to support technical workstreams.
+- Help customers problem-solve technical hurdles and propose effective product implementations.
+- Participate in technical discovery to understand customer systems and workflows.
+- Recommend best-fit Ramp architecture, including when and how to use Ramp's API.
+- Be a subject matter expert across HRIS and Accounting integration partners.
+- Partner with Sales, Product, and partners to advocate for integration development aligned with customer needs.
+- Troubleshoot integration blockers and guide customers through complex configuration decisions without writing code directly.
+- Contribute to internal documentation and tooling that scales support for integration use cases.
+- Influence the product roadmap by channeling customer pain points and feedback to Product and Engineering.
+
+Requirements:
+- Bachelor's degree in computer science, engineering, finance, business, or related field.
+- 2+ years in technical consulting, solutions engineering, implementation, or similar customer-facing technical role, ideally SaaS or fintech.
+- Familiarity with ERP systems such as NetSuite, Sage Intacct, Microsoft Dynamics, Oracle Fusion, SAP S/4HANA.
+- Comfort working with APIs, integration logic, system architecture, and explaining concepts to finance and operations stakeholders.
+- Strong communication skills translating technical solutions into business value.
+- Ability to guide customers toward scalable approaches and steer conversations when requests are misaligned with best practices or product capabilities.
+- Cross-functional collaboration with Sales, Customer Success, Product, and Engineering.
+- Exceptional organization and problem-solving skills.
+- Bias toward action and high ownership.
+- Thrives in ambiguity and fast-paced environments.

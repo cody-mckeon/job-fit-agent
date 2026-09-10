@@ -1,0 +1,41 @@
+SpeedVegas Senior Website Manager
+
+Location: Sloan, NV / Las Vegas area
+
+SpeedVegas is seeking an experienced Senior Website Manager to own the direction, execution, and continuous improvement of multi-brand websites, booking experience, and e-commerce operations. This senior role is the operational bridge between leadership, marketing, the CTO, developers, agencies, and vendors. The role sets priorities, manages delivery, owns website and e-commerce performance, and remains close enough to CMS and content operations to ensure work ships at a high standard.
+
+Immediate Priorities - First 90 Days:
+- Support final delivery and launch of the new website and booking platform, including coordination of remaining development work, UAT, content review, launch preparation, and post-launch stabilization.
+- Take hands-on ownership of critical CMS publishing, website pages, landing pages, promotions, pricing, and content updates during launch and stabilization.
+- Build and update pages from approved templates, accurately format copy, apply approved design assets, and prepare completed pages for review and publication.
+- Assess content, conversion, customer journey, and operational backlog.
+- Prioritize high-value improvements, translate them into clear tickets with acceptance criteria, and assign work to the appropriate internal or external resource.
+- Establish a clear process for website updates, managing content, design, testing, publishing, and developer coordination.
+
+Responsibilities:
+- Own the website, booking, and e-commerce roadmap, ensuring customer experience, revenue goals, technical execution, timelines, budgets, and operational needs stay aligned.
+- Manage external developers, agencies, designers, technology vendors, and implementation partners.
+- Set expectations, review deliverables, resolve issues, and hold work to schedule and quality standards.
+- Support the CTO by owning website and e-commerce delivery operations, including requirements, prioritization, vendor coordination, testing, release readiness, and follow-through.
+- Own the website product backlog and release process by defining tickets, leading UAT and QA, approving releases, and verifying production fixes.
+- Own e-commerce and booking performance, including offers, pricing, promotions, checkout flows, payment experience, merchandising, and conversion opportunities.
+- Partner with marketing and communications on content strategy, landing pages, campaigns, SEO/GEO, CRO, analytics, and brand consistency.
+- Remain hands-on with CMS content when needed.
+- Provide leadership with concise updates on progress, risks, decisions, vendor performance, business impact, and recommended next steps.
+
+Technical Proficiencies:
+- Strong understanding of websites, e-commerce, booking flows, APIs, integrations, web analytics, and modern digital delivery practices.
+- Hands-on familiarity with CMS platforms, website content operations, SEO/CRO, conversion measurement, and customer-journey optimization.
+- Experience managing developer, agency, and vendor workflows through tools such as Jira, Asana, or Trello.
+- Practical command of UAT, QA, and release management.
+- Familiarity with website architecture and platforms such as Symfony/PHP, React, payment providers, CRM, or reporting tools is helpful.
+- Experience working with APIs, web integrations, and data flows.
+- Able to define requirements, coordinate developers and vendors, test integrations, and resolve issues.
+- Practical experience using AI tools to improve content creation, image production, research, quality assurance, customer experience, and internal workflows.
+
+Qualifications:
+- 5+ years leading websites, e-commerce, digital products, or complex customer-facing digital initiatives.
+- Demonstrated success owning website launches, rebuilds, e-commerce operations, or multi-vendor digital programs from planning through production.
+- Strong vendor management, project management, business, and communication skills.
+- Able to work effectively with executives, marketers, designers, developers, and external partners.
+- High-ownership, data-informed operator who can set direction, make decisions, and still step into content and execution details when needed.

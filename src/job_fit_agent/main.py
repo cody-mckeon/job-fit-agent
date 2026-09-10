@@ -3835,13 +3835,43 @@ def _project_bullet(project_name: str) -> str:
         "Job Fit Agent": "Job Fit Agent: AI product that evaluates job opportunities using configurable scoring models, workflow automation, and user-defined decision criteria, with GitHub Actions scheduling and Telegram notifications.",
         "RWLV Priority Governor Agent": "RWLV Priority Governor Agent / Resorts World digital product and analytics work: AI-assisted discovery, implementation-ready product requirements, stakeholder alignment, GA4/GTM/Pendo analytics instrumentation, customer journey optimization, and internal sales/digital tool execution.",
         "Web Product Measurement Framework": "Web Product Measurement Framework: event taxonomy, instrumentation standards, and analytics QA for decision-ready reporting.",
-        "Site Audit QA Agent": "Site Audit QA Agent: automated digital quality checks supporting analytics validation, release readiness, issue prioritization, and repeatable stakeholder reporting.",
+        "Site Audit QA Agent": "Site Audit QA Agent: AI-assisted QA workflow for website audits, analytics validation, consent/readiness checks, governance review, defect identification, and stakeholder follow-up.",
         "Hospitality API Integration Exploration": "Hospitality API Integration Exploration: scoped integration discovery for digital experience improvements across hospitality touchpoints.",
         "Resorts World analytics/instrumentation work": "Resorts World analytics/instrumentation work: analytics implementation and instrumentation quality improvements for product measurement.",
         "Resorts World digital experience work": "Resorts World digital experience work: digital journey optimization and product systems support for guest-facing experiences.",
     }
     return bullets.get(project_name, f"{project_name}: relevant project experience.")
 
+def _resume_project_block(project_name: str) -> str | None:
+    blocks = {
+        "Site Audit QA Agent": """### Site Audit QA Agent
+AI-assisted QA, governance checks, analytics validation, release readiness
+
+- Built an AI-assisted site audit workflow to evaluate website pages, tracking requirements, content accuracy, consent requirements, and implementation readiness.
+- Structured repeatable QA checks for CTA behavior, analytics/tag coverage, vendor embeds, page content, and customer journey consistency.
+- Used AI-assisted review patterns to identify defects, document assumptions, flag data-quality risks, and convert findings into actionable stakeholder/vendor follow-ups.
+- Supported release readiness and AI adoption by standardizing how issues are captured, prioritized, and communicated across marketing, analytics, design, engineering, and vendor teams.""",
+    }
+    return blocks.get(project_name)
+
+def _limit_project_block_bullets(block: str, max_bullets: int) -> str:
+    """Keep project heading/subheading but limit the number of bullet points."""
+    if max_bullets <= 0:
+        return block
+
+    lines = block.splitlines()
+    result: list[str] = []
+    bullet_count = 0
+
+    for line in lines:
+        if line.strip().startswith("- "):
+            bullet_count += 1
+            if bullet_count > max_bullets:
+                continue
+
+        result.append(line)
+
+    return "\n".join(result).strip()
 
 def _tailor_base_resume_with_strategy(markdown_text: str, strategy: ResumeStrategy) -> str:
     """Apply lane guidance to applicant-facing markdown without inventing experience."""
@@ -3852,29 +3882,146 @@ def _tailor_base_resume_with_strategy(markdown_text: str, strategy: ResumeStrate
         skills = "\n".join(f"- {item}" for item in strategy.core_skills)
         text = re.sub(r"(?s)(## Core Skills\s*\n+).*?(?=\n## )", rf"\1{skills}\n", text, count=1)
 
-    # Replace any prior optional methods block and insert this lane's methods before tools.
-    text = re.sub(r"(?s)\n## (?:Product Methodologies|AI Transformation Methods|Data Product Methods|AI Operating Methods|Delivery Methods|Automation Methods|Go-to-Market Methods|Consulting Methods)\s*\n+.*?(?=\n## )", "\n", text)
-    if strategy.methods_title and strategy.methods and not minimal_fixture:
-        methods = "\n".join(f"- {item}" for item in strategy.methods)
-        text = text.replace("\n## Tools & Platforms", f"\n## {strategy.methods_title}\n\n{methods}\n\n## Tools & Platforms", 1)
+    known_methods_titles = (
+        "Product Methodologies",
+        "AI Transformation Methods",
+        "Data Product Methods",
+        "AI Operating Methods",
+        "Delivery Methods",
+        "Automation Methods",
+        "Go-to-Market Methods",
+        "Consulting Methods",
+        "AI Solutions Architecture Methods",
+        "Agentic Operations Architecture Methods",
+        "AI Data Operations & Delivery Methods",
+        "Technical Consulting & Implementation Methods",
+        "AI Enablement Product Methods",
+        "Webinar Production & Program Methods",
+        "Content Product & GTM Methods",
+        "E-Commerce Product Methods",
+        "Website, E-Commerce & AI Delivery Methods",
+        "Performance Analytics & AI Methods",
+        "Applied AI Delivery Methods",
+        "Agentic Workflow Methods",
+    )
 
-    tools_match = re.search(r"(?s)(## Tools & Platforms\s*\n+)(.*?)(?=\n## )", text)
+    methods_pattern = "|".join(re.escape(title) for title in known_methods_titles)
+
+    text = re.sub(
+        rf"(?s)\n## (?:{methods_pattern})\s*\n+.*?(?=\n## )",
+        "\n",
+        text,
+    )
+
+    if strategy.methods_title and strategy.methods:
+        methods_body = "\n".join(f"- {method}" for method in strategy.methods)
+        methods_block = (
+            f"\n## {strategy.methods_title}\n\n"
+            f"{methods_body}\n"
+    )
+
+    tools_heading = "\n## Tools & Platforms"
+    if tools_heading in text:
+        text = text.replace(
+            tools_heading,
+            f"{methods_block}\n## Tools & Platforms",
+            1,
+        )
+    else:
+        text = f"{text.rstrip()}\n{methods_block}"
+
+    tools_match = re.search(
+        r"(?s)(## Tools & Platforms\s*\n+)(.*?)(?=\n## )",
+        text,
+    )
     if tools_match:
-        existing = [line[2:].strip() for line in tools_match.group(2).splitlines() if line.strip().startswith("- ")]
-        ordered = [tool for tool in strategy.tools if tool in existing]
-        ordered.extend(tool for tool in existing if tool not in ordered)
-        text = text[:tools_match.start(2)] + "\n".join(f"- {tool}" for tool in ordered) + "\n" + text[tools_match.end(2):]
+        tools_body = "\n".join(f"- {tool}" for tool in strategy.tools)
+        text = (
+            text[:tools_match.start(2)]
+            + tools_body
+            + "\n"
+            + text[tools_match.end(2):]
+        )
 
-    projects_match = re.search(r"(?s)(## Projects\s*\n+)(.*?)(?=\n## Education|\Z)", text)
+    PROJECT_SECTION_TITLES = (
+            "Projects",
+            "Selected AI Solutions, Agents & Evaluation Projects",
+            "Selected Agentic Operations, QA & AI Workflow Projects",
+            "Selected AI Data Operations, QC & Delivery Projects",
+            "Selected Technical Consulting, Integration & AI Operations Projects",
+            "Selected Webinar, QA & AI Operations Projects",
+            "Selected AI Enablement & Agentic Workflow Projects",
+            "Selected Content Product, GTM & Analytics Projects",
+            "Selected E-Commerce Product & AI Delivery Projects",
+            "Selected Website, E-Commerce & AI Delivery Projects",
+            "Selected Performance Analytics & AI Development Projects",
+            "Selected Applied AI Strategy & Agentic Workflow Projects",
+            "Selected AI Transformation & Workflow Automation Projects",
+            "Selected AI Systems & Enterprise Automation Projects",
+            "Selected Agentic Workflow & AI Automation Projects",
+            "Selected Data, Product & AI Systems",
+            "Selected Delivery, Product & AI Systems",
+            "Selected Product & AI Systems",
+    )
+    project_titles_pattern = "|".join(
+    re.escape(title) for title in PROJECT_SECTION_TITLES
+    )
+    
+    projects_heading_pattern = rf"## (?:{project_titles_pattern})\s*\n+"
+    
+    projects_match = re.search(
+        rf"(?s)({projects_heading_pattern})(.*?)(?=\n## Education|\Z)",
+        text,
+    )
+    projects_match = re.search(rf"(?s)({projects_heading_pattern})(.*?)(?=\n## Education|\Z)", text)
     if projects_match:
         body = projects_match.group(2)
         blocks = {m.group(1).strip(): m.group(0).strip() for m in re.finditer(r"(?ms)^### (.+?)\s*$.*?(?=^### |\Z)", body)}
-        selected = [blocks[name] for name in strategy.projects if name in blocks and name not in strategy.excluded_projects]
+        selected = []
+        max_project_bullets = getattr(strategy, "max_project_bullets", 3)
+
+        for name in strategy.projects:
+            if name in strategy.excluded_projects:
+                continue
+
+            if name in blocks:
+                selected.append(
+                    _limit_project_block_bullets(
+                        blocks[name],
+                        max_project_bullets,
+                    )
+                )
+                continue
+
+            fallback_block = _resume_project_block(name)
+            if fallback_block:
+                selected.append(
+                    _limit_project_block_bullets(
+                        fallback_block,
+                        max_project_bullets,
+                    )
+                )
+
         # Preserve unrecognized projects only for the product fallback; specialized lanes intentionally curate.
         if strategy.lane == "product_management":
-            selected.extend(block for name, block in blocks.items() if name not in strategy.projects)
+            selected.extend(
+                block
+                for name, block in blocks.items()
+                if name not in strategy.projects and name not in strategy.excluded_projects
+            )
+
+        max_projects = getattr(strategy, "max_projects", 4)
+        selected = selected[:max_projects]
+
         if selected:
-            text = text[:projects_match.start(2)] + "\n\n".join(selected) + "\n" + text[projects_match.end(2):]
+            project_heading = f"## {getattr(strategy, 'project_section_title', 'Projects')}\n\n"
+            text = (
+                text[:projects_match.start(1)]
+                + project_heading
+                + "\n\n".join(selected)
+                + "\n"
+                + text[projects_match.end(2):]
+            )
     return text
 
 
@@ -3972,7 +4119,12 @@ def prep_application(job_id: int) -> None:
             "Experienced translating ambiguous business needs into customer-facing experiences, internal tools, measurable product improvements, and cross-functional execution. "
             "Uses AI throughout product discovery, planning, prototyping, and delivery to accelerate decision making, stakeholder alignment, and product outcomes."
         ))
-    base_resume = _tailor_base_resume_with_strategy(base_resume, strategy)
+
+    
+    tailored_base_resume = _tailor_base_resume_with_strategy(base_resume, strategy)
+    if tailored_base_resume is None:
+        raise RuntimeError("_tailor_base_resume_with_strategy returned None; expected resume markdown.")
+    base_resume = tailored_base_resume
 
     decision = "review first"
     if job["classification"] == "high_fit" and job["viability_level"] == "apply_now":
@@ -4624,8 +4776,20 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
     normalized = markdown_text.replace("\r\n", "\n")
     section_order = [
         "Professional Summary",
+        "Agentic Workflow Methods",
+        "AI Data Operations & Delivery Methods",
+        "Agentic Operations Architecture Methods",
+        "Technical Consulting & Implementation Methods",
+        "AI Enablement Product Methods",
         "Core Skills",
         "Product Methodologies",
+        "Webinar Production & Program Methods",
+        "Content Product & GTM Methods",
+        "E-Commerce Product Methods",
+        "Website, E-Commerce & AI Delivery Methods",
+        "Performance Analytics & AI Methods",
+        "Applied AI Delivery Methods",
+        "AI Solutions Architecture Methods",
         "AI Transformation Methods",
         "Data Product Methods",
         "AI Operating Methods",
@@ -4636,6 +4800,23 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
         "Tools & Platforms",
         "Professional Experience",
         "Projects",
+        "Selected AI Solutions, Agents & Evaluation Projects",
+        "Selected Agentic Operations, QA & AI Workflow Projects",
+        "Selected AI Data Operations, QC & Delivery Projects",
+        "Selected Technical Consulting, Integration & AI Operations Projects",
+        "Selected Webinar, QA & AI Operations Projects",
+        "Selected AI Enablement & Agentic Workflow Projects",
+        "Selected Content Product, GTM & Analytics Projects",
+        "Selected E-Commerce Product & AI Delivery Projects",
+        "Selected Website, E-Commerce & AI Delivery Projects",
+        "Selected Performance Analytics & AI Development Projects",
+        "Selected Applied AI Strategy & Agentic Workflow Projects",
+        "Selected AI Transformation & Workflow Automation Projects",
+        "Selected AI Systems & Enterprise Automation Projects",
+        "Selected Agentic Workflow & AI Automation Projects",
+        "Selected Data, Product & AI Systems",
+        "Selected Delivery, Product & AI Systems",
+        "Selected Product & AI Systems",
         "Education",
     ]
     for section_name in section_order:
@@ -4671,9 +4852,29 @@ def _normalize_submit_resume(markdown_text: str, headline: str = DEFAULT_RESUME_
 
     _convert_section("Core Skills")
     _convert_section("Product Methodologies")
-    for methods_section in ("AI Transformation Methods", "Data Product Methods", "AI Operating Methods", "Delivery Methods", "Automation Methods", "Go-to-Market Methods", "Consulting Methods"):
-        _convert_section(methods_section)
     _convert_section("Tools & Platforms")
+    for methods_section in (
+        "AI Data Operations & Delivery Methods",
+        "Agentic Operations Architecture Methods",
+        "Agentic Workflow Methods",
+        "Technical Consulting & Implementation Methods",
+        "AI Enablement Product Methods",
+        "Webinar Production & Program Methods",
+        "Content Product & GTM Methods",
+        "E-Commerce Product Methods",
+        "Website, E-Commerce & AI Delivery Methods",
+        "Performance Analytics & AI Methods",
+        "Applied AI Delivery Methods",
+        "AI Solutions Architecture Methods",
+        "AI Transformation Methods",
+        "Data Product Methods",
+        "AI Operating Methods",
+        "Delivery Methods",
+        "Automation Methods",
+        "Go-to-Market Methods",
+        "Consulting Methods",
+    ):
+        _convert_section(methods_section)
 
     summary_heading = "## Professional Summary"
     for idx, line in enumerate(lines):
@@ -4735,7 +4936,7 @@ RESUME_PDF_PANDOC_OPTIONS = [
     "-V",
     "pagestyle=empty",
     "-V",
-    "linestretch=1.15",
+    "linestretch=1.08",
 ]
 
 

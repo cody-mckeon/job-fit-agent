@@ -1,0 +1,48 @@
+Pindrop Product Manager, AI Enablement
+
+Pindrop is the Real Human + Right Human Identity Trust Platform for the AI era, delivering continuous identity verification and deepfake detection across voice, video, and digital interactions.
+
+The Product Manager, AI Enablement will own the product experience that turns Pindrop's AI capabilities into practical, repeatable workflows across Finance, RevOps, People, Recruiting, Customer Success, Marketing, and Legal. This is not an AI trainer or help desk role. It is a product manager role for internal users, focused on mapping processes, identifying high-value problems, building or configuring agentic solutions, and proving ROI.
+
+Responsibilities:
+- Map processes before touching AI.
+- Sit with stakeholders, document current-state workflows end to end, extract context and tools involved, and identify where AI can reduce friction.
+- Build and manage a portfolio of internal AI tools, agentic workflows, and prompt-based copilots that solve discrete, measurable problems.
+- Push projects past prototype into production.
+- Audit AI capabilities already built into purchased tools before standing up new solutions.
+- Extend Pindrop's shared AI platform and agent infrastructure to new use cases instead of creating parallel stacks.
+- Design and implement the operating process that moves AI concepts from prototype to production.
+- Define evaluation, human-in-the-loop review, rollout criteria, and post-launch monitoring.
+- Consolidate learnings across functions and build tooling and documentation that makes reuse real.
+- Define success metrics, instrument usage, track adoption, and explain the ROI of AI investments.
+- Drive adoption through workshops, onboarding paths, office hours, and coaching.
+- Give teams guardrails to use AI well.
+
+Who you are:
+- A builder, not just a user.
+- Experience going past prompting into building.
+- GitHub or equivalent with projects that prove it.
+- Shipped agentic systems that solve real problems.
+- Process mapper first.
+- Frontier-fluent and self-directed.
+- Understands the difference between AI theater and AI value.
+- Translator and teacher who can build credibility with Finance, HR, Customer Success, Marketing, Legal, and other business teams.
+- Rigorously skeptical and understands where models break down.
+- Understands evals and why they matter.
+
+Must-haves:
+- Process mapping and current-state workflow documentation.
+- 3+ years in product management, product operations, AI enablement, or related role with PM-level ownership of scope, requirements, delivery, and metrics.
+- Hands-on experience with frontier AI CLIs and coding tools including Codex, Claude Code, Anti-Gravity, and/or SuperGrok.
+- Demonstrated ability to build agentic systems that solve discrete, measurable problems.
+- GitHub profile showing 3-4 built projects is a strong signal.
+- Fluency in context engineering and ontology design.
+- Conceptual command of test-driven development and eval-driven development for AI systems.
+- Ability to define success metrics, track adoption, and make the ROI case for AI investments.
+
+Nice-to-haves:
+- Experience with meta harnesses and multi-agent orchestration frameworks.
+- Familiarity with RAG patterns, LLM output evaluation, hallucination mitigation, and release gating in enterprise contexts.
+- Exposure to AI acceptable-use policies, data-handling guardrails, or workforce governance frameworks.
+- Background in high-growth, AI-native, or B2B SaaS environments.
+- Experience building enablement content, use-case libraries, or office-hours programs from a blank page.

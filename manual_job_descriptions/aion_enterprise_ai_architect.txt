@@ -1,0 +1,31 @@
+AION Enterprise AI Architect
+
+AION is seeking an enterprise AI architect to design scalable, production-ready architectures across data, integration, model, and security layers. The role leads discovery, maps business outcomes to technical roadmaps, and drives phased implementation from pilot to production while ensuring governance and operational readiness for enterprise deployments.
+
+Responsibilities:
+- Lead discovery and map business outcomes to target technical architecture.
+- Design end-to-end AI-enabled architecture across data, integration, model, and security layers.
+- Define phased implementation plans from pilot to production rollout.
+- Drive integration architecture with enterprise systems and operational workflows.
+- Set governance, risk, and compliance controls in solution design.
+- Translate ambiguity into executable technical roadmaps.
+- Communicate architecture decisions clearly to business and technical stakeholders.
+
+Qualifications:
+- Enterprise architecture across APIs, data platforms, IAM, and integration layers.
+- AI architecture depth in RAG topology, grounding, orchestration, and fallback design.
+- Hands-on familiarity with LangChain and LangGraph capabilities and production constraints.
+- Stakeholder workshop facilitation and architecture communication skills.
+- Ability to convert ambiguity into executable technical roadmaps.
+- Strong stakeholder communication and multi-cloud experience.
+- Experience designing scalable production-ready enterprise AI deployments.
+- Governance and operational readiness for enterprise AI deployments.
+
+Skills:
+- Enterprise architecture
+- AI architecture
+- LangChain
+- LangGraph
+- Stakeholder facilitation
+- Roadmap planning
+- Multi-cloud platforms
