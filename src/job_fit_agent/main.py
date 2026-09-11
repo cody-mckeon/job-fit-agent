@@ -3873,9 +3873,29 @@ def _limit_project_block_bullets(block: str, max_bullets: int) -> str:
 
     return "\n".join(result).strip()
 
+
+def _tailor_slip18_experience(text: str, strategy: ResumeStrategy) -> str:
+    """Include and size the Slip 18 role independently from project selection."""
+    block_match = re.search(
+        r"(?ms)^### Founder \| AI Transformation & Workflow Automation\s*$"
+        r".*?(?=^### |^## |\Z)",
+        text,
+    )
+    if not block_match:
+        return text
+
+    if not strategy.include_slip18:
+        return (text[:block_match.start()] + text[block_match.end():]).rstrip() + "\n"
+
+    tailored_block = _limit_project_block_bullets(
+        block_match.group(0), strategy.max_slip18_bullets
+    )
+    return text[:block_match.start()] + tailored_block + "\n\n" + text[block_match.end():].lstrip("\n")
+
 def _tailor_base_resume_with_strategy(markdown_text: str, strategy: ResumeStrategy) -> str:
     """Apply lane guidance to applicant-facing markdown without inventing experience."""
     text = re.sub(r"(?m)^## (?!Professional Summary|Core Skills|Tools & Platforms|Professional Experience|Projects|Education).+\|.+$", f"## {strategy.headline}", markdown_text, count=1)
+    text = _tailor_slip18_experience(text, strategy)
     minimal_fixture = "Builder summary." in text
     if not minimal_fixture:
         text = re.sub(r"(?s)(## Professional Summary\s*\n+).*?(?=\n## )", rf"\1{strategy.summary}\n", text, count=1)
@@ -4195,6 +4215,10 @@ def prep_application(job_id: int) -> None:
 
 ## Tools ordering
 {chr(10).join(f'- {tool}' for tool in strategy.tools)}
+
+## Slip 18 experience
+- Include: {strategy.include_slip18}
+- Maximum bullets: {strategy.max_slip18_bullets}
 
 ## Top projects to include
 {chr(10).join(f'- {p}' for p in prioritized_projects)}

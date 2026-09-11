@@ -1,6 +1,7 @@
+from dataclasses import replace
 from pathlib import Path
 
-from job_fit_agent.main import main
+from job_fit_agent.main import _tailor_base_resume_with_strategy, main
 from job_fit_agent.resume_strategy import classify_resume_strategy
 
 
@@ -31,6 +32,8 @@ def test_lvcva_ai_systems_integration_lane():
     )
     assert strategy.lane == "ai_systems_integration"
     assert strategy.projects[0] == "RWLV Priority Governor Agent"
+    assert strategy.include_slip18 is True
+    assert strategy.max_slip18_bullets == 4
 
 
 def test_insight_global_technical_project_program_lane():
@@ -46,6 +49,44 @@ def test_low_confidence_falls_back_with_warning_state():
     strategy = classify_resume_strategy("Business Lead", "General leadership responsibilities")
     assert strategy.lane == "product_management"
     assert strategy.low_confidence is True
+    assert strategy.include_slip18 is False
+
+
+def test_slip18_is_included_after_resorts_world_with_lane_bullet_limit():
+    source_resume = Path(__file__).resolve().parents[1] / "profile" / "base_resume.md"
+    strategy = classify_resume_strategy(
+        "AI Solutions Architect",
+        "Design agent workflows, evaluation plans, and implementation architecture.",
+    )
+    strategy = replace(strategy, max_slip18_bullets=2)
+
+    resume = _tailor_base_resume_with_strategy(
+        source_resume.read_text(encoding="utf-8"), strategy
+    )
+    slip18 = resume.split(
+        "### Founder | AI Transformation & Workflow Automation", 1
+    )[1].split("### Technical Business Analyst / Project Manager", 1)[0]
+
+    assert resume.index("**Resorts World Las Vegas**") < resume.index("**Slip 18**")
+    assert resume.index("**Slip 18**") < resume.index("**Lake Havasu City**")
+    assert "Part-time / Independent" in slip18
+    assert sum(line.startswith("- ") for line in slip18.splitlines()) == 2
+
+
+def test_slip18_is_omitted_for_traditional_product_lane():
+    source_resume = Path(__file__).resolve().parents[1] / "profile" / "base_resume.md"
+    strategy = classify_resume_strategy(
+        "Product Manager",
+        "Own the product roadmap, backlog, discovery, and feature prioritization.",
+    )
+
+    resume = _tailor_base_resume_with_strategy(
+        source_resume.read_text(encoding="utf-8"), strategy
+    )
+
+    assert strategy.lane == "product_management"
+    assert strategy.include_slip18 is False
+    assert "**Slip 18**" not in resume
 
 
 def test_yum_generated_resume_consumes_strategy(monkeypatch, tmp_path):

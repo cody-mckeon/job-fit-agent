@@ -20,12 +20,14 @@ class ResumeStrategy:
     max_projects: int = 4
     max_project_bullets: int = 3
     project_section_title: str = "Projects"
+    include_slip18: bool = False
+    max_slip18_bullets: int = 2
     score: int = 0
     runner_up_score: int = 0
     low_confidence: bool = False
 
 
-COMMON_TOOLS = ("OpenAI API", "GPT-5.5", "Python", "GitHub / GitHub Actions", "Figma", "GA4", "Google Tag Manager", "Pendo", "OneTrust", "Asana")
+COMMON_TOOLS = ("ChatGPT", "Codex", "OpenAI API", "Python", "GitHub / GitHub Actions", "Figma", "GA4", "Google Tag Manager", "Pendo", "OneTrust", "Asana")
 
 
 def _strategy(
@@ -44,19 +46,19 @@ def _strategy(
     project_section_title: str = "Projects",
 ) -> ResumeStrategy:
     return ResumeStrategy(
-        lane,
-        headline,
-        summary,
-        skills,
-        methods_title,
-        methods,
-        tools,
-        projects,
-        excluded,
-        emphasis,
-        max_projects,
-        max_project_bullets,
-        project_section_title,
+        lane=lane,
+        headline=headline,
+        summary=summary,
+        core_skills=skills,
+        methods_title=methods_title,
+        methods=methods,
+        tools=tools,
+        projects=projects,
+        excluded_projects=excluded,
+        experience_emphasis=emphasis,
+        max_projects=max_projects,
+        max_project_bullets=max_project_bullets,
+        project_section_title=project_section_title,
     )
 
 
@@ -68,7 +70,7 @@ STRATEGIES = {
         "AI Transformation Methods", ("Enterprise AI Literacy", "AI Academy Program Design", "Champion Network Development", "Communities of Practice", "Workflow Mapping", "Use Case Intake", "AI Tool Enablement", "Prompt Design", "Responsible AI Practices", "Adoption Tracking", "Stakeholder Updates", "Executive Reporting", "Change Management", "Training Resources", "Automation Roadmaps", "Impact Measurement"),
         ("AI Marketing Intelligence Platform", "AI Product Design Operating System", "RWLV Priority Governor Agent", "Site Audit QA Agent"),
         ("enterprise adoption and enablement", "stakeholder and senior-leader communications", "change management", "measurable transformation outcomes"),
-        ("OpenAI API", "GPT-5.5", "OpenClaw", "Hermes Agent", "Python", "GitHub / GitHub Actions", "Asana", "GA4", "Pendo", "Figma"),
+        ("ChatGPT", "Codex", "OpenAI API", "Python", "GitHub / GitHub Actions", "Asana", "GA4", "Pendo", "Figma"),
         project_section_title="Selected AI Transformation & Workflow Automation Projects"),
     "ai_solutions_architecture": _strategy(
         "ai_solutions_architecture",
@@ -464,8 +466,6 @@ STRATEGIES = {
             "Google Tag Manager",
             "OneTrust",
             "pytest",
-            "local LLMs",
-            "Qwen 3",
         ),
         excluded=(),
         project_section_title="Selected AI Enablement & Agentic Workflow Projects",
@@ -605,8 +605,6 @@ STRATEGIES = {
             "Pendo",
             "OneTrust",
             "Asana",
-            "local LLMs",
-            "Qwen 3",
             "SQLite",
             "Telegram Bot API",
             "pytest",
@@ -845,9 +843,6 @@ STRATEGIES = {
         ),
         (
             "OpenAI API",
-            "GPT-5.5",
-            "OpenClaw",
-            "Hermes Agent",
             "Python",
             "GitHub / GitHub Actions",
             "SQLite",
@@ -917,9 +912,6 @@ STRATEGIES = {
         ),
         (
             "OpenAI API",
-            "GPT-5.5",
-            "OpenClaw",
-            "Hermes Agent",
             "Python",
             "GitHub / GitHub Actions",
             "SQLite",
@@ -1028,7 +1020,7 @@ STRATEGIES = {
         "Product Methodologies", ("Product Roadmap", "Product Discovery", "Feature Prioritization", "User Behavior Analysis", "Product Requirements", "User Stories", "Backlog Prioritization", "Product Lifecycle", "Stakeholder Alignment"),
         ("AI Product Design Operating System", "RWLV Priority Governor Agent", "Job Fit Agent", "AI Marketing Intelligence Platform"),
         ("product discovery and requirements", "roadmap prioritization", "analytics-informed decisions", "cross-functional execution"),
-        ("OpenClaw", "Hermes Agent", "GPT-5.5", "OpenAI API", "local LLMs", "Qwen 3", "Python", "GitHub / GitHub Actions", "SQLite", "Telegram Bot API", "Asana", "Pendo", "GA4", "Google Tag Manager", "OneTrust", "Figma", "pytest"),
+        ("ChatGPT", "Codex", "OpenAI API", "Python", "GitHub / GitHub Actions", "SQLite", "Telegram Bot API", "Asana", "Pendo", "GA4", "Google Tag Manager", "OneTrust", "Figma", "pytest"),
         excluded=()),
     "content_portfolio_product_management": _strategy(
         "content_portfolio_product_management",
@@ -1687,4 +1679,25 @@ def classify_resume_strategy(job_title: str, description: str = "", role_family:
     if low_confidence:
         lane = "product_management"
     base = STRATEGIES[lane]
-    return ResumeStrategy(**{**base.__dict__, "score": score, "runner_up_score": runner_up, "low_confidence": low_confidence})
+    slip18_lanes = {
+        "ai_solutions_architecture",
+        "ai_strategy_transformation",
+        "ai_enablement_product_management",
+        "agentic_operations_architecture",
+        "ai_workflow_automation_solutions",
+        "ai_systems_integration",
+        "technical_consulting_solutions_implementation",
+        "local_contract_consulting",
+        "applied_ai_strategy_consulting",
+        "ai_data_operations_project_lead",
+    }
+    return ResumeStrategy(
+        **{
+            **base.__dict__,
+            "include_slip18": lane in slip18_lanes,
+            "max_slip18_bullets": 4 if lane in slip18_lanes else 2,
+            "score": score,
+            "runner_up_score": runner_up,
+            "low_confidence": low_confidence,
+        }
+    )

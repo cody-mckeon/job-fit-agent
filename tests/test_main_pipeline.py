@@ -2256,11 +2256,11 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
     assert submit_text.find("## Core Skills") < submit_text.find("## Product Methodologies") < submit_text.find("## Tools & Platforms")
     tools_platforms = _section_body(submit_text, "Tools & Platforms")
     assert tools_platforms == (
-        "OpenClaw, Hermes Agent, GPT-5.5, OpenAI API, local LLMs, Qwen 3, Python, "
+        "ChatGPT, Codex, OpenAI API, Python, "
         "GitHub / GitHub Actions, SQLite, Telegram Bot API, Asana, Pendo, GA4, "
         "Google Tag Manager, OneTrust, Figma, pytest"
     )
-    assert all(tool in tools_platforms for tool in ["Hermes Agent", "local LLMs", "Qwen 3"])
+    assert all(tool not in tools_platforms for tool in ["OpenClaw", "Hermes Agent", "GPT-5.5", "local LLMs", "Qwen 3"])
     assert tools_platforms.count("\n") == 0
     assert submit_text.count("## Projects") == 1
     assert submit_text.find("## Professional Experience") < submit_text.find("## Projects") < submit_text.find("## Education")
@@ -2283,9 +2283,8 @@ def test_lennar_product_manager_resume_tailoring_uses_ai_native_pm_language(monk
         "OpenClaw, Hermes Agent, GPT-5.5, OpenAI API, local LLMs, Qwen 3, Telegram, Asana, Python, Markdown Configuration",
     ]:
         assert tool_heavy_subtitle not in submit_text
-    for tool in ["Hermes Agent", "local LLMs", "Qwen 3"]:
-        assert tool in resume_text
-        assert tool in submit_text
+    assert all(tool not in resume_text for tool in ["OpenClaw", "Hermes Agent", "GPT-5.5"])
+    assert "Qwen 3" in resume_text  # Retained only as documented project-specific experimentation.
     assert "model training" not in resume_text.lower()
     assert "ml infrastructure" not in resume_text.lower()
 
