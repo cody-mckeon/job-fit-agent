@@ -1097,7 +1097,7 @@ STRATEGIES = {
 }
 
 
-KEYWORDS = {
+_KEYWORD_PHRASES = {
     "ai_strategy_transformation": ("ai strategy", "ai transformation", "enterprise ai", "ai literacy", "ai academy", "ai adoption", "change enablement", "communities of practice", "champion network", "responsible ai", "workflow-integrated automation", "productivity outcomes", "senior leader updates", "stakeholder communications", "scalable ai programs"),
     "ai_data_operations_project_lead": (
         "strategic project lead",
@@ -1666,16 +1666,144 @@ KEYWORDS = {
 }
 
 
+# A match is not equally informative just because it is an exact phrase match.
+# Most phrases receive a modest default value; these overrides capture how strongly
+# a phrase distinguishes one lane from its neighbors.  In particular, routine PM
+# vocabulary must not cancel several coherent AI-enablement signals in the JD.
+_KEYWORD_WEIGHT_OVERRIDES: dict[str, dict[str, int]] = {
+    "product_management": {
+        "product manager": 1,
+        "product management": 1,
+        "product lead": 1,
+        "product roadmap": 1,
+        "product discovery": 1,
+        "feature prioritization": 1,
+        "backlog": 1,
+    },
+    "ai_enablement_product_management": {
+        "product manager, ai enablement": 10,
+        "ai enablement product manager": 10,
+        "ai product manager": 8,
+        "ai enablement": 6,
+        "agentic devops": 7,
+        "agentic development": 7,
+        "ai sdlc": 7,
+        "ai-assisted development": 6,
+        "internal ai tools": 6,
+        "ai developer tools": 6,
+        "developer productivity": 5,
+        "agent workflows": 5,
+        "agentic workflows": 5,
+        "ai platform": 4,
+        "llm evaluation": 4,
+        "model evaluation": 4,
+        "ai evals": 4,
+        "prompt evaluation": 4,
+        "human in the loop": 4,
+        "ai governance": 3,
+        "ai adoption": 3,
+    },
+    "ai_solutions_architecture": {
+        "solutions architect": 8,
+        "ai solutions architect": 10,
+        "knowledge assistants": 7,
+        "llm evaluation": 5,
+        "model evaluation": 5,
+        "ai evals": 5,
+        "prompt evaluation": 5,
+    },
+    "agentic_operations_architecture": {
+        "agentic operations architect": 10,
+        "agentic operations": 7,
+        "agent workflows": 4,
+        "agentic workflows": 4,
+        "human in the loop": 6,
+        "human-in-the-loop": 6,
+        "hitl": 6,
+        "escalation": 5,
+        "escalation logic": 6,
+        "monitoring": 4,
+        "post-launch monitoring": 5,
+        "ai governance": 4,
+    },
+    "ai_workflow_automation_solutions": {
+        "agent workflows": 4,
+        "agentic workflows": 5,
+        "ai workflow": 4,
+        "ai workflows": 4,
+        "workflow automation": 4,
+        "human in the loop": 3,
+        "ai governance": 3,
+    },
+    "ai_systems_integration": {
+        "ai systems integration": 10,
+        "ai platform": 5,
+        "integration architecture": 6,
+        "llm evaluation": 4,
+        "model evaluation": 4,
+        "ai governance": 4,
+    },
+    "ai_strategy_transformation": {
+        "ai strategy": 3,
+        "ai transformation": 7,
+        "ai adoption": 6,
+        "ai literacy": 6,
+        "ai enablement": 3,
+        "ai governance": 3,
+    },
+}
+
+# Public keyword model: every lane uses the same explicit phrase -> weight shape.
+# New phrases belong in the override table when their discriminatory value differs
+# from the default, rather than relying on list order or adding duplicate synonyms.
+KEYWORDS: dict[str, dict[str, int]] = {
+    lane: {
+        phrase: _KEYWORD_WEIGHT_OVERRIDES.get(lane, {}).get(phrase, 1)
+        for phrase in phrases
+    }
+    for lane, phrases in _KEYWORD_PHRASES.items()
+}
+for _lane, _weighted_phrases in _KEYWORD_WEIGHT_OVERRIDES.items():
+    KEYWORDS[_lane].update(_weighted_phrases)
+
+
+_SPECIALIZED_LANES = {
+    "ai_enablement_product_management",
+    "ai_solutions_architecture",
+    "agentic_operations_architecture",
+    "ai_workflow_automation_solutions",
+    "ai_systems_integration",
+    "ai_strategy_transformation",
+}
+
+
 def classify_resume_strategy(job_title: str, description: str = "", role_family: str = "") -> ResumeStrategy:
-    """Score exact phrases deterministically; title matches receive a 3x tie-break weight."""
+    """Select a lane using weighted title-family and job-description evidence.
+
+    Title evidence remains important, especially for a specific title, but phrase
+    weights prevent generic role-family words from overpowering a cluster of
+    specialized signals in the description.
+    """
     title = job_title.casefold()
     body = f"{description} {role_family}".casefold()
-    scores = {lane: sum(3 for term in terms if term in title) + sum(1 for term in terms if term in body)
-              for lane, terms in KEYWORDS.items()}
-    ranked = sorted(scores.items(), key=lambda item: (-item[1], list(KEYWORDS).index(item[0])))
+    scores = {
+        lane: sum(weight * 3 for term, weight in terms.items() if term in title)
+        + sum(weight for term, weight in terms.items() if term in body)
+        for lane, terms in KEYWORDS.items()
+    }
+    # If scores tie, prefer an evidenced specialized lane over its broad family;
+    # declaration order remains the final deterministic tie-breaker.
+    ranked = sorted(
+        scores.items(),
+        key=lambda item: (
+            -item[1],
+            -(item[0] in _SPECIALIZED_LANES and item[1] > 0),
+            list(KEYWORDS).index(item[0]),
+        ),
+    )
     lane, score = ranked[0]
     runner_up = ranked[1][1]
-    low_confidence = score < 2
+    low_confidence = score < 4
     if low_confidence:
         lane = "product_management"
     base = STRATEGIES[lane]
