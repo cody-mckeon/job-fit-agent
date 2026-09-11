@@ -11,7 +11,7 @@ https://github.com/cody-mckeon
 
 Technical Product Manager building AI-powered digital products, analytics systems, and workflow automation. Experienced translating ambiguous business needs into customer-facing experiences, internal tools, measurable product improvements, and cross-functional execution. Uses AI throughout product discovery, planning, prototyping, and delivery to accelerate decision making, stakeholder alignment, and product outcomes.
 
-Experienced building and orchestrating AI-assisted product systems across Python, OpenClaw, Hermes Agent, GPT-5.5, hosted OpenAI API workflows, local LLMs including Qwen 3, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
+Experienced building and orchestrating AI-assisted product systems across Python, OpenAI API workflows, ChatGPT, Codex, GitHub Actions, Telegram, Figma, and analytics platforms, with a strong emphasis on practical delivery, implementation readiness, and cross-functional execution.
 
 
 ## Core Skills
@@ -31,12 +31,9 @@ Experienced building and orchestrating AI-assisted product systems across Python
 
 ## Tools & Platforms
 
-- OpenClaw
-- Hermes Agent
-- GPT-5.5
+- ChatGPT
+- Codex
 - OpenAI API
-- local LLMs
-- Qwen 3
 - Python
 - GitHub / GitHub Actions
 - SQLite
@@ -60,6 +57,16 @@ Feb 2026 – Present
 - Partnered with designers, marketers, engineers, and third-party vendors to translate ambiguous business requests into implementation-ready product requirements.
 - Led website optimization initiatives spanning customer journeys, analytics, consent management, booking flows, and digital governance.
 - Applied AI throughout product planning, documentation, analysis, and prototyping to improve delivery speed and stakeholder alignment.
+
+### Founder | AI Transformation & Workflow Automation
+**Slip 18**
+Las Vegas, NV
+Sep 2025 – Aug 2026 | Part-time / Independent
+
+- Built practical AI workflow systems for hospitality, marketing, product, analytics, and operational use cases.
+- Designed AI-assisted tools and agents for product discovery, marketing intelligence, website QA, workflow automation, and decision support.
+- Translated business workflows and operational problems into AI use cases, prototypes, technical requirements, and implementation plans.
+- Evaluated AI models, prompts, agent workflows, and automation approaches based on task fit, reliability, cost, and implementation constraints.
 
 ### Technical Business Analyst / Project Manager  
 **Lake Havasu City**  
