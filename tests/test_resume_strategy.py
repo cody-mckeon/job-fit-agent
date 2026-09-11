@@ -1,8 +1,24 @@
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from job_fit_agent.main import _tailor_base_resume_with_strategy, main
 from job_fit_agent.resume_strategy import classify_resume_strategy
+
+
+@pytest.fixture
+def allstate_style_role():
+    """Generic PM title paired with a distinctly AI-enablement description."""
+    return {
+        "title": "Product Manager",
+        "description": (
+            "Own agentic DevOps and agentic development capabilities across the AI SDLC. "
+            "Build internal AI tools and AI developer tools that improve developer productivity. "
+            "Define agent workflows, AI platform priorities, LLM and prompt evaluation, human in "
+            "the loop controls, AI governance, enablement, and adoption."
+        ),
+    }
 
 
 def test_yum_ai_strategy_transformation_lane():
@@ -87,6 +103,60 @@ def test_slip18_is_omitted_for_traditional_product_lane():
     assert strategy.lane == "product_management"
     assert strategy.include_slip18 is False
     assert "**Slip 18**" not in resume
+
+
+@pytest.mark.parametrize(
+    ("title", "description", "expected_lane"),
+    (
+        (
+            "Product Manager",
+            "Own the product roadmap, backlog, product discovery, and feature prioritization.",
+            "product_management",
+        ),
+        (
+            "Product Manager",
+            "Lead agentic DevOps, AI SDLC, AI-assisted development, internal AI tools, and developer productivity.",
+            "ai_enablement_product_management",
+        ),
+        (
+            "Product Manager",
+            "Establish agentic workflow governance, human in the loop review, escalation logic, safeguards, and post-launch monitoring.",
+            "agentic_operations_architecture",
+        ),
+        (
+            "Solutions Architect",
+            "Design knowledge assistants with LLM evaluation, model evaluation, AI evals, and prompt evaluation.",
+            "ai_solutions_architecture",
+        ),
+        (
+            "Director, Transformation",
+            "Lead enterprise AI transformation, AI adoption, AI literacy, and change enablement.",
+            "ai_strategy_transformation",
+        ),
+    ),
+)
+def test_weighted_lane_classification_regressions(title, description, expected_lane):
+    strategy = classify_resume_strategy(title, description)
+
+    assert strategy.lane == expected_lane
+    assert strategy.low_confidence is False
+
+
+def test_allstate_style_role_uses_ai_enablement_resume(allstate_style_role):
+    strategy = classify_resume_strategy(
+        allstate_style_role["title"], allstate_style_role["description"]
+    )
+    source_resume = Path(__file__).resolve().parents[1] / "profile" / "base_resume.md"
+    resume = _tailor_base_resume_with_strategy(
+        source_resume.read_text(encoding="utf-8"), strategy
+    )
+
+    assert strategy.lane == "ai_enablement_product_management"
+    assert strategy.include_slip18 is True
+    assert "**Slip 18**" in resume
+    assert strategy.headline == "Product Manager, AI Enablement | Agentic Workflows | Internal AI Tools"
+    assert "## AI Enablement Product Methods" in resume
+    assert "- Agentic Workflow Design" in resume
 
 
 def test_yum_generated_resume_consumes_strategy(monkeypatch, tmp_path):

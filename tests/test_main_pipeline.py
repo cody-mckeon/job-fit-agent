@@ -854,10 +854,11 @@ def test_prep_application_changes_headline_and_prioritizes_ai_projects(monkeypat
     strategy_text = (app_dir / "resume_strategy.md").read_text(encoding="utf-8")
     resume_text = (app_dir / "resume_draft.md").read_text(encoding="utf-8")
     assert "## Recommended headline" in strategy_text
+    assert "ai_enablement_product_management" in strategy_text
     assert "Job Fit Agent" in strategy_text
-    assert "RWLV Priority Governor Agent" in strategy_text
+    assert "AI Product Design Operating System" in strategy_text
     assert "Job Fit Agent" in resume_text
-    assert "RWLV Priority Governor Agent" in resume_text
+    assert "AI Product Design Operating System" in resume_text
 
 
 
@@ -906,8 +907,8 @@ def test_role_family_project_ordering_rules():
     ]
     assert _select_projects_for_role("Product Manager", "", "roadmap and agentic workflows")[:3] == [
         "AI Product Design Operating System",
-        "RWLV Priority Governor Agent",
-        "Job Fit Agent",
+        "Site Audit QA Agent",
+        "AI Marketing Intelligence Platform",
     ]
     assert _select_projects_for_role("Product Systems Analytics Manager", "", "instrumentation and product systems")[:3] == [
         "RWLV Priority Governor Agent",
@@ -966,7 +967,7 @@ def test_generated_summary_avoids_buzzword_heavy_phrasing_for_product_manager(mo
     assert "AI Product Design Operating System" in resume_text
     assert "Job Fit Agent" in resume_text
     assert "RWLV Priority Governor Agent" in resume_text
-    assert "Technical product builder focused on AI-enabled workflow systems" in resume_text
+    assert "Senior product manager focused on agentic workflows" in resume_text
     assert "AI-native" not in resume_text
 
 def test_prep_application_creates_all_expected_files(monkeypatch, tmp_path):
